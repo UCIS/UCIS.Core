@@ -12,6 +12,8 @@
     <AssemblyName>UCIS</AssemblyName>
     <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>UCIS.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -64,6 +66,7 @@
     <None Include="Pml\LegacyPmlCommunicator.cs" />
     <Compile Include="Pml\PmlBuilder.cs" />
     <None Include="Pml\PmlCommunicator.cs" />
+    <None Include="UCIS.snk" />
     <Compile Include="Pml\PmlCommunicator2.cs" />
     <Compile Include="Pml\RW\PmlAmfRW.cs" />
     <Compile Include="Pml\RW\PmlPHPRW.cs" />
@@ -81,7 +84,9 @@
     <Compile Include="Util\AsyncStream.cs" />
     <Compile Include="Util\CrossStream.cs" />
     <Compile Include="Util\HoldStream.cs" />
+    <Compile Include="Util\PacketStream.cs" />
     <Compile Include="Util\PipeStream.cs" />
+    <Compile Include="Util\QueuedPacketStream.cs" />
     <Compile Include="Windows\ServiceManager.cs" />
     <Compile Include="Xml\PolicyFile.cs" />
     <Compile Include="Xml\Server.cs" />

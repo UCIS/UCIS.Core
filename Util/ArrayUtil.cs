@@ -84,5 +84,23 @@ namespace UCIS.Util {
 			for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
 			return true;
 		}
+		public static int GetHashCode<T>(T[] array) {
+			int h = 0;
+			foreach (T v in array) h ^= v.GetHashCode();
+			return h;
+		}
+		public static void Add<T>(ref T[] array, T item) {
+			if (array == null) {
+				array = new T[] { item };
+			} else {
+				int index = array.Length;
+				Array.Resize(ref array, index + 1);
+				array[index] = item;
+			}
+		}
+		public static void AddUnique<T>(ref T[] array, T item) {
+			if (Array.IndexOf(array, item) != -1) return;
+			Add(ref array, item);
+		}
 	}
 }

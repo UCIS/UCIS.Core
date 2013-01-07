@@ -6,12 +6,15 @@ namespace UCIS.Pml {
 	public class PmlCollection : PmlElement, ICollection<PmlElement> {
 			private List<PmlElement> pItems = new List<PmlElement>();
 
-			public PmlCollection() { 			}
+			public PmlCollection() { }
 			public PmlCollection(params PmlElement[] Elements) {
 				pItems.AddRange(Elements);
 			}
 			public PmlCollection(IEnumerable<PmlElement> Elements) {
 				pItems.AddRange(Elements);
+			}
+			public PmlCollection(params String[] Elements) {
+				foreach (String s in Elements) pItems.Add(s);
 			}
 
 			public PmlElement Add(PmlElement Element) {

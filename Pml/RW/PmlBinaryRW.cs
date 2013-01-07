@@ -34,28 +34,17 @@ namespace UCIS.Pml {
 	}
 
 	public class PmlBinaryWriter : IPmlWriter {
-		//private BinaryWriter pWriter;
 		private Stream pStream;
 		private Encoding pEncoding;
 
-		/*public PmlBinaryWriter(BinaryWriter Writer) {
-			pWriter = Writer;
-		}*/
 		public PmlBinaryWriter(Stream Stream) {
-			//pWriter = new BinaryWriter(Stream);
 			pStream = Stream;
 			pEncoding = Encoding.UTF8;
 		}
 		public PmlBinaryWriter(Stream Stream, Encoding Encoding) {
-			//pWriter = new BinaryWriter(Stream, Encoding);
 			pStream = Stream;
 			pEncoding = Encoding;
 		}
-
-		/*public BinaryWriter BaseWriter {
-			get { return pWriter; }
-			set { pWriter = value; }
-		}*/
 
 		public void WriteMessage(PmlElement Message) {
 			MemoryStream stream = new MemoryStream();
@@ -65,6 +54,13 @@ namespace UCIS.Pml {
 				stream.WriteTo(pStream);
 				pStream.Flush();
 			}
+		}
+
+		public static Byte[] EncodeMessage(PmlElement message) {
+			MemoryStream stream = new MemoryStream();
+			BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8);
+			WriteMessageTo(message, writer);
+			return stream.ToArray();
 		}
 
 		public static void WriteMessageTo(PmlElement Message, BinaryWriter Writer) {
@@ -77,13 +73,10 @@ namespace UCIS.Pml {
 		}
 
 		private static void WriteElementTo(PmlElement Element, BinaryWriter Writer) {
-			//byte[] Buffer = null;
 			if (Element == null) {
-				//Writer.Write((byte)PmlElementType.Null);
 				Writer.Write((byte)0);
 				return;
 			}
-			//Writer.Write((byte)Element.Type);
 			switch (Element.Type) {
 				case PmlType.Null:
 					Writer.Write((byte)0);
@@ -119,7 +112,7 @@ namespace UCIS.Pml {
 					Writer.Write((byte)11);
 					string Str = Element.ToString();
 					if (Str == null) {
-						Writer.Write("");
+						Writer.Write(String.Empty);
 					} else {
 						Writer.Write(Str);
 					}
@@ -164,6 +157,14 @@ namespace UCIS.Pml {
 
 		public PmlElement ReadMessage() {
 			return ReadMessageFrom(pReader);
+		}
+
+		public static PmlElement DecodeMessage(Byte[] message) {
+			using (MemoryStream ms = new MemoryStream(message)) {
+				using (BinaryReader reader = new BinaryReader(ms, Encoding.UTF8)) {
+					return ReadMessageFrom(reader);
+				}
+			}
 		}
 
 		public static PmlElement ReadMessageFrom(BinaryReader Reader) {
@@ -213,7 +214,6 @@ namespace UCIS.Pml {
 						if (B == 0) return new PmlInteger(Reader.ReadUInt64());
 						else if (B == 1) return new PmlInteger(Reader.ReadInt64());
 						else return null;
-
 					}
 				default:
 					throw new Exception("Unknown PML type code " + EType.ToString());
