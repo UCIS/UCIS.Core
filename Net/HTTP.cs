@@ -104,10 +104,10 @@ namespace UCIS.Net.HTTP {
 			while (true) {
 				int b = Stream.ReadByte();
 				if (b == -1) {
-					if (s.Length == null) return null;
+					if (s.Length == 0) return null;
 					break;
 				} else if (b == 13) {
-				} else if (b == 10) {
+				} else if (b == 10 || b == 0) {
 					break;
 				} else {
 					s.Append((Char)b);
