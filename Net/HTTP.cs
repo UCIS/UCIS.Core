@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using UCIS.Net;
 using UCIS.Util;
 using HTTPHeader = System.Collections.Generic.KeyValuePair<string, string>;
 
@@ -59,9 +60,10 @@ namespace UCIS.Net.HTTP {
 
 		public Socket Socket { get; private set; }
 		public Boolean SuppressStandardHeaders { get; set; }
+		public TCPStream TCPStream { get; private set; }
 
-		private Stream Stream;
 		private StreamWriter Writer;
+		private PrebufferingStream Reader;
 		private List<HTTPHeader> RequestHeaders;
 		private HTTPConnectionState State = HTTPConnectionState.Starting;
 
@@ -76,33 +78,34 @@ namespace UCIS.Net.HTTP {
 
 		public HTTPContext(HTTPServer server, TCPStream stream) {
 			this.Server = server;
+			this.TCPStream = stream;
 			this.Socket = stream.Socket;
 			this.LocalEndPoint = Socket.LocalEndPoint;
 			this.RemoteEndPoint = Socket.RemoteEndPoint;
-			this.Stream = stream;
-			Init();
+			Init(stream);
 		}
 
 		public HTTPContext(HTTPServer server, Socket socket) {
 			this.Server = server;
+			this.TCPStream = null;
 			this.Socket = socket;
 			this.LocalEndPoint = socket.LocalEndPoint;
 			this.RemoteEndPoint = socket.RemoteEndPoint;
-			this.Stream = new NetworkStream(socket, true);
-			Init();
+			Init(new NetworkStream(socket, true));
 		}
 
-		private void Init() {
+		private void Init(Stream Stream) {
 			Writer = new StreamWriter(Stream, Encoding.ASCII);
 			Writer.NewLine = "\r\n";
 			Writer.AutoFlush = true;
-			UCIS.ThreadPool.RunTask(ReceiveOperation, null);
+			Reader = new PrebufferingStream(Stream);
+			Reader.BeginPrebuffering(PrebufferCallback, null);
 		}
 
 		private String ReadLine() {
 			StringBuilder s = new StringBuilder();
 			while (true) {
-				int b = Stream.ReadByte();
+				int b = Reader.ReadByte();
 				if (b == -1) {
 					if (s.Length == 0) return null;
 					break;
@@ -116,9 +119,10 @@ namespace UCIS.Net.HTTP {
 			return s.ToString();
 		}
 
-		private void ReceiveOperation(Object state) {
+		private void PrebufferCallback(IAsyncResult ar) {
 			State = HTTPConnectionState.ReceivingRequest;
 			try {
+				Reader.EndPrebuffering(ar);
 				String line = ReadLine();
 				if (line == null) {
 					Close();
@@ -126,7 +130,7 @@ namespace UCIS.Net.HTTP {
 				}
 				if (Server.ServeFlashPolicyFile && line[0] == '<') { //<policy-file-request/>
 					Writer.WriteLine("<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>");
-					Stream.WriteByte(0);
+					Reader.WriteByte(0);
 					Close();
 					return;
 				}
@@ -248,12 +252,12 @@ SendError500AndClose:
 				State = HTTPConnectionState.SendingContent;
 			}
 			if (State != HTTPConnectionState.SendingContent) throw new InvalidOperationException();
-			return Stream;
+			return Reader;
 		}
 
 		public void Close() {
 			if (State == HTTPConnectionState.Closed) return;
-			Stream.Close();
+			Reader.Close();
 			State = HTTPConnectionState.Closed;
 		}
 	}
