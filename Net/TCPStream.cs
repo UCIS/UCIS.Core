@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using SysThreadPool = System.Threading.ThreadPool;
 
 namespace UCIS.Net {
 	public class TCPStream : Stream, INetworkConnection {
@@ -111,6 +112,61 @@ namespace UCIS.Net {
 			_BytesRead += (ulong)Count;
 			Interlocked.Add(ref _totalBytesRead, (long)Count);
 			return Count;
+		}
+
+		class AsyncResult : IAsyncResult {
+			public Object AsyncState { get; private set; }
+			public WaitHandle AsyncWaitHandle { get { return WaitHandle; } }
+			public Boolean CompletedSynchronously { get; private set; }
+			public Boolean IsCompleted { get; private set; }
+			public int Count { get; private set; }
+
+			private ManualResetEvent WaitHandle = new ManualResetEvent(false);
+			private AsyncCallback Callback = null;
+			private void CallCallback(Object state) {
+				if (Callback != null) Callback(this);
+			}
+			public void SetCompleted(Boolean synchronously, int cnt) {
+				CompletedSynchronously = synchronously;
+				Count = cnt;
+				IsCompleted = true;
+				WaitHandle.Set();
+				if (synchronously) {
+					CallCallback(null);
+				} else {
+					if (Callback != null) SysThreadPool.QueueUserWorkItem(CallCallback);
+				}
+			}
+			public AsyncResult(AsyncCallback callback, Object state) {
+				this.Callback = callback;
+				this.AsyncState = state;
+				CompletedSynchronously = false;
+				IsCompleted = false;
+			}
+		}
+		public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			if (count < 0) {
+				AsyncResult ar = new AsyncResult(callback, state);
+				ar.SetCompleted(true, 0);
+				return ar;
+			} else if (_HasPeekByte) {
+				buffer[offset] = _PeekByte;
+				_HasPeekByte = false;
+				offset += 1;
+				count -= 1;
+				AsyncResult ar = new AsyncResult(callback, state);
+				ar.SetCompleted(true, 1);
+				return ar;
+			} else {
+				return Socket.BeginReceive(buffer, offset, count, SocketFlags.None, callback, state);
+			}
+		}
+		public override int EndRead(IAsyncResult asyncResult) {
+			if (asyncResult is AsyncResult) {
+				return ((AsyncResult)asyncResult).Count;
+			} else {
+				return Socket.EndReceive(asyncResult);
+			}
 		}
 
 		public int PeekByte() {
