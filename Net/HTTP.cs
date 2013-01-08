@@ -1,158 +1,381 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
-using System.Threading;
+using UCIS.Util;
+using HTTPHeader = System.Collections.Generic.KeyValuePair<string, string>;
 
 namespace UCIS.Net.HTTP {
-	public class HTTPServer : TCPServer.IModule {
-		public Dictionary<string, HTTPContent> Content = new Dictionary<string, HTTPContent>(StringComparer.InvariantCultureIgnoreCase);
-		public HTTPContent DefaultContent = null;
+	public class HTTPServer : TCPServer.IModule, IDisposable {
+		public IHTTPContentProvider ContentProvider { get; set; }
+		public Boolean ServeFlashPolicyFile { get; set; }
+		private Socket Listener = null;
 
-		public bool Accept(TCPStream Stream) {
-			StreamReader StreamReader = new StreamReader(Stream, Encoding.ASCII);
-			String Line = StreamReader.ReadLine();
-			String[] Request = Line.Split(' ');
+		public HTTPServer() { }
 
-			//Console.WriteLine("HTTP.Server.Accept Request: " + Line);
-
-			if (Request == null || Request.Length < 2 || Request[0] != "GET" || Request[1][0] != '/') {
-				//Console.WriteLine("HTTP.Server.Start Bad request");
-				SendError(Stream, 400);
-				return true;
-			}
-
-			Request = Request[1].Split(new Char[] { '?' }, 2);
-			HTTPContent content;
-			if (Content.TryGetValue(Request[0], out content)) {
-			} else if (DefaultContent != null) {
-				content = DefaultContent;
-			} else {
-				SendError(Stream, 404);
-				return true;
-			}
-			HTTPContext Context = new HTTPContext();
-			Context.Stream = Stream;
-			Context.Request = new HTTPRequest();
-			Context.Request.Method = Method.GET;
-			Context.Request.Path = Request[0];
-			if (Request.Length == 2) {
-				Context.Request.Query = Request[1];
-			} else {
-				Context.Request.Query = null;
-			}
-			HTTPContent.Result ServeResult = content.Serve(Context);
-
-			if (ServeResult == HTTPContent.Result.OK_KEEPALIVE) {
-				return false;
-			} else if (!(ServeResult == HTTPContent.Result.OK_CLOSE)) {
-				SendError(Stream, (int)ServeResult);
-			}
-			return true;
+		public void Listen(int port) {
+			Listen(new IPEndPoint(IPAddress.Any, port));
 		}
 
-		public static void SendError(Stream Stream, int ErrorCode) {
-			string ErrorText = null;
-			switch (ErrorCode) {
-				case 400:
-					ErrorText = "The request could not be understood by the server due to malformed syntax.";
-					break;
-				case 404:
-					ErrorText = "The requested file can not be found.";
-					break;
-				default:
-					ErrorText = "Unknown error code: " + ErrorCode.ToString() + ".";
-					break;
-			}
-			SendHeader(Stream, ErrorCode, "text/plain", ErrorText.Length);
-			WriteLine(Stream, ErrorText);
-			Thread.Sleep(100);
-			return;
+		public void Listen(EndPoint localep) {
+			if (Listener != null) throw new InvalidOperationException("A listener exists");
+			Listener = new Socket(localep.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+			Listener.Bind(localep);
+			Listener.Listen(5);
+			Listener.BeginAccept(AcceptCallback, null);
 		}
 
-		public static void SendHeader(Stream Stream, int ResultCode, string ContentType) {
-			SendHeader(Stream, ResultCode, ContentType, -1);
-		}
-		public static void SendHeader(Stream Stream, int ResultCode, string ContentType, int ContentLength) {
-			//ResultCode = 200, ContentType = null, ContentLength = -1
-			string ResultString;
-			switch (ResultCode) {
-				case 200: ResultString = "OK"; break;
-				case 400: ResultString = "Bad Request"; break;
-				case 404: ResultString = "Not found"; break;
-				default: ResultString = "Unknown"; break;
-			}
-			WriteLine(Stream, "HTTP/1.1 " + ResultCode.ToString() + " " + ResultString);
-			WriteLine(Stream, "Expires: Mon, 26 Jul 1990 05:00:00 GMT");
-			WriteLine(Stream, "Cache-Control: no-store, no-cache, must-revalidate");
-			WriteLine(Stream, "Cache-Control: post-check=0, pre-check=0");
-			WriteLine(Stream, "Pragma: no-cache");
-			WriteLine(Stream, "Server: UCIS Simple Webserver");
-			WriteLine(Stream, "Connection: Close");
-			if ((ContentType != null)) WriteLine(Stream, "Content-Type: " + ContentType);
-			if (ContentLength != -1) WriteLine(Stream, "Content-Length: " + ContentLength.ToString());
-			WriteLine(Stream, "");
+		private void AcceptCallback(IAsyncResult ar) {
+			try {
+				Socket socket = Listener.EndAccept(ar);
+				new HTTPContext(this, socket);
+			} catch (Exception) { }
+			try {
+				Listener.BeginAccept(AcceptCallback, null);
+			} catch (Exception) { }
 		}
 
-		public static void WriteLine(Stream Stream, string Line) {
-			byte[] Buffer = null;
-			Buffer = Encoding.ASCII.GetBytes(Line);
-			Stream.Write(Buffer, 0, Buffer.Length);
-			Stream.WriteByte(13);
-			Stream.WriteByte(10);
-		}
-	}
-
-	public abstract class HTTPContent {
-		public abstract Result Serve(HTTPContext Context);
-		public enum Result : int {
-			OK_CLOSE = -2,
-			OK_KEEPALIVE = -1,
-			ERR_NOTFOUND = 404
-		}
-	}
-
-	public class HTTPFileContent : HTTPContent {
-		public string Filename { get; private set; }
-		public string ContentType { get; private set; }
-
-		public HTTPFileContent(string Filename) : this(Filename, "application/octet-stream") { }
-		public HTTPFileContent(string Filename, string ContentType) {
-			this.Filename = Filename;
-			this.ContentType = ContentType;
+		public void Dispose() {
+			if (Listener != null) Listener.Close();
 		}
 
-		public override Result Serve(HTTPContext Context) {
-			if (!File.Exists(Filename)) return Result.ERR_NOTFOUND;
-
-			using (FileStream FileStream = File.OpenRead(Filename)) {
-				HTTPServer.SendHeader(Context.Stream, 200, ContentType, (int)FileStream.Length);
-				byte[] Buffer = new byte[1025];
-				while (FileStream.CanRead) {
-					int Length = FileStream.Read(Buffer, 0, Buffer.Length);
-					if (Length <= 0) break;
-					Context.Stream.Write(Buffer, 0, Length);
-				}
-			}
-			return Result.OK_CLOSE;
+		bool TCPServer.IModule.Accept(TCPStream stream) {
+			new HTTPContext(this, stream);
+			return false;
 		}
 	}
 
 	public class HTTPContext {
-		public HTTPRequest Request { get; internal set; }
-		public TCPStream Stream { get; internal set; }
+		public HTTPServer Server { get; private set; }
+		public EndPoint LocalEndPoint { get; private set; }
+		public EndPoint RemoteEndPoint { get; private set; }
+
+		public String RequestMethod { get; private set; }
+		public String RequestPath { get; private set; }
+		public String RequestQuery { get; private set; }
+		public int HTTPVersion { get; set; }
+
+		public Socket Socket { get; private set; }
+		public Boolean SuppressStandardHeaders { get; set; }
+
+		private Stream Stream;
+		private StreamWriter Writer;
+		private List<HTTPHeader> RequestHeaders;
+		private HTTPConnectionState State = HTTPConnectionState.Starting;
+
+		private enum HTTPConnectionState {
+			Starting = 0,
+			ReceivingRequest = 1,
+			ProcessingRequest = 2,
+			SendingHeaders = 3,
+			SendingContent = 4,
+			Closed = 5,
+		}
+
+		public HTTPContext(HTTPServer server, TCPStream stream) {
+			this.Server = server;
+			this.Socket = stream.Socket;
+			this.LocalEndPoint = Socket.LocalEndPoint;
+			this.RemoteEndPoint = Socket.RemoteEndPoint;
+			this.Stream = stream;
+			Init();
+		}
+
+		public HTTPContext(HTTPServer server, Socket socket) {
+			this.Server = server;
+			this.Socket = socket;
+			this.LocalEndPoint = socket.LocalEndPoint;
+			this.RemoteEndPoint = socket.RemoteEndPoint;
+			this.Stream = new NetworkStream(socket, true);
+			Init();
+		}
+
+		private void Init() {
+			Writer = new StreamWriter(Stream, Encoding.ASCII);
+			Writer.NewLine = "\r\n";
+			Writer.AutoFlush = true;
+			UCIS.ThreadPool.RunTask(ReceiveOperation, null);
+		}
+
+		private String ReadLine() {
+			StringBuilder s = new StringBuilder();
+			while (true) {
+				int b = Stream.ReadByte();
+				if (b == -1) {
+					if (s.Length == null) return null;
+					break;
+				} else if (b == 13) {
+				} else if (b == 10) {
+					break;
+				} else {
+					s.Append((Char)b);
+				}
+			}
+			return s.ToString();
+		}
+
+		private void ReceiveOperation(Object state) {
+			State = HTTPConnectionState.ReceivingRequest;
+			try {
+				String line = ReadLine();
+				if (line == null) {
+					Close();
+					return;
+				}
+				if (Server.ServeFlashPolicyFile && line[0] == '<') { //<policy-file-request/>
+					Writer.WriteLine("<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>");
+					Stream.WriteByte(0);
+					Close();
+					return;
+				}
+				String[] request = line.Split(' ');
+				if (request.Length != 3) goto SendError400AndClose;
+				RequestMethod = request[0];
+				String RequestAddress = request[1];
+				switch (request[2]) {
+					case "HTTP/1.0": HTTPVersion = 10; break;
+					case "HTTP/1.1": HTTPVersion = 11; break;
+					default: goto SendError400AndClose;
+				}
+				request = RequestAddress.Split(new Char[] { '?' });
+				RequestPath = Uri.UnescapeDataString(request[0]);
+				RequestQuery = request.Length > 1 ? request[1] : null;
+				RequestHeaders = new List<HTTPHeader>();
+				while (true) {
+					line = ReadLine();
+					if (line == null) goto SendError400AndClose;
+					if (line.Length == 0) break;
+					request = line.Split(new String[] { ": " }, 2, StringSplitOptions.None);
+					if (request.Length != 2) goto SendError400AndClose;
+					RequestHeaders.Add(new HTTPHeader(request[0], request[1]));
+				}
+				IHTTPContentProvider content = Server.ContentProvider;
+				if (content == null) goto SendError500AndClose;
+				State = HTTPConnectionState.ProcessingRequest;
+				content.ServeRequest(this);
+			} catch (Exception ex) {
+				Console.Error.WriteLine(ex);
+				switch (State) {
+					case HTTPConnectionState.ProcessingRequest: goto SendError500AndClose;
+					default:
+						Close();
+						break;
+				}
+			}
+			return;
+
+SendError400AndClose:
+			SendErrorAndClose(400);
+			return;
+SendError500AndClose:
+			SendErrorAndClose(500);
+			return;
+		}
+
+		public String GetRequestHeader(String name) {
+			if (State != HTTPConnectionState.ProcessingRequest && State != HTTPConnectionState.SendingHeaders && State != HTTPConnectionState.SendingContent) throw new InvalidOperationException();
+			foreach (HTTPHeader h in RequestHeaders) {
+				if (name.Equals(h.Key, StringComparison.OrdinalIgnoreCase)) return h.Value;
+			}
+			return null;
+		}
+		public String[] GetRequestHeaders(String name) {
+			if (State != HTTPConnectionState.ProcessingRequest && State != HTTPConnectionState.SendingHeaders && State != HTTPConnectionState.SendingContent) throw new InvalidOperationException();
+			String[] items = new String[0];
+			foreach (HTTPHeader h in RequestHeaders) {
+				if (name.Equals(h.Key, StringComparison.OrdinalIgnoreCase)) ArrayUtil.Add(ref items, h.Value);
+			}
+			return items;
+		}
+
+		public void SendErrorAndClose(int state) {
+			try {
+				SendStatus(state);
+				GetResponseStream();
+			} catch (Exception ex) {
+				Console.Error.WriteLine(ex);
+			}
+			Close();
+		}
+
+		public void SendStatus(int code) {
+			String message;
+			switch (code) {
+				case 101: message = "Switching Protocols"; break;
+				case 200: message = "OK"; break;
+				case 400: message = "Bad Request"; break;
+				case 404: message = "Not Found"; break;
+				case 500: message = "Internal Server Error"; break;
+				default: message = "Unknown Status"; break;
+			}
+			SendStatus(code, message);
+		}
+		public void SendStatus(int code, String message) {
+			if (State != HTTPConnectionState.ProcessingRequest) throw new InvalidOperationException();
+			StringBuilder sb = new StringBuilder();
+			sb.Append("HTTP/");
+			switch (HTTPVersion) {
+				case 10: sb.Append("1.0"); break;
+				case 11: sb.Append("1.1"); break;
+				default: throw new ArgumentException("The HTTP version is not supported", "HTTPVersion");
+			}
+			sb.Append(" ");
+			sb.Append(code);
+			sb.Append(" ");
+			sb.Append(message);
+			Writer.WriteLine(sb.ToString());
+			State = HTTPConnectionState.SendingHeaders;
+			if (!SuppressStandardHeaders) {
+				SendHeader("Expires", "Expires: Sun, 1 Jan 2000 00:00:00 GMT");
+				SendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+				SendHeader("Cache-Control", "post-check=0, pre-check=0");
+				SendHeader("Pragma", "no-cache");
+				SendHeader("Server", "UCIS Webserver");
+				SendHeader("Connection", "Close");
+			}
+		}
+		public void SendHeader(String name, String value) {
+			if (State == HTTPConnectionState.ProcessingRequest) SendStatus(200);
+			if (State != HTTPConnectionState.SendingHeaders) throw new InvalidOperationException();
+			Writer.WriteLine(name + ": " + value);
+		}
+		public Stream GetResponseStream() {
+			if (State == HTTPConnectionState.ProcessingRequest) SendStatus(200);
+			if (State == HTTPConnectionState.SendingHeaders) {
+				Writer.WriteLine();
+				State = HTTPConnectionState.SendingContent;
+			}
+			if (State != HTTPConnectionState.SendingContent) throw new InvalidOperationException();
+			return Stream;
+		}
+
+		public void Close() {
+			if (State == HTTPConnectionState.Closed) return;
+			Stream.Close();
+			State = HTTPConnectionState.Closed;
+		}
 	}
 
-	public enum Method {
-		GET = 0,
-		HEAD = 1,
-		POST = 2,
-		PUT = 3
+	public interface IHTTPContentProvider {
+		void ServeRequest(HTTPContext context);
 	}
-
-	public class HTTPRequest {
-		public HTTP.Method Method { get; internal set; }
-		public string Path { get; internal set; }
-		public string Query { get; internal set; }
+	public class HTTPPathSelector : IHTTPContentProvider {
+		private List<KeyValuePair<String, IHTTPContentProvider>> Prefixes;
+		private StringComparison PrefixComparison;
+		public HTTPPathSelector() : this(false) { }
+		public HTTPPathSelector(Boolean caseSensitive) {
+			Prefixes = new List<KeyValuePair<string, IHTTPContentProvider>>();
+			PrefixComparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+		}
+		public void AddPrefix(String prefix, IHTTPContentProvider contentProvider) {
+			Prefixes.Add(new KeyValuePair<string, IHTTPContentProvider>(prefix, contentProvider));
+		}
+		public void DeletePrefix(String prefix) {
+			Prefixes.RemoveAll(delegate(KeyValuePair<string, IHTTPContentProvider> item) { return prefix.Equals(item.Key, PrefixComparison); });
+		}
+		public void ServeRequest(HTTPContext context) {
+			KeyValuePair<string, IHTTPContentProvider> c = Prefixes.Find(delegate(KeyValuePair<string, IHTTPContentProvider> item) { return context.RequestPath.StartsWith(item.Key, PrefixComparison); });
+			if (c.Value != null) {
+				c.Value.ServeRequest(context);
+			} else {
+				context.SendErrorAndClose(404);
+			}
+		}
+	}
+	public class HTTPFileProvider : IHTTPContentProvider {
+		public String FileName { get; private set; }
+		public String ContentType { get; private set; }
+		public HTTPFileProvider(String fileName) : this(fileName, "application/octet-stream") { }
+		public HTTPFileProvider(String fileName, String contentType) {
+			this.FileName = fileName;
+			this.ContentType = contentType;
+		}
+		public void ServeRequest(HTTPContext context) {
+			if (File.Exists(FileName)) {
+				using (FileStream fs = File.OpenRead(FileName)) {
+					context.SendStatus(200);
+					context.SendHeader("Content-Type", ContentType);
+					context.SendHeader("Content-Length", fs.Length.ToString());
+					long left = fs.Length;
+					Stream response = context.GetResponseStream();
+					byte[] buffer = new byte[1024 * 10];
+					while (fs.CanRead) {
+						int len = fs.Read(buffer, 0, buffer.Length);
+						if (len <= 0) break;
+						left -= len;
+						response.Write(buffer, 0, len);
+					}
+					response.Close();
+				}
+			} else {
+				context.SendErrorAndClose(404);
+			}
+		}
+	}
+	public class HTTPUnTarchiveProvider : IHTTPContentProvider {
+		public String TarFileName { get; private set; }
+		public HTTPUnTarchiveProvider(String tarFile) {
+			this.TarFileName = tarFile;
+		}
+		public void ServeRequest(HTTPContext context) {
+			if (!File.Exists(TarFileName)) {
+				context.SendErrorAndClose(404);
+				return;
+			}
+			String reqname1 = context.RequestPath;
+			if (reqname1.Length > 0 && reqname1[0] == '/') reqname1 = reqname1.Substring(1);
+			String reqname2 = reqname1;
+			if (reqname2.Length > 0 && !reqname2.EndsWith("/")) reqname2 += "/";
+			reqname2 += "index.htm";
+			using (FileStream fs = File.OpenRead(TarFileName)) {
+				while (true) {
+					Byte[] header = new Byte[512];
+					if (fs.Read(header, 0, 512) != 512) break;
+					int flen = Array.IndexOf<Byte>(header, 0, 0, 100);
+					if (flen == 0) continue;
+					if (flen == -1) flen = 100;
+					String fname = Encoding.ASCII.GetString(header, 0, flen);
+					String fsize = Encoding.ASCII.GetString(header, 124, 11);
+					int fsizei = Convert.ToInt32(fsize, 8);
+					if (reqname1.Equals(fname, StringComparison.OrdinalIgnoreCase) || reqname2.Equals(fname)) {
+						context.SendStatus(200);
+						context.SendHeader("Content-Length", fsizei.ToString());
+						String ctype = null;
+						switch (Path.GetExtension(fname).ToUpperInvariant()) {
+							case ".txt": ctype = "text/plain"; break;
+							case ".htm":
+							case ".html": ctype = "text/html"; break;
+							case ".css": ctype = "text/css"; break;
+							case ".js": ctype = "application/x-javascript"; break;
+							case ".png": ctype = "image/png"; break;
+							case ".jpg":
+							case ".jpeg": ctype = "image/jpeg"; break;
+							case ".gif": ctype = "image/gif"; break;
+							case ".ico": ctype = "image/x-icon"; break;
+						}
+						if (ctype != null) context.SendHeader("Content-Type", ctype);
+						Stream response = context.GetResponseStream();
+						int left = fsizei;
+						while (left > 0) {
+							byte[] buffer = new byte[1024 * 10];
+							int len = fs.Read(buffer, 0, buffer.Length);
+							if (len <= 0) break;
+							left -= len;
+							response.Write(buffer, 0, len);
+						}
+						response.Close();
+						return;
+					} else {
+						fs.Seek(fsizei, SeekOrigin.Current);
+					}
+					int padding = fsizei % 512;
+					if (padding != 0) padding = 512 - padding;
+					fs.Seek(padding, SeekOrigin.Current);
+				}
+			}
+			context.SendErrorAndClose(404);
+		}
 	}
 }
