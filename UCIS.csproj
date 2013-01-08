@@ -81,11 +81,13 @@
     <Compile Include="ThreadPool.cs" />
     <Compile Include="UTF8NoPreamble.cs" />
     <Compile Include="Util\ArrayUtil.cs" />
+    <Compile Include="Util\AsyncResultBase.cs" />
     <Compile Include="Util\AsyncStream.cs" />
     <Compile Include="Util\CrossStream.cs" />
     <Compile Include="Util\HoldStream.cs" />
     <Compile Include="Util\PacketStream.cs" />
     <Compile Include="Util\PipeStream.cs" />
+    <Compile Include="Util\PrebufferingStream.cs" />
     <Compile Include="Util\QueuedPacketStream.cs" />
     <Compile Include="Windows\ServiceManager.cs" />
     <Compile Include="Xml\PolicyFile.cs" />
