@@ -35,7 +35,13 @@ namespace UCIS.Util {
 				IsCompleted = true;
 				if (WaitEvent != null) WaitEvent.Set();
 			}
-			if (Callback != null) SysThreadPool.QueueUserWorkItem(CallCallback);
+			if (Callback != null) {
+				if (synchronously) {
+					Callback(this);
+				} else {
+					SysThreadPool.QueueUserWorkItem(CallCallback);
+				}
+			}
 		}
 
 		protected void ThrowError() {

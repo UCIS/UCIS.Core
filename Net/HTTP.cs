@@ -171,9 +171,11 @@ namespace UCIS.Net.HTTP {
 			return;
 
 SendError400AndClose:
+			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(400);
 			return;
 SendError500AndClose:
+			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(500);
 			return;
 		}
@@ -288,6 +290,37 @@ SendError500AndClose:
 			}
 		}
 	}
+	public class HTTPStaticContent : IHTTPContentProvider {
+		public ArraySegment<Byte> ContentBuffer { get; set; }
+		public String ContentType { get; set; }
+		public HTTPStaticContent() : this(new ArraySegment<Byte>()) { }
+		public HTTPStaticContent(ArraySegment<Byte> content) : this(content, "application/octet-stream") { }
+		public HTTPStaticContent(String content, String contentType) : this(Encoding.UTF8.GetBytes(content), contentType) { }
+		public HTTPStaticContent(String contentType) : this(new ArraySegment<Byte>(), contentType) { }
+		public HTTPStaticContent(Byte[] content, String contentType) : this(new ArraySegment<Byte>(content), contentType) { }
+		public HTTPStaticContent(ArraySegment<Byte> content, String contentType) {
+			this.ContentBuffer = content;
+			this.ContentType = contentType;
+		}
+		public void SetContent(Byte[] bytes) { ContentBuffer = new ArraySegment<byte>(bytes); }
+		public void SetContent(Byte[] bytes, int offset, int count) { ContentBuffer = new ArraySegment<byte>(bytes, offset, count); }
+		public void SetContent(String content, Encoding encoding) { SetContent(encoding.GetBytes(content)); }
+		public void SetContent(String content) { SetContent(content, Encoding.UTF8); }
+		public void ServeRequest(HTTPContext context) {
+			ArraySegment<Byte> content = ContentBuffer;
+			if (content.Array == null) {
+				context.SendErrorAndClose(404);
+				return;
+			}
+			String contentType = ContentType;
+			context.SendStatus(200);
+			if (contentType != null) context.SendHeader("Content-Type", contentType);
+			context.SendHeader("Content-Length", content.Count.ToString());
+			Stream response = context.GetResponseStream();
+			response.Write(content.Array, content.Offset, content.Count);
+			response.Close();
+		}
+	}
 	public class HTTPFileProvider : IHTTPContentProvider {
 		public String FileName { get; private set; }
 		public String ContentType { get; private set; }
@@ -347,7 +380,7 @@ SendError500AndClose:
 						context.SendStatus(200);
 						context.SendHeader("Content-Length", fsizei.ToString());
 						String ctype = null;
-						switch (Path.GetExtension(fname).ToUpperInvariant()) {
+						switch (Path.GetExtension(fname).ToLowerInvariant()) {
 							case ".txt": ctype = "text/plain"; break;
 							case ".htm":
 							case ".html": ctype = "text/html"; break;

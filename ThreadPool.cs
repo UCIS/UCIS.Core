@@ -1,6 +1,7 @@
 ﻿using System;
-using System.Threading;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Threading;
 
 namespace UCIS {
 	public class ThreadPool {
@@ -49,7 +50,7 @@ namespace UCIS {
 		}
 
 		private List<ThreadInfo> pThreads = new List<ThreadInfo>();
-		private List<ThreadInfo> pBusyThreads = new List<ThreadInfo>();
+		private int pBusyThreads = 0;
 		private Queue<ThreadInfo> pIdleThreads = new Queue<ThreadInfo>();
 		private int pThreadsMax;
 		private int pThreadsMinIdle;
@@ -58,16 +59,11 @@ namespace UCIS {
 		public event OnExceptionEventHandler OnException;
 		public delegate void OnExceptionEventHandler(ThreadPool sender, ExceptionEventArgs e);
 
-		public System.Collections.ObjectModel.ReadOnlyCollection<ThreadInfo> Threads {
-			get {
-				return new System.Collections.ObjectModel.ReadOnlyCollection<ThreadInfo>(pThreads);
-			}
-		}
+		public ReadOnlyCollection<ThreadInfo> Threads { get { return pThreads.AsReadOnly(); } }
 
-		public ThreadPool() : this(250, 1, 5) { }
+		public ThreadPool() : this(250, 0, 5) { }
 
 		public ThreadPool(int MaxThreads, int MinIdle, int MaxIdle) {
-			int I = 0;
 			if (MaxThreads < 0) {
 				throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must greater than 0");
 			} else if (MaxThreads < MaxIdle) {
@@ -82,20 +78,14 @@ namespace UCIS {
 			pThreadsMax = MaxThreads;
 			pThreadsMinIdle = MinIdle;
 			pThreadsMaxIdle = MaxIdle;
-			for (I = 1; I <= pThreadsMinIdle; I++) {
+			for (int I = 1; I <= pThreadsMinIdle; I++) {
 				StartThread(false);
 			}
 		}
 
-		public int ThreadsIdle {
-			get { return pIdleThreads.Count; }
-		}
-		public int ThreadsBusy {
-			get { return pBusyThreads.Count; }
-		}
-		public int ThreadsAlive {
-			get { return pThreads.Count; }
-		}
+		public int ThreadsIdle { get { return pIdleThreads.Count; } }
+		public int ThreadsBusy { get { return pBusyThreads; } }
+		public int ThreadsAlive { get { return pThreads.Count; } }
 		public int ThreadsMinIdle {
 			get { return pThreadsMinIdle; }
 			set {
@@ -119,62 +109,39 @@ namespace UCIS {
 		public int ThreadsMaxIdle {
 			get { return pThreadsMaxIdle; }
 			set {
-				if (pThreadsMinIdle > value) {
-					throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must be greater than or equal to ThreadsMinIdle");
-				} else if (value < 0) {
-					throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must greater than or equal to 0");
-				} else {
-					int I = 0;
-					int C = 0;
-					ThreadInfo T = default(ThreadInfo);
-					lock (pIdleThreads) {
-						C = pIdleThreads.Count;
-						if (value < C) {
-							for (I = value; I <= C - 1; I++) {
-								T = pIdleThreads.Dequeue();
-								T.Abort = true;
-								T.WaitHandle.Set();
-							}
-						}
+				if (pThreadsMinIdle > value) throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must be greater than or equal to ThreadsMinIdle");
+				if (value < 0) throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must greater than or equal to 0");
+				lock (pIdleThreads) {
+					while (value > pIdleThreads.Count) {
+						ThreadInfo T = pIdleThreads.Dequeue();
+						T.Abort = true;
+						T.WaitHandle.Set();
 					}
-					pThreadsMaxIdle = value;
 				}
+				pThreadsMaxIdle = value;
 			}
 		}
 		public int ThreadsMax {
 			get { return pThreadsMax; }
 			set {
-				if (pThreadsMaxIdle > value) {
-					throw new ArgumentOutOfRangeException("ThreadsMax", "ThreadsMax must be greater than or equal to ThreadsMaxIdle");
-				} else if (value <= 0) {
-					throw new ArgumentOutOfRangeException("ThreadsMax", "ThreadsMax must greater than 0");
-				} else {
-					pThreadsMax = value;
-				}
+				if (pThreadsMaxIdle > value) throw new ArgumentOutOfRangeException("ThreadsMax", "ThreadsMax must be greater than or equal to ThreadsMaxIdle");
+				if (value <= 0) throw new ArgumentOutOfRangeException("ThreadsMax", "ThreadsMax must greater than 0");
+				pThreadsMax = value;
 			}
 		}
 
 		public WorkItem QueueWorkItem(WaitCallback Callback, object State) {
-			WorkItem WorkItem = new WorkItem();
+			WorkItem WorkItem = new WorkItem() { Callback = Callback, State = State };
 			ThreadInfo Thread = null;
-			WorkItem.Callback = Callback;
-			WorkItem.State = State;
 			lock (pIdleThreads) {
-				while (pIdleThreads.Count > 0) {
+				while (Thread == null && pIdleThreads.Count > 0) {
 					Thread = pIdleThreads.Dequeue();
-					if (!Thread.Abort) {
-						break;
-					} else {
-						Thread = null;
-					}
+					if (Thread.Abort) Thread = null;
 				}
 			}
 			if (Thread == null)  {
-				if (pThreads.Count < pThreadsMax) {
-					Thread = StartThread(true);
-				} else {
-					throw new ThreadStateException("Thread limit exceeded");
-				}
+				if (pThreads.Count >= pThreadsMax) throw new ThreadStateException("Thread limit exceeded");
+				Thread = StartThread(true);
 			}
 			Thread.LastActive = DateTime.Now;
 			WorkItem.Thread = Thread;
@@ -235,16 +202,13 @@ namespace UCIS {
 				while (true) {
 					if (Thread.WaitHandle == null) throw new ArgumentNullException("WaitHandle");
 					if (!Thread.WaitHandle.WaitOne(1000, false)) {
-						if (pBusyThreads.Count == 0) {
-							return;
-						} else {
-							continue;
-						}
-					}					
+						if (pBusyThreads <= 0) return;
+						continue;
+					}
 					if (Thread.Abort) break;
 
 					Thread.Busy = true;
-					lock (pBusyThreads) pBusyThreads.Add(Thread);
+					Interlocked.Increment(ref pBusyThreads);
 					try {
 						if (Thread.WorkItem == null) throw new ArgumentNullException("WorkItem");
 						if (Thread.WorkItem.Callback == null) throw new ArgumentNullException("WorkItem.Callback");
@@ -262,7 +226,7 @@ namespace UCIS {
 							throw new Exception("Unhandled exception in work item", e.Exception);
 						}
 					} finally {
-						lock (pBusyThreads) pBusyThreads.Remove(Thread);
+						Interlocked.Decrement(ref pBusyThreads);
 					}
 					Thread.WorkItem.Thread = null;
 					Thread.WorkItem = null;

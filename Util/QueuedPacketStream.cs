@@ -104,43 +104,26 @@ namespace UCIS.Util {
 			return ret;
 		}
 
-		class AsyncResult : IAsyncResult {
-			public Object AsyncState { get; private set; }
-			public WaitHandle AsyncWaitHandle { get { return WaitHandle; } }
-			public Boolean CompletedSynchronously { get; private set; }
-			public Boolean IsCompleted { get; private set; }
+		class AsyncResult : AsyncResultBase {
 			public Boolean IsReadPacket { get; private set; }
-
 			public Byte[] Buffer = null;
 			public int BufferOffset = 0;
 			public int BufferLength = 0;
 
-			private ManualResetEvent WaitHandle = new ManualResetEvent(false);
-			private AsyncCallback Callback = null;
-			private void CallCallback(Object state) {
-				if (Callback != null) Callback(this);
-			}
 			public void SetCompleted(Boolean synchronously) {
-				CompletedSynchronously = synchronously;
-				IsCompleted = true;
-				WaitHandle.Set();
-				if (Callback != null) SysThreadPool.QueueUserWorkItem(CallCallback);
+				base.SetCompleted(synchronously, null);
 			}
-			public AsyncResult(AsyncCallback callback, Object state) {
-				this.Callback = callback;
-				this.AsyncState = state;
-				CompletedSynchronously = false;
-				IsCompleted = false;
+			public AsyncResult(AsyncCallback callback, Object state) : base(callback, state) {
 				IsReadPacket = true;
 			}
-			public AsyncResult(AsyncCallback callback, Object state, Byte[] buffer, int bufferOffset, int bufferLength)
-				: this(callback, state) {
+			public AsyncResult(AsyncCallback callback, Object state, Byte[] buffer, int bufferOffset, int bufferLength) : base(callback, state) {
 				this.Buffer = buffer;
 				this.BufferOffset = bufferOffset;
 				this.BufferLength = bufferLength;
 				IsReadPacket = false;
 			}
 		}
+
 		private IAsyncResult BeginAsyncReadOperation(AsyncResult ar) {
 			lock (ReceiveQueue) {
 				if (AsyncReceiveOperation != null) throw new InvalidOperationException("Another asynchronous operation is in progress");

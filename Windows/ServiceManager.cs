@@ -68,8 +68,7 @@ namespace UCIS.Windows {
 		public string StartPassword { get { return (string)_serviceObject.GetPropertyValue("StartPassword"); } }
 
 		public void Change(string DisplayName, string PathName, string StartMode, bool DesktopInteract, string StartName, string StartPassword) {
-			UInt32 ret;
-			ret = (UInt32)_serviceObject.InvokeMethod("Change", new Object[] {
+			UInt32 ret = (UInt32)_serviceObject.InvokeMethod("Change", new Object[] {
 					DisplayName, //DisplayName
 					PathName, //PathName
 					16, //ServiceType (16 = own process)

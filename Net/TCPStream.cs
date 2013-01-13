@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using UCIS.Util;
 using SysThreadPool = System.Threading.ThreadPool;
 
 namespace UCIS.Net {
@@ -76,17 +77,15 @@ namespace UCIS.Net {
 		}
 
 		public override int Read(byte[] buffer, int offset, int size) {
-			int Count = 0;
-
 			if (size < 1) return 0;
+			int Count = 0;
 			if (_HasPeekByte) {
 				buffer[offset] = _PeekByte;
 				_HasPeekByte = false;
 				Count = 1;
 				offset += 1;
-				size -= 1;
+				size = 0;
 			}
-
 			try {
 				if (size > 0) Count += Socket.Receive(buffer, offset, size, SocketFlags.None);
 			} catch (SocketException ex) {
@@ -114,34 +113,12 @@ namespace UCIS.Net {
 			return Count;
 		}
 
-		class AsyncResult : IAsyncResult {
-			public Object AsyncState { get; private set; }
-			public WaitHandle AsyncWaitHandle { get { return WaitHandle; } }
-			public Boolean CompletedSynchronously { get; private set; }
-			public Boolean IsCompleted { get; private set; }
+		class AsyncResult : AsyncResultBase {
 			public int Count { get; private set; }
-
-			private ManualResetEvent WaitHandle = new ManualResetEvent(false);
-			private AsyncCallback Callback = null;
-			private void CallCallback(Object state) {
-				if (Callback != null) Callback(this);
-			}
+			public AsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
 			public void SetCompleted(Boolean synchronously, int cnt) {
-				CompletedSynchronously = synchronously;
 				Count = cnt;
-				IsCompleted = true;
-				WaitHandle.Set();
-				if (synchronously) {
-					CallCallback(null);
-				} else {
-					if (Callback != null) SysThreadPool.QueueUserWorkItem(CallCallback);
-				}
-			}
-			public AsyncResult(AsyncCallback callback, Object state) {
-				this.Callback = callback;
-				this.AsyncState = state;
-				CompletedSynchronously = false;
-				IsCompleted = false;
+				base.SetCompleted(synchronously, null);
 			}
 		}
 		public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
@@ -152,8 +129,6 @@ namespace UCIS.Net {
 			} else if (_HasPeekByte) {
 				buffer[offset] = _PeekByte;
 				_HasPeekByte = false;
-				offset += 1;
-				count -= 1;
 				AsyncResult ar = new AsyncResult(callback, state);
 				ar.SetCompleted(true, 1);
 				return ar;
@@ -173,8 +148,7 @@ namespace UCIS.Net {
 			if (_HasPeekByte) {
 				return _PeekByte;
 			} else {
-				int Result = 0;
-				Result = ReadByte();
+				int Result = ReadByte();
 				if (Result >= 0 && Result <= 255) {
 					_PeekByte = (byte)Result;
 					_HasPeekByte = true;
@@ -211,18 +185,11 @@ namespace UCIS.Net {
 		}
 
 		public override long Length {
-			get {
-				throw new NotSupportedException();
-			}
+			get { throw new NotSupportedException(); }
 		}
-
 		public override long Position {
-			get {
-				throw new NotSupportedException();
-			}
-			set {
-				throw new NotSupportedException();
-			}
+			get { throw new NotSupportedException(); }
+			set { throw new NotSupportedException(); }
 		}
 
 		public override long Seek(long offset, SeekOrigin origin) {
@@ -266,7 +233,7 @@ namespace UCIS.Net {
 		}
 
 		public override void Close() {
-			System.Net.Sockets.Socket s = Interlocked.Exchange(ref _Socket, null);
+			Socket s = Interlocked.Exchange(ref _Socket, null);
 			try {
 				if (s != null) {
 					try {
