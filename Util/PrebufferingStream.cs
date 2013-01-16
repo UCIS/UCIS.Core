@@ -7,11 +7,16 @@ using System.Threading;
 namespace UCIS.Util {
 	public class PrebufferingStream : Stream {
 		class AsyncResult : AsyncResultBase {
-			public int Count { get; private set; }
+			public Byte[] Buffer { get; set; }
+			public int Offset { get; set; }
 			public int Left { get; set; }
+			public int Count { get; set; }
 			public AsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
 			public void SetCompleted(Boolean synchronously, int count, Exception error) {
 				this.Count = count;
+				base.SetCompleted(synchronously, error);
+			}
+			public void SetCompleted(Boolean synchronously, Exception error) {
 				base.SetCompleted(synchronously, error);
 			}
 			public int WaitForCompletion() {
@@ -43,10 +48,11 @@ namespace UCIS.Util {
 		}
 		public IAsyncResult BeginPrebuffering(int count, AsyncCallback callback, Object state) {
 			AsyncResult ar = new AsyncResult(callback, state);
-			if (prebuffercount > count) {
-				ar.SetCompleted(true, count, null);
+			if (prebuffercount >= count) {
+				ar.SetCompleted(true, prebuffercount, null);
 			} else {
 				PrepareBuffer(count);
+				ar.Left = count - prebuffercount;
 				int off = prebufferoffset + prebuffercount;
 				baseStream.BeginRead(prebuffer, off, prebuffer.Length - off, asyncPrebufferReadCallback, ar);
 			}
@@ -153,6 +159,21 @@ namespace UCIS.Util {
 			}
 		}
 
+		public void ReadAll(Byte[] buffer, int offset, int count) {
+			while (count > 0) {
+				int read = Read(buffer, offset, count);
+				if (read <= 0) throw new EndOfStreamException();
+				offset += read;
+				count -= read;
+			}
+		}
+
+		public Byte[] ReadAll(int count) {
+			Byte[] buffer = new Byte[count];
+			ReadAll(buffer, 0, count);
+			return buffer;
+		}
+
 		public override int ReadByte() {
 			if (Prebuffer(1) < 1) return -1;
 			int v = prebuffer[prebufferoffset];
@@ -182,6 +203,53 @@ namespace UCIS.Util {
 			} else {
 				return baseStream.EndRead(asyncResult);
 			}
+		}
+
+		public IAsyncResult BeginReadAll(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			AsyncResult ar = new AsyncResult(callback, state);
+			ar.Buffer = buffer;
+			ar.Offset = 0;
+			ar.Left = count;
+			ar.Count = 0;
+			if (prebuffercount > 0) {
+				int read = Math.Min(ar.Left, prebuffercount);
+				Buffer.BlockCopy(prebuffer, prebufferoffset, ar.Buffer, ar.Offset, read);
+				prebufferoffset += read;
+				prebuffercount -= read;
+				ar.Offset += read;
+				ar.Left -= read;
+				ar.Count += read;
+			}
+			if (ar.Left > 0) {
+				baseStream.BeginRead(ar.Buffer, ar.Offset, ar.Left, asyncReadAllReadCallback, ar);
+			} else {
+				ar.SetCompleted(true, count, null);
+			}
+			return ar;
+		}
+
+		private void asyncReadAllReadCallback(IAsyncResult ar) {
+			AsyncResult myar = (AsyncResult)ar.AsyncState;
+			try {
+				int len = baseStream.EndRead(ar);
+				if (len <= 0) throw new EndOfStreamException();
+				myar.Offset += len;
+				myar.Left -= len;
+				myar.Count += len;
+				if (myar.Left > 0) {
+					int off = prebufferoffset + prebuffercount;
+					baseStream.BeginRead(myar.Buffer, myar.Offset, myar.Left, asyncReadAllReadCallback, ar);
+				} else {
+					myar.SetCompleted(false, myar.Count, null);
+				}
+			} catch (Exception ex) {
+				myar.SetCompleted(false, ex);
+			}
+		}
+
+		public int EndReadAll(IAsyncResult asyncResult) {
+			AsyncResult myar = asyncResult as AsyncResult;
+			return myar.WaitForCompletion();
 		}
 
 		public override void Close() {
