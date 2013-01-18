@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using UCIS.Net;
 using UCIS.Util;
@@ -12,6 +14,7 @@ namespace UCIS.Net.HTTP {
 	public class HTTPServer : TCPServer.IModule, IDisposable {
 		public IHTTPContentProvider ContentProvider { get; set; }
 		public Boolean ServeFlashPolicyFile { get; set; }
+		public X509Certificate SSLCertificate { get; set; }
 		private Socket Listener = null;
 
 		public HTTPServer() { }
@@ -31,10 +34,25 @@ namespace UCIS.Net.HTTP {
 		private void AcceptCallback(IAsyncResult ar) {
 			try {
 				Socket socket = Listener.EndAccept(ar);
-				new HTTPContext(this, socket);
+				if (SSLCertificate != null) {
+					SslStream ssl = new SslStream(new NetworkStream(socket, true));
+					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl });
+				} else {
+					new HTTPContext(this, socket);
+				}
 			} catch (Exception) { }
 			try {
 				Listener.BeginAccept(AcceptCallback, null);
+			} catch (Exception) { }
+		}
+
+		private void SslAuthenticationCallback(IAsyncResult ar) {
+			Object[] args = (Object[])ar.AsyncState;
+			Socket socket = (Socket)args[0];
+			SslStream ssl = (SslStream)args[1];
+			try {
+				ssl.EndAuthenticateAsServer(ar);
+				new HTTPContext(this, ssl, socket);
 			} catch (Exception) { }
 		}
 
@@ -67,6 +85,7 @@ namespace UCIS.Net.HTTP {
 		private List<HTTPHeader> RequestHeaders;
 		private HTTPConnectionState State = HTTPConnectionState.Starting;
 
+
 		private enum HTTPConnectionState {
 			Starting = 0,
 			ReceivingRequest = 1,
@@ -76,22 +95,17 @@ namespace UCIS.Net.HTTP {
 			Closed = 5,
 		}
 
-		public HTTPContext(HTTPServer server, TCPStream stream) {
+		public HTTPContext(HTTPServer server, TCPStream stream) : this(server, stream, stream.Socket) { }
+		public HTTPContext(HTTPServer server, Socket socket) : this(server, null, socket) { }
+		public HTTPContext(HTTPServer server, Stream stream, Socket socket) {
 			this.Server = server;
-			this.TCPStream = stream;
-			this.Socket = stream.Socket;
-			this.LocalEndPoint = Socket.LocalEndPoint;
-			this.RemoteEndPoint = Socket.RemoteEndPoint;
-			Init(stream);
-		}
-
-		public HTTPContext(HTTPServer server, Socket socket) {
-			this.Server = server;
-			this.TCPStream = null;
 			this.Socket = socket;
-			this.LocalEndPoint = socket.LocalEndPoint;
-			this.RemoteEndPoint = socket.RemoteEndPoint;
-			Init(new NetworkStream(socket, true));
+			if (socket != null) {
+				this.LocalEndPoint = socket.LocalEndPoint;
+				this.RemoteEndPoint = socket.RemoteEndPoint;
+				if (stream == null) stream = new NetworkStream(socket, true);
+			}
+			Init(stream);
 		}
 
 		private void Init(Stream Stream) {
