@@ -19,6 +19,9 @@ namespace UCIS.Util {
 			input.CopyTo(output, 0);
 			return output;
 		}
+		public static T[] ToArray<T>(ArraySegment<T> input) {
+			return Slice(input.Array, input.Offset, input.Count);
+		}
 		public static IList<T> ToList<T>(IEnumerable<T> input) {
 			return new List<T>(input);
 		}

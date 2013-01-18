@@ -20,8 +20,7 @@ namespace UCIS.Util {
 		}
 
 		protected void AddReadBufferCopy(Byte[] buffer, int offset, int count) {
-			Byte[] store;
-			store = new Byte[count];
+			Byte[] store = new Byte[count];
 			Buffer.BlockCopy(buffer, offset, store, 0, count);
 			AddReadBufferNoCopy(store);
 		}
@@ -125,15 +124,17 @@ namespace UCIS.Util {
 		}
 
 		private IAsyncResult BeginAsyncReadOperation(AsyncResult ar) {
+			Boolean synccompleted = false;
 			lock (ReceiveQueue) {
 				if (AsyncReceiveOperation != null) throw new InvalidOperationException("Another asynchronous operation is in progress");
 				if (ReceiveBuffer != null || ReceiveQueue.Count > 0) {
-					ar.SetCompleted(true);
+					synccompleted = true;
 				} else {
 					if (Closed) throw new ObjectDisposedException("QueuedPacketStream", "The connection has been closed");
 					AsyncReceiveOperation = ar;
 				}
 			}
+			if (synccompleted) ar.SetCompleted(true);
 			return ar;
 		}
 		private void EndAsyncReadOperation(AsyncResult ar) {
