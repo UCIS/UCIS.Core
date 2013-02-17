@@ -281,6 +281,16 @@ SendError500AndClose:
 	public interface IHTTPContentProvider {
 		void ServeRequest(HTTPContext context);
 	}
+	public delegate void HTTPContentProviderDelegate(HTTPContext context);
+	public class HTTPContentProviderFunction : IHTTPContentProvider {
+		public HTTPContentProviderDelegate Handler { get; private set; }
+		public HTTPContentProviderFunction(HTTPContentProviderDelegate handler) {
+			this.Handler = handler;
+		}
+		public void ServeRequest(HTTPContext context) {
+			Handler(context);
+		}
+	}
 	public class HTTPPathSelector : IHTTPContentProvider {
 		private List<KeyValuePair<String, IHTTPContentProvider>> Prefixes;
 		private StringComparison PrefixComparison;

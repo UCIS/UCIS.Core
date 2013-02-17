@@ -48,6 +48,7 @@
     <Compile Include="Net\INetworkConnection.cs" />
     <Compile Include="Net\TCPServer.cs" />
     <Compile Include="Net\TCPStream.cs" />
+    <Compile Include="Net\WebSocketPacketStream.cs" />
     <Compile Include="Pml\Channels\ActivePmlChannel.cs" />
     <Compile Include="Pml\Channels\PassivePmlChannel.cs" />
     <Compile Include="Pml\Channels\PmlChannel.cs" />
