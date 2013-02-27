@@ -80,6 +80,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ProtocolBuffers.cs" />
     <Compile Include="Radio\Tuner.cs" />
+    <Compile Include="Remoting\RemotingManager.cs" />
     <Compile Include="ThreadPool.cs" />
     <Compile Include="UTF8NoPreamble.cs" />
     <Compile Include="Util\ArrayUtil.cs" />
