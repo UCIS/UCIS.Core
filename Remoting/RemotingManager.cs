@@ -563,6 +563,9 @@ namespace UCIS.Remoting {
 				} else if (type == typeof(UInt64)) {
 					writer.Write((Byte)14);
 					writer.Write((UInt64)obj);
+				} else if (type == typeof(DateTime)) {
+					writer.Write((Byte)32);
+					writer.Write((Int64)((DateTime)obj).ToBinary());
 				} else if (type.IsSubclassOf(typeof(Type))) {
 					writer.Write((Byte)165);
 					SerializeType(writer, (Type)obj);
@@ -581,7 +584,7 @@ namespace UCIS.Remoting {
 				} else if (obj is ISerializable) {
 					SerializationInfo si = new SerializationInfo(type, new FormatterConverter());
 					((ISerializable)obj).GetObjectData(si, new StreamingContext(StreamingContextStates.All));
-					writer.Write((Byte)166);
+					writer.Write((Byte)128);
 					SerializeType(writer, Type.GetType(si.FullTypeName + "," + si.AssemblyName));
 					writer.Write((int)si.MemberCount);
 					foreach (SerializationEntry se in si) {
@@ -593,13 +596,11 @@ namespace UCIS.Remoting {
 					Object[] values = FormatterServices.GetObjectData(obj, members);
 					writer.Write((Byte)128);
 					SerializeType(writer, type);
+					writer.Write((int)members.Length);
 					for (int i = 0; i < members.Length; i++) {
-						MemberInfo mi = members[i];
-						writer.Write((Byte)255);
-						writer.Write(mi.Name);
+						writer.Write(members[i].Name);
 						Serialize(writer, values[i]);
 					}
-					writer.Write((Byte)0);
 				} else {
 					GetObjectData(obj, writer);
 				}
@@ -630,25 +631,38 @@ namespace UCIS.Remoting {
 			if (t == 12) return reader.ReadUInt16();
 			if (t == 13) return reader.ReadUInt32();
 			if (t == 14) return reader.ReadUInt64();
+			if (t == 32) return DateTime.FromBinary(reader.ReadInt64());
 			if (t == 128) {
 				Type type = DeserializeType(reader);
-				Object inst = FormatterServices.GetUninitializedObject(type);
-				List<MemberInfo> members = new List<MemberInfo>();
-				List<Object> values = new List<object>();
-				while (true) {
-					t = reader.ReadByte();
-					if (t == 0) {
-						break;
-					} else if (t == 255) {
+				int cnt = reader.ReadInt32();
+				Object inst;
+				StreamingContext sc = new StreamingContext(StreamingContextStates.All);
+				if (typeof(ISerializable).IsAssignableFrom(type) && type.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Type[] { typeof(SerializationInfo), typeof(StreamingContext) }, null) != null) {
+					SerializationInfo si = new SerializationInfo(type, new FormatterConverter());
+					for (int i = 0; i < cnt; i++) {
+						String name = reader.ReadString();
+						Object value = Deserialize(reader);
+						si.AddValue(name, value);
+					}
+					inst = Activator.CreateInstance(type, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Object[] { si, sc }, null);
+				} else if (type.IsSerializable) {
+					inst = FormatterServices.GetUninitializedObject(type);
+					List<MemberInfo> members = new List<MemberInfo>();
+					List<Object> values = new List<object>();
+					for (int i = 0; i < cnt; i++) {
 						String mname = reader.ReadString();
 						Object value = Deserialize(reader);
 						MemberInfo[] mms = type.GetMember(mname, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 						if (mms.Length != 1) throw new InvalidOperationException();
 						members.Add(mms[0]);
 						values.Add(value);
-					} else throw new InvalidDataException();
+					}
+					FormatterServices.PopulateObjectMembers(inst, members.ToArray(), values.ToArray());
+				} else {
+					throw new InvalidOperationException("Type " + type.Name + " is not serializable");
 				}
-				FormatterServices.PopulateObjectMembers(inst, members.ToArray(), values.ToArray());
+				IObjectReference objref = inst as IObjectReference;
+				if (objref != null) inst = objref.GetRealObject(sc);
 				return inst;
 			}
 			if (t == 129 || t == 130 || t == 131) {
@@ -662,21 +676,6 @@ namespace UCIS.Remoting {
 			}
 			if (t == 165) {
 				return DeserializeType(reader);
-			}
-			if (t == 166) {
-				Type type = DeserializeType(reader);
-				SerializationInfo si = new SerializationInfo(type, new FormatterConverter());
-				int cnt = reader.ReadInt32();
-				for (int i = 0; i < cnt; i++) {
-					String name = reader.ReadString();
-					Object sub = Deserialize(reader);
-					si.AddValue(name, sub);
-				}
-				StreamingContext sc = new StreamingContext(StreamingContextStates.All);
-				Object obj = Activator.CreateInstance(type, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Object[] { si, sc }, null);
-				IObjectReference objref = obj as IObjectReference;
-				if (objref != null) obj = objref.GetRealObject(sc);
-				return obj;
 			}
 			throw new NotSupportedException();
 		}
