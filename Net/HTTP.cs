@@ -400,6 +400,7 @@ SendError500AndClose:
 					String fname = Encoding.ASCII.GetString(header, 0, flen);
 					String fsize = Encoding.ASCII.GetString(header, 124, 11);
 					int fsizei = Convert.ToInt32(fsize, 8);
+					if (fname.StartsWith("./")) fname = fname.Length == 2 ? "/" : fname.Substring(2);
 					if (reqname1.Equals(fname, StringComparison.OrdinalIgnoreCase) || reqname2.Equals(fname)) {
 						context.SendStatus(200);
 						context.SendHeader("Content-Length", fsizei.ToString());
