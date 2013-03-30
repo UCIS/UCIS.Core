@@ -420,9 +420,9 @@ SendError500AndClose:
 						if (ctype != null) context.SendHeader("Content-Type", ctype);
 						Stream response = context.GetResponseStream();
 						int left = fsizei;
+						byte[] buffer = new byte[Math.Min(left, 1024 * 10)];
 						while (left > 0) {
-							byte[] buffer = new byte[1024 * 10];
-							int len = fs.Read(buffer, 0, buffer.Length);
+							int len = fs.Read(buffer, 0, Math.Min(left, buffer.Length));
 							if (len <= 0) break;
 							left -= len;
 							response.Write(buffer, 0, len);
