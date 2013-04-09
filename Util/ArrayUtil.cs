@@ -92,6 +92,26 @@ namespace UCIS.Util {
 			foreach (T v in array) h ^= v.GetHashCode();
 			return h;
 		}
+		public static void Add<T>(ref T[] array, params T[] items) {
+			if (array == null) {
+				array = new T[items.Length];
+				items.CopyTo(array, 0);
+			} else {
+				int index = array.Length;
+				Array.Resize(ref array, index + items.Length);
+				items.CopyTo(array, index);
+			}
+		}
+		public static void Add<T>(ref T[] array, ICollection<T> items) {
+			if (array == null) {
+				array = new T[items.Count];
+				items.CopyTo(array, 0);
+			} else {
+				int index = array.Length;
+				Array.Resize(ref array, index + items.Count);
+				items.CopyTo(array, index);
+			}
+		}
 		public static void Add<T>(ref T[] array, T item) {
 			if (array == null) {
 				array = new T[] { item };
