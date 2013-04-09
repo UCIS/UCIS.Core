@@ -4,6 +4,8 @@ using SysThreadPool = System.Threading.ThreadPool;
 
 namespace UCIS.Util {
 	public abstract class AsyncResultBase : IAsyncResult {
+		[ThreadStatic]
+		static Boolean ThreadInCallback = false;
 		ManualResetEvent WaitEvent = null;
 		AsyncCallback Callback = null;
 		public object AsyncState { get; private set; }
@@ -36,8 +38,13 @@ namespace UCIS.Util {
 				if (WaitEvent != null) WaitEvent.Set();
 			}
 			if (Callback != null) {
-				if (synchronously) {
-					Callback(this);
+				if (synchronously && !ThreadInCallback) {
+					try {
+						ThreadInCallback = true;
+						Callback(this);
+					} finally {
+						ThreadInCallback = false;
+					}
 				} else {
 					SysThreadPool.QueueUserWorkItem(CallCallback);
 				}
