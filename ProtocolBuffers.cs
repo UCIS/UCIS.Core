@@ -67,13 +67,19 @@ namespace UCIS.ProtocolBuffers {
 		}
 
 		private int ReadVarIntTo(out int v) {
+			long vl;
+			int l = ReadVarIntTo(out vl);
+			v = (int)vl;
+			return l;
+		}
+		private int ReadVarIntTo(out long v) {
 			v = 0;
 			int h = 0;
 			int b = 0x80;
 			int l = 0;
 			while ((b & 0x80) != 0) {
 				b = buffer[offset + index + l];
-				v |= (b & 0x7F) << h;
+				v |= ((long)b & 0x7FL) << h;
 				h += 7;
 				l++;
 			}
@@ -85,7 +91,7 @@ namespace UCIS.ProtocolBuffers {
 
 		public long GetVarint() {
 			if (!hasCurrentField || WireType != 0) throw new InvalidOperationException();
-			int v;
+			long v;
 			ReadVarIntTo(out v);
 			return v;
 		}
@@ -145,7 +151,7 @@ namespace UCIS.ProtocolBuffers {
 		private void WriteVarint(long value) {
 			while ((value & ~0x7fL) != 0) {
 				stream.WriteByte((Byte)(0x80 | value));
-				value >>= 7;
+				value = (long)((ulong)value >> 7);
 			}
 			stream.WriteByte((Byte)value);
 		}
