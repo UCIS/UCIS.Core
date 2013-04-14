@@ -23,6 +23,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -43,6 +44,54 @@
     <Compile Include="Cci\CciCommand.cs" />
     <Compile Include="Database.cs" />
     <None Include="DBReader.cs" />
+    <Compile Include="NaCl\APIv2.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_box\curve25519xsalsa20poly1305.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_core\hsalsa20.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_core\salsa20.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_hashblocks\sha512.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_hash\sha512.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_onetimeauth\poly1305.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_scalarmult\curve25519.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_secretbox\xsalsa20poly1305.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_sign\edwards25519sha512batch.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_stream\salsa20.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_stream\xsalsa20.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_verify\16.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\crypto_verify\32.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\Native.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="NaCl\randombytes.cs">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Net\ConnectionList.cs" />
     <Compile Include="Net\HTTP.cs" />
     <Compile Include="Net\INetworkConnection.cs" />
