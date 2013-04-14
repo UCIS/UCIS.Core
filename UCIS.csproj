@@ -32,6 +32,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -131,6 +132,31 @@
     <Compile Include="Radio\Tuner.cs" />
     <Compile Include="Remoting\RemotingManager.cs" />
     <Compile Include="ThreadPool.cs" />
+    <Compile Include="USBLib\Communication\IUsbDevice.cs" />
+    <Compile Include="USBLib\Communication\IUsbDeviceRegistry.cs" />
+    <Compile Include="USBLib\Communication\LibUsb0\LibUsb0Registry.cs" />
+    <Compile Include="USBLib\Communication\LibUsb0\LibUsbDevice.cs" />
+    <Compile Include="USBLib\Communication\LibUsb0\Support.cs" />
+    <Compile Include="USBLib\Communication\LibUsb1\libusb1.cs" />
+    <Compile Include="USBLib\Communication\LibUsb1\LibUsb1Device.cs" />
+    <Compile Include="USBLib\Communication\LibUsb1\LibUsb1Registry.cs" />
+    <Compile Include="USBLib\Communication\LibUsbDotNet.cs" />
+    <Compile Include="USBLib\Communication\UsbControlRequestType.cs" />
+    <Compile Include="USBLib\Communication\UsbDescriptorType.cs" />
+    <Compile Include="USBLib\Communication\UsbInterface.cs" />
+    <Compile Include="USBLib\Communication\UsbPipeStream.cs" />
+    <Compile Include="USBLib\Communication\WindowsUsbDeviceRegistry.cs" />
+    <Compile Include="USBLib\Communication\WinUsb\WinUsbDevice.cs" />
+    <Compile Include="USBLib\Communication\WinUsb\WinUsbRegistry.cs" />
+    <Compile Include="USBLib\Descriptor\UsbDescriptor.cs" />
+    <Compile Include="USBLib\Internal\Windows\SetupApi.cs" />
+    <Compile Include="USBLib\Internal\Windows\UsbApi.cs" />
+    <Compile Include="USBLib\Internal\Windows\Win32Kernel.cs" />
+    <Compile Include="USBLib\Windows\Devices\DeviceNode.cs" />
+    <Compile Include="USBLib\Windows\USB\UsbBus.cs" />
+    <Compile Include="USBLib\Windows\USB\UsbController.cs" />
+    <Compile Include="USBLib\Windows\USB\UsbDevice.cs" />
+    <Compile Include="USBLib\Windows\USB\UsbHub.cs" />
     <Compile Include="UTF8NoPreamble.cs" />
     <Compile Include="Util\ArrayUtil.cs" />
     <Compile Include="Util\AsyncResultBase.cs" />
