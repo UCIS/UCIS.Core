@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
-using UCIS.USBLib.Internal.Windows;
 using UCIS.HWLib.Windows.Devices;
+using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.HWLib.Windows.USB {
 	public class UsbDevice {

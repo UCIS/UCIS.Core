@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
-using UCIS.HWLib.Windows.Devices;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
+using UCIS.HWLib.Windows.Devices;
 
 namespace UCIS.USBLib.Internal.Windows {
 	class SafeDeviceInfoSetHandle : SafeHandleZeroOrMinusOneIsInvalid {

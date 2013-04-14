@@ -1,9 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using UCIS.USBLib.Internal.Windows;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 
 namespace UCIS.HWLib.Windows.USB {
 	public class UsbHub : UsbDevice {

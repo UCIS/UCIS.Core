@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Runtime.InteropServices;
+using System.Text;
 using UCIS.USBLib.Communication;
 
 namespace UCIS.USBLib.Descriptor {

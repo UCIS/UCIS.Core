@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using UCIS.HWLib.Windows.Devices;
 using UCIS.USBLib.Internal.Windows;
 
