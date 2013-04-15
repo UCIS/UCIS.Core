@@ -88,7 +88,8 @@ namespace UCIS.FBGUI {
 		void IFBGControl.Orphaned() { Orphaned(); }
 		protected virtual void Paint(Graphics g) {
 			if (!visible) return;
-			if (backColor.A != 0) g.Clear(backColor);
+			if (backColor.A == 0xff) g.Clear(backColor);
+			else if (backColor.A != 0) using (Brush brush = new SolidBrush(backColor)) g.FillRectangle(brush, g.ClipBounds);
 			RaiseEvent(OnPaint, new PaintEventArgs(g, Rectangle.Round(g.ClipBounds)));
 		}
 		protected virtual void MouseMove(Point position, MouseButtons buttons) { RaiseEvent(OnMouseMove, new MouseEventArgs(buttons, 0, position.X, position.Y, 0)); }
@@ -553,6 +554,7 @@ namespace UCIS.FBGUI {
 		public FBGCursor Cursor {
 			get { return cursor; }
 			set {
+				if (cursor == value) return;
 				cursor = value;
 				Invalidate();
 			}
@@ -1352,19 +1354,72 @@ namespace UCIS.FBGUI {
 			}
 		}
 	}
-	public class FBGDomainUpDown : FBGControl {
-		private List<Object> items = new List<object>();
-		private int selectedIndex = -1;
+	public abstract class FBGUpDownControlBase : FBGControl {
 		private ButtonState buttonUpState = ButtonState.Normal;
 		private ButtonState buttonDownState = ButtonState.Normal;
+		public FBGUpDownControlBase(IFBGContainerControl parent) : base(parent) {
+			BackColor = Color.White;
+			Height = 25;
+		}
+		protected override void Paint(Graphics g) {
+			base.Paint(g);
+			g.DrawRectangle(Pens.DarkBlue, 0, 0, Bounds.Width - 1, Bounds.Height - 1);
+			int lh = (int)Math.Ceiling(SystemFonts.DefaultFont.GetHeight());
+			String text = SelectedText;
+			if (text == null) {
+				g.FillRectangle(Brushes.DarkGray, 2, 2, Bounds.Width - 4 - 16, Bounds.Height - 4);
+			} else {
+				using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap)) {
+					sf.LineAlignment = StringAlignment.Center;
+					g.FillRectangle(Brushes.LightGray, 2, 2, Bounds.Width - 4 - 16, Bounds.Height - 4);
+					g.DrawString(text, SystemFonts.DefaultFont, SystemBrushes.WindowText, new Rectangle(3, 2, Bounds.Width - 6 - 16, Bounds.Height - 4), sf);
+				}
+			}
+			int xoff = Bounds.Width - 17;
+			int he = (Bounds.Height - 2) / 2;
+			ControlPaint.DrawScrollButton(g, xoff, 1, 16, he, ScrollButton.Up, buttonUpState);
+			ControlPaint.DrawScrollButton(g, xoff, Bounds.Height - he - 1, 16, he, ScrollButton.Down, buttonDownState);
+		}
+		protected abstract String SelectedText { get; }
+		protected override void MouseDown(Point position, MouseButtons buttons) {
+			CaptureKeyboard(true);
+			if ((buttons & MouseButtons.Left) != 0) {
+				CaptureMouse(true);
+				if (position.X > Bounds.Width - 17) {
+					if (position.Y < Bounds.Height / 2) {
+						buttonUpState = ButtonState.Pushed;
+						ButtonPressUp();
+					} else {
+						buttonDownState = ButtonState.Pushed;
+						ButtonPressDown();
+					}
+					Invalidate(new Rectangle(Bounds.Width - 16, 0, 16, Bounds.Height));
+				}
+			}
+		}
+		protected override void MouseUp(Point position, MouseButtons buttons) {
+			if ((buttons & MouseButtons.Left) != 0) {
+				CaptureMouse(false);
+				buttonUpState = buttonDownState = ButtonState.Normal;
+				Invalidate(new Rectangle(Bounds.Width - 16, 0, 16, Bounds.Height));
+			}
+		}
+		protected override void KeyDown(Keys key) {
+			base.KeyDown(key);
+			if (key == Keys.Down) ButtonPressDown();
+			else if (key == Keys.Up) ButtonPressUp();
+		}
+		protected abstract void ButtonPressUp();
+		protected abstract void ButtonPressDown();
+	}
+	public class FBGDomainUpDown : FBGUpDownControlBase {
+		private List<Object> items = new List<object>();
+		private int selectedIndex = -1;
 		private Converter<Object, String> itemFormatter = null;
 		public Boolean AllowSelectEmpty { get; set; }
 		public Converter<Object, String> ItemFormatter { get { return itemFormatter; } set { itemFormatter = value; Invalidate(); } }
 		public event EventHandler SelectedIndexChanged;
-		public FBGDomainUpDown(IFBGContainerControl parent)
-			: base(parent) {
-			BackColor = Color.White;
-		}
+		public FBGDomainUpDown(IFBGContainerControl parent) : base(parent) { }
 		public void AddItem(Object item) {
 			items.Add(item);
 			Invalidate();
@@ -1402,6 +1457,15 @@ namespace UCIS.FBGUI {
 				}
 			}
 		}
+		protected override string SelectedText {
+			get {
+				if (selectedIndex == -1) return null;
+				Object item = items[selectedIndex];
+				if (itemFormatter != null) return itemFormatter(item);
+				if (item == null) return null;
+				return item.ToString();
+			}
+		}
 		private void FixSelectedIndex(int change) {
 			int value = selectedIndex;
 			if (value == 0 && change == -1 && !AllowSelectEmpty) change = 0;
@@ -1410,56 +1474,40 @@ namespace UCIS.FBGUI {
 			if (value >= items.Count) value = items.Count - 1;
 			SelectedIndex = value;
 		}
-		protected override void Paint(Graphics g) {
-			base.Paint(g);
-			g.DrawRectangle(Pens.DarkBlue, 0, 0, Bounds.Width - 1, Bounds.Height - 1);
-			int lh = (int)Math.Ceiling(SystemFonts.DefaultFont.GetHeight());
-			if (selectedIndex == -1) {
-				g.FillRectangle(Brushes.DarkGray, 2, 2, Bounds.Width - 4 - 16, Bounds.Height - 4);
-			} else {
-				using (StringFormat sf = new StringFormat(StringFormatFlags.NoWrap)) {
-					sf.LineAlignment = StringAlignment.Center;
-					Object item = items[selectedIndex];
-					String text = itemFormatter == null ? (item == null ? String.Empty : item.ToString()) : itemFormatter(item);
-					g.FillRectangle(Brushes.LightGray, 2, 2, Bounds.Width - 4 - 16, Bounds.Height - 4);
-					g.DrawString(text, SystemFonts.DefaultFont, SystemBrushes.WindowText, new Rectangle(3, 2, Bounds.Width - 6 - 16, Bounds.Height - 4), sf);
-				}
-			}
-			int xoff = Bounds.Width - 17;
-			int he = (Bounds.Height - 2) / 2;
-			ControlPaint.DrawScrollButton(g, xoff, 1, 16, he, ScrollButton.Up, buttonUpState);
-			ControlPaint.DrawScrollButton(g, xoff, Bounds.Height - he - 1, 16, he, ScrollButton.Down, buttonDownState);
+		protected override void ButtonPressDown() {
+			FixSelectedIndex(1);
 		}
-		protected override void MouseDown(Point position, MouseButtons buttons) {
-			CaptureKeyboard(true);
-			if ((buttons & MouseButtons.Left) != 0) {
-				CaptureMouse(true);
-				if (position.X > Bounds.Width - 17) {
-					if (position.Y < Bounds.Height / 2) {
-						buttonUpState = ButtonState.Pushed;
-						FixSelectedIndex(-1);
-					} else {
-						buttonDownState = ButtonState.Pushed;
-						FixSelectedIndex(1);
-					}
-					Invalidate(new Rectangle(Bounds.Width - 16, 0, 16, Bounds.Height));
-				}
-			}
+		protected override void ButtonPressUp() {
+			FixSelectedIndex(-1);
 		}
-		protected override void MouseUp(Point position, MouseButtons buttons) {
-			if ((buttons & MouseButtons.Left) != 0) {
-				CaptureMouse(false);
-				buttonUpState = buttonDownState = ButtonState.Normal;
-				Invalidate(new Rectangle(Bounds.Width - 16, 0, 16, Bounds.Height));
-			}
+	}
+	public class FBGNumericUpDown : FBGUpDownControlBase {
+		private int minimum = 0;
+		private int maximum = 0;
+		private int value = 0;
+		public event EventHandler SelectedValueChanged;
+		public FBGNumericUpDown(IFBGContainerControl parent) : base(parent) { }
+		public int Value {
+			get { return value; }
+			set { if (this.value == value) return; this.value = value; Invalidate(); RaiseEvent(SelectedValueChanged); }
 		}
-		protected override void KeyDown(Keys key) {
-			base.KeyDown(key);
-			if (key == Keys.Down) {
-				FixSelectedIndex(1);
-			} else if (key == Keys.Up) {
-				FixSelectedIndex(-1);
-			}
+		public int Minimum {
+			get { return minimum; }
+			set { minimum = value; if (this.value < minimum) this.Value = minimum; }
+		}
+		public int Maximum {
+			get { return maximum; }
+			set { maximum = value; if (this.value > maximum) this.Value = maximum; }
+		}
+		public int Step { get; set; }
+		protected override string SelectedText {
+			get { return value.ToString(); }
+		}
+		protected override void ButtonPressDown() {
+			Value = Math.Max(minimum, value - Step);
+		}
+		protected override void ButtonPressUp() {
+			Value = Math.Min(maximum, value + Step);
 		}
 	}
 	public interface IFBGTreeParent {
