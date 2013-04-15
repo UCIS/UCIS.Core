@@ -37,7 +37,9 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Management" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
@@ -45,6 +47,9 @@
     <Compile Include="Cci\CciCommand.cs" />
     <Compile Include="Database.cs" />
     <None Include="DBReader.cs" />
+    <Compile Include="FBGUI.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="NaCl\APIv2.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -167,6 +172,8 @@
     <Compile Include="Util\PipeStream.cs" />
     <Compile Include="Util\PrebufferingStream.cs" />
     <Compile Include="Util\QueuedPacketStream.cs" />
+    <Compile Include="VNCServer\IFramebuffer.cs" />
+    <Compile Include="VNCServer\VNCServer.cs" />
     <Compile Include="Windows\ServiceManager.cs" />
     <Compile Include="Xml\PolicyFile.cs" />
     <Compile Include="Xml\Server.cs" />
