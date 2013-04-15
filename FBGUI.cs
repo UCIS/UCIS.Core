@@ -118,8 +118,8 @@ namespace UCIS.FBGUI {
 	}
 	public class FBGContainerControl : FBGControl, IFBGContainerControl {
 		protected List<IFBGControl> controls = new List<IFBGControl>();
-		private IFBGControl mouseCaptureControl = null;
-		private IFBGControl keyboardCaptureControl = null;
+		protected IFBGControl mouseCaptureControl = null;
+		protected IFBGControl keyboardCaptureControl = null;
 		private Rectangle childarea = Rectangle.Empty;
 		public Rectangle ClientRectangle { get { return childarea; } protected set { childarea = value; Invalidate(); } }
 		public FBGContainerControl(IFBGContainerControl parent) : base(parent) { }
@@ -512,10 +512,10 @@ namespace UCIS.FBGUI {
 		private FBGCursor cursor = null;
 		private Point cursorposition = Point.Empty;
 		public IFramebuffer Framebuffer { get; private set; }
-		private Bitmap Frontbuffer;
-		private Object RenderLock = new object();
+		private Bitmap Frontbuffer = null;
+		protected Object RenderLock = new object();
 		public event EventHandler<InvalidateEventArgs> Painted;
-		private Size size;
+		protected Size size = Size.Empty;
 		private ThreadingTimer PaintTimer = null;
 		private Boolean PaintScheduled = false;
 		private int PaintDelay = 0;
@@ -588,6 +588,9 @@ namespace UCIS.FBGUI {
 			BackColor = SystemColors.Control;
 			size = Frontbuffer.Size;
 		}
+		protected FBGRenderer() : base(null) {
+			BackColor = SystemColors.Control;
+		}
 		public override void Invalidate(Rectangle rect) {
 			if (rect.Width == 0 || rect.Height == 0) return;
 			lock (RenderLock) {
@@ -611,15 +614,17 @@ namespace UCIS.FBGUI {
 				}
 			} catch { }
 		}
-		private void Refresh(Rectangle rect) {
+		protected virtual void Refresh(Rectangle rect) {
 			lock (RenderLock) {
 				rect.Intersect(Bounds);
 				if (rect.Width == 0 || rect.Height == 0) return;
-				using (Graphics g = Graphics.FromImage(Frontbuffer)) {
-					g.SetClip(rect);
-					Paint(g);
+				if (Frontbuffer != null) {
+					using (Graphics g = Graphics.FromImage(Frontbuffer)) {
+						g.SetClip(rect);
+						Paint(g);
+					}
+					if (Framebuffer != null) Framebuffer.DrawImage(Frontbuffer, rect, rect.Location);
 				}
-				if (Framebuffer != null) Framebuffer.DrawImage(Frontbuffer, rect, rect.Location);
 				RaiseEvent(Painted, new InvalidateEventArgs(rect));
 			}
 		}
@@ -637,7 +642,7 @@ namespace UCIS.FBGUI {
 		protected override Boolean CaptureKeyboard(bool capture) {
 			return true;
 		}
-		public void Dispose() {
+		public virtual void Dispose() {
 			lock (RenderLock) {
 				if (PaintTimer != null) PaintTimer.Dispose();
 				PaintTimer = null;
