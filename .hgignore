@@ -1,7 +1,6 @@
 syntax: glob
 bin/*
 obj/*
-UCIS.snk
 *.suo
 *.*proj.user
 UCIS.sln
