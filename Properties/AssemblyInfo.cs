@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("UCIS")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("UCIS Class Library")]
+[assembly: AssemblyDescription("UCIS Class Library")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("UCIS")]
-[assembly: AssemblyCopyright("Copyright ©  2009")]
+[assembly: AssemblyCompany("UCIS")]
+[assembly: AssemblyProduct("UCIS Class Library")]
+[assembly: AssemblyCopyright("Copyright © Ivo Smits 2009-2013")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
