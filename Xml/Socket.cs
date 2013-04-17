@@ -36,7 +36,7 @@ namespace UCIS.Xml {
 
 			pStream = Stream;
 		}
-		public XmlSocket(Stream Stream) : this(Stream, new UTF8NoPreamble()) { }
+		public XmlSocket(Stream Stream) : this(Stream, new UTF8Encoding(false)) { }
 
 		public virtual MemoryStream ReadRawDocument() {
 			MemoryStream Buffer = new MemoryStream();
