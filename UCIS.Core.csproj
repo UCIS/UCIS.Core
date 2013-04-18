@@ -47,7 +47,7 @@
     <Compile Include="Cci\CciCommand.cs" />
     <Compile Include="Database.cs" />
     <None Include="DBReader.cs" />
-    <Compile Include="FBGUI.cs">
+    <Compile Include="FBGUI\FBGUI.cs">
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="NaCl\APIv2.cs">
@@ -178,6 +178,12 @@
     <Compile Include="Xml\PolicyFile.cs" />
     <Compile Include="Xml\Server.cs" />
     <Compile Include="Xml\Socket.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="FBGUI\cursor_topleft.png" />
+    <EmbeddedResource Include="FBGUI\cursor_move.png" />
+    <EmbeddedResource Include="FBGUI\cursor_left.png" />
+    <EmbeddedResource Include="FBGUI\cursor_arrow.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

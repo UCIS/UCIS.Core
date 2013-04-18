@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
 using UCIS.VNCServer;
@@ -13,6 +15,7 @@ namespace UCIS.FBGUI {
 	public interface IFBGControl {
 		Rectangle Bounds { get; set; }
 		Boolean Visible { get; set; }
+		FBGCursor Cursor { get; }
 		void Paint(Graphics g);
 		void MouseMove(Point position, MouseButtons buttons);
 		void MouseDown(Point position, MouseButtons buttons);
@@ -24,7 +27,6 @@ namespace UCIS.FBGUI {
 		void Orphaned();
 	}
 	public interface IFBGContainerControl {
-		Size Size { get; } //Todo: really necessary? Probably not.
 		void Invalidate(IFBGControl control, Rectangle rect);
 		void AddControl(IFBGControl control);
 		void RemoveControl(IFBGControl control);
@@ -35,6 +37,7 @@ namespace UCIS.FBGUI {
 		private Rectangle bounds = new Rectangle(0, 0, 100, 100);
 		private Color backColor = Color.Transparent;
 		private Boolean visible = true;
+		protected FBGCursor CurrentCursor = null;
 		public virtual IFBGContainerControl Parent { get; private set; }
 		public event MouseEventHandler OnMouseDown;
 		public event MouseEventHandler OnMouseMove;
@@ -64,6 +67,8 @@ namespace UCIS.FBGUI {
 				Invalidate();
 			}
 		}
+		FBGCursor IFBGControl.Cursor { get { return CurrentCursor; } }
+		public virtual FBGCursor Cursor { get { return CurrentCursor; } set { CurrentCursor = value; } }
 		public Size Size { get { return Bounds.Size; } set { Rectangle r = Bounds; r.Size = value; Bounds = r; } }
 		public Point Location { get { return Bounds.Location; } set { Rectangle r = Bounds; r.Location = value; Bounds = r; } }
 		public int Left { get { return Bounds.Left; } set { Rectangle r = Bounds; r.X = value; Bounds = r; } }
@@ -122,9 +127,11 @@ namespace UCIS.FBGUI {
 		protected IFBGControl mouseCaptureControl = null;
 		protected IFBGControl keyboardCaptureControl = null;
 		private Rectangle childarea = Rectangle.Empty;
+		protected FBGCursor DefaultCursor = null;
 		public Rectangle ClientRectangle { get { return childarea; } protected set { childarea = value; Invalidate(); } }
+		public Size ClientSize { get { return childarea.Size; } set { Bounds = new Rectangle(Bounds.Location, Bounds.Size - childarea.Size + value); } }
+		public override FBGCursor Cursor { get { return DefaultCursor; } set { DefaultCursor = value; } }
 		public FBGContainerControl(IFBGContainerControl parent) : base(parent) { }
-		Size IFBGContainerControl.Size { get { return childarea.IsEmpty ? Bounds.Size : childarea.Size; } }
 		void IFBGContainerControl.AddControl(IFBGControl control) { AddControl(control); }
 		protected virtual void AddControl(IFBGControl control) {
 			controls.Add(control);
@@ -190,6 +197,7 @@ namespace UCIS.FBGUI {
 			} else {
 				control.MouseMove(PointToChild(control, position), buttons);
 			}
+			CurrentCursor = control == null || control.Cursor == null ? DefaultCursor : control.Cursor;
 		}
 		protected override void MouseDown(Point position, MouseButtons buttons) {
 			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(position);
@@ -198,6 +206,7 @@ namespace UCIS.FBGUI {
 			} else {
 				control.MouseDown(PointToChild(control, position), buttons);
 			}
+			CurrentCursor = control == null || control.Cursor == null ? DefaultCursor : control.Cursor;
 		}
 		protected override void MouseUp(Point position, MouseButtons buttons) {
 			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(position);
@@ -206,6 +215,7 @@ namespace UCIS.FBGUI {
 			} else {
 				control.MouseUp(PointToChild(control, position), buttons);
 			}
+			CurrentCursor = control == null || control.Cursor == null ? DefaultCursor : control.Cursor;
 		}
 		Boolean IFBGContainerControl.CaptureMouse(IFBGControl control, Boolean capture) { return CaptureMouse(control, capture); }
 		protected Boolean CaptureMouse(IFBGControl control, Boolean capture) {
@@ -412,7 +422,6 @@ namespace UCIS.FBGUI {
 			return point + (Size)child.Bounds.Location;
 		}
 
-		Size IFBGContainerControl.Size { get { return ClientSize; } }
 		void IFBGContainerControl.Invalidate(IFBGControl control, Rectangle rect) {
 			Invalidate(new Rectangle(PointFromChild(control, rect.Location), rect.Size));
 		}
@@ -505,9 +514,43 @@ namespace UCIS.FBGUI {
 			this.Hotspot = hotspot;
 			this.Size = image.Size;
 		}
+		public Rectangle Area { get { return new Rectangle(-Hotspot.X, -Hotspot.Y, Size.Width, Size.Height); } }
+		public FBGCursor RotateFlip(RotateFlipType type) {
+			Image img = new Bitmap(Image);
+			img.RotateFlip(type);
+			Point hs = Hotspot;
+			switch (type) {
+				case RotateFlipType.RotateNoneFlipNone: break;
+				case RotateFlipType.Rotate90FlipNone: hs = new Point(img.Width - hs.Y, hs.X); break;
+				case RotateFlipType.Rotate180FlipNone: hs = new Point(img.Width - hs.X, img.Height - hs.Y); break;
+				case RotateFlipType.Rotate270FlipNone: hs = new Point(hs.Y, img.Height - hs.X); break;
+				case RotateFlipType.RotateNoneFlipX: hs.X = img.Width - hs.X; break;
+				case RotateFlipType.Rotate90FlipX: hs = new Point(hs.Y, hs.X); break;
+				case RotateFlipType.RotateNoneFlipY: hs.Y = img.Height - hs.Y; break;
+				case RotateFlipType.Rotate90FlipY: hs = new Point(img.Width - hs.Y, img.Height - hs.X); break;
+			}
+			return new FBGCursor(img, hs);
+		}
+		public static FBGCursor FromBase64Image(String data, Point hotspot) {
+			return new FBGCursor(Image.FromStream(new MemoryStream(Convert.FromBase64String(data))), hotspot);
+		}
+		private static FBGCursor LoadFromResource(String name, int hotX, int hotY) {
+			using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("UCIS.FBGUI." + name + ".png")) {
+				return new FBGCursor(Image.FromStream(s), new Point(hotX, hotY));
+			}
+		}
 
-		private const String ArrowCursorImageData = "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAVCAYAAAByrA+0AAAAkUlEQVR42pWTORbEMAhDJb3cYNqUuf+JUk6bM2iKLM9DvGAqG/MFxpgAfKwbkTQBwOe7ewqwnYZ0L7KQyk0GUnSMINWcPUgtpRakXr01SKOuREiZ3pcQz329KeR7YpZaUCkQ50wjxWYGko8aSduGbZD8m2bF4NQsxeBj3XiX92rrzOfpvkMrizBpS+/wyuLynj9U+GDtLEEVuQAAAABJRU5ErkJggg==";
-		public static readonly FBGCursor ArrowCursor = new FBGCursor(Image.FromStream(new MemoryStream(Convert.FromBase64String(ArrowCursorImageData))), Point.Empty);
+		public static readonly FBGCursor Arrow = LoadFromResource("cursor_arrow", 0, 0);
+		public static readonly FBGCursor Move = LoadFromResource("cursor_move", 8, 8);
+		public static readonly FBGCursor SizeLeft = LoadFromResource("cursor_left", 1, 10);
+		public static readonly FBGCursor SizeRight = SizeLeft.RotateFlip(RotateFlipType.RotateNoneFlipX);
+		public static readonly FBGCursor SizeTop = SizeLeft.RotateFlip(RotateFlipType.Rotate90FlipNone);
+		public static readonly FBGCursor SizeBottom = SizeLeft.RotateFlip(RotateFlipType.Rotate90FlipY);
+		public static readonly FBGCursor SizeTopLeft = LoadFromResource("cursor_topleft", 1, 1);
+		public static readonly FBGCursor SizeTopRight = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipX);
+		public static readonly FBGCursor SizeBottomLeft = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipY);
+		public static readonly FBGCursor SizeBottomRight = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipXY);
+		public static FBGCursor ArrowCursor { get { return Arrow; } }
 	}
 	public class FBGRenderer : FBGContainerControl, IDisposable {
 		private FBGCursor cursor = null;
@@ -551,30 +594,25 @@ namespace UCIS.FBGUI {
 		private Boolean suspenddrawing = false;
 		private Rectangle DirtyRectangle;
 
-		public FBGCursor Cursor {
-			get { return cursor; }
-			set {
-				if (cursor == value) return;
-				cursor = value;
-				Invalidate();
-			}
-		}
 		public Point CursorPosition {
 			get { return cursorposition; }
-			set {
-				if (cursorposition == value) return;
-				Point oldposition = cursorposition;
-				cursorposition = value;
-				if (cursor == null) return;
-				Size s = cursor.Size;
-				if (s.Width == 0 && s.Height == 0) s = new Size(32, 32);
-				Rectangle r = Rectangle.Union(new Rectangle(oldposition, s), new Rectangle(cursorposition, s));
-				r.Offset(-cursor.Hotspot.X, -cursor.Hotspot.Y);
-				if (Environment.OSVersion.Platform == PlatformID.Unix) {
-					r = Rectangle.Union(r, Rectangle.Union(new Rectangle(oldposition.X - 2, oldposition.Y - 2, 4, 4), new Rectangle(cursorposition.X - 2, cursorposition.Y - 2, 4, 4)));
-				}
-				Invalidate(r);
+			set { UpdateCursor(value, cursor); }
+		}
+		protected void UpdateCursor(Point position, FBGCursor cursor) {
+			if (cursorposition == position && cursor == this.cursor) return;
+			Rectangle r1 = Rectangle.Empty;
+			if (this.cursor != null) {
+				r1 = this.cursor.Area;
+				r1.Offset(cursorposition);
 			}
+			if (cursor != null) {
+				Rectangle r2 = cursor.Area;
+				r2.Offset(position);
+				r1 = r1.IsEmpty ? r2 : Rectangle.Union(r1, r2);
+			}
+			this.cursor = cursor;
+			cursorposition = position;
+			Invalidate(r1);
 		}
 		public override Rectangle Bounds {
 			get { return new Rectangle(Point.Empty, size); }
@@ -614,7 +652,10 @@ namespace UCIS.FBGUI {
 					Refresh(DirtyRectangle);
 					DirtyRectangle = Rectangle.Empty;
 				}
-			} catch { }
+			} catch (Exception ex) {
+				Debug.WriteLine(ex);
+				Console.Error.WriteLine(ex);
+			}
 		}
 		protected virtual void Refresh(Rectangle rect) {
 			lock (RenderLock) {
@@ -632,10 +673,10 @@ namespace UCIS.FBGUI {
 		}
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
-			if (Cursor != null) {
+			if (cursor != null) {
 				Point r = CursorPosition;
 				r.Offset(-cursor.Hotspot.X, -cursor.Hotspot.Y);
-				g.DrawImageUnscaled(Cursor.Image, r);
+				g.DrawImage(cursor.Image, new Rectangle(r, cursor.Size));
 			}
 		}
 		protected override Boolean CaptureMouse(Boolean capture) {
@@ -659,9 +700,9 @@ namespace UCIS.FBGUI {
 		public void UnlockBitmapBuffer() {
 			Monitor.Exit(RenderLock);
 		}
-		public new void MouseMove(Point position, MouseButtons buttons) { base.MouseMove(position, buttons); }
-		public new void MouseDown(Point position, MouseButtons buttons) { base.MouseDown(position, buttons); }
-		public new void MouseUp(Point position, MouseButtons buttons) { base.MouseUp(position, buttons); }
+		public new void MouseMove(Point position, MouseButtons buttons) { base.MouseMove(position, buttons); UpdateCursor(cursorposition, CurrentCursor); }
+		public new void MouseDown(Point position, MouseButtons buttons) { base.MouseDown(position, buttons); UpdateCursor(cursorposition, CurrentCursor); }
+		public new void MouseUp(Point position, MouseButtons buttons) { base.MouseUp(position, buttons); UpdateCursor(cursorposition, CurrentCursor); }
 		public new void KeyDown(Keys key) { base.KeyDown(key); }
 		public new void KeyPress(Char key) { base.KeyPress(key); }
 		public new void KeyUp(Keys key) { base.KeyUp(key); }
@@ -700,23 +741,37 @@ namespace UCIS.FBGUI {
 			}
 		}
 		public String Text { get { return text; } set { if (text == value) return; text = value; Invalidate(new Rectangle(0, 0, Bounds.Width, 20)); RaiseEvent(TextChanged); } }
+		private NonClientOps GetNonClientOperation(Point p) {
+			if ((new Rectangle(Bounds.Width - 5 - 14, 4, 14, 14)).Contains(p)) return NonClientOps.ButtonClose;
+			NonClientOps mr = 0;
+			if (Sizable) {
+				if (Movable) {
+					if (p.X < 4) mr |= NonClientOps.ResizeLeft;
+					if (p.Y < 4) mr |= NonClientOps.ResizeTop;
+				}
+				if (p.X >= Bounds.Width - 4) mr |= NonClientOps.ResizeRight;
+				if (p.Y >= Bounds.Height - 4) mr |= NonClientOps.ResizeBottom;
+			}
+			if (mr == 0 && Movable && p.Y < 20) mr = NonClientOps.Move;
+			return mr;
+		}
+		private void SetCursorForNonClientOperation(NonClientOps op) {
+			switch (op & NonClientOps.MoveResize) {
+				case NonClientOps.Move: CurrentCursor = FBGCursor.Move; break;
+				case NonClientOps.ResizeLeft: CurrentCursor = FBGCursor.SizeLeft; break;
+				case NonClientOps.ResizeRight: CurrentCursor = FBGCursor.SizeRight; break;
+				case NonClientOps.ResizeBottom: CurrentCursor = FBGCursor.SizeBottom; break;
+				case NonClientOps.ResizeTop: CurrentCursor = FBGCursor.SizeTop; break;
+				case NonClientOps.ResizeTop | NonClientOps.ResizeLeft: CurrentCursor = FBGCursor.SizeTopLeft; break;
+				case NonClientOps.ResizeTop | NonClientOps.ResizeRight: CurrentCursor = FBGCursor.SizeTopRight; break;
+				case NonClientOps.ResizeBottom | NonClientOps.ResizeLeft: CurrentCursor = FBGCursor.SizeBottomLeft; break;
+				case NonClientOps.ResizeBottom | NonClientOps.ResizeRight: CurrentCursor = FBGCursor.SizeBottomRight; break;
+				default: CurrentCursor = DefaultCursor; break;
+			}
+		}
 		protected override void MouseDown(Point p, MouseButtons buttons) {
 			NonClientOps mr = 0;
-			if ((buttons & MouseButtons.Left) != 0) {
-				if ((new Rectangle(Bounds.Width - 5 - 14, 4, 14, 14)).Contains(p)) {
-					mr = NonClientOps.ButtonClose;
-				} else {
-					if (Sizable) {
-						if (Movable) {
-							if (p.X < 4) mr |= NonClientOps.ResizeLeft;
-							if (p.Y < 4) mr |= NonClientOps.ResizeTop;
-						}
-						if (p.X >= Bounds.Width - 4) mr |= NonClientOps.ResizeRight;
-						if (p.Y >= Bounds.Height - 4) mr |= NonClientOps.ResizeBottom;
-					}
-					if (mr == 0 && Movable && p.Y < 20) mr = NonClientOps.Move;
-				}
-			}
+			if ((buttons & MouseButtons.Left) != 0) mr = GetNonClientOperation(p);
 			if (mr != 0) {
 				moveresize = mr;
 				prevPosition = p;
@@ -732,7 +787,9 @@ namespace UCIS.FBGUI {
 				Rectangle b = Bounds;
 				int dx = position.X - prevPosition.X;
 				int dy = position.Y - prevPosition.Y;
-				if (moveresize == NonClientOps.Move) b.Offset(dx, dy);
+				if (moveresize == NonClientOps.Move) {
+					b.Offset(dx, dy);
+				}
 				if ((moveresize & NonClientOps.ResizeLeft) != 0) {
 					b.X += dx;
 					b.Width -= dx;
@@ -751,6 +808,7 @@ namespace UCIS.FBGUI {
 				if (b.Height < 25) b.Height = 25;
 				Bounds = b;
 			}
+			SetCursorForNonClientOperation(moveresize == 0 ? GetNonClientOperation(position) : moveresize);
 		}
 		protected override void MouseUp(Point position, MouseButtons buttons) {
 			if (moveresize == 0) {
@@ -761,6 +819,7 @@ namespace UCIS.FBGUI {
 				if (moveresize == NonClientOps.ButtonClose && (new Rectangle(Bounds.Width - 5 - 14, 4, 14, 14)).Contains(position) && Closable) Close();
 				moveresize = 0;
 			}
+			SetCursorForNonClientOperation(moveresize == 0 ? GetNonClientOperation(position) : moveresize);
 		}
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
@@ -1193,41 +1252,43 @@ namespace UCIS.FBGUI {
 		Image image = null;
 		PictureBoxSizeMode sizeMode = PictureBoxSizeMode.Normal;
 		Rectangle imageRect;
-		public Image Image { get { return image; } set { image = value; UpdateImageRect(false); } }
+		public Image Image { get { return image; } set { image = value; UpdateImageRect(Size.Empty); } }
 		public FBGImageBox(IFBGContainerControl parent) : base(parent) { }
-		public PictureBoxSizeMode SizeMode { get { return sizeMode; } set { sizeMode = value; UpdateImageRect(false); } }
+		public PictureBoxSizeMode SizeMode { get { return sizeMode; } set { sizeMode = value; UpdateImageRect(Size.Empty); } }
 		public override Rectangle Bounds {
 			get {
 				return base.Bounds;
 			}
 			set {
-				UpdateImageRect(true);
+				UpdateImageRect(value.Size);
 				base.Bounds = value;
 			}
 		}
-		private void UpdateImageRect(Boolean boundsset) {
+		private void UpdateImageRect(Size csize) {
 			if (image == null) return;
+			Boolean boundsset = !csize.IsEmpty;
 			if (!boundsset && sizeMode == PictureBoxSizeMode.AutoSize) {
 				Size = Image.Size;
 				return;
 			}
+			if (!boundsset) csize = Bounds.Size;
 			switch (sizeMode) {
 				case PictureBoxSizeMode.AutoSize:
 				case PictureBoxSizeMode.Normal:
 					imageRect = new Rectangle(Point.Empty, image.Size);
 					break;
 				case PictureBoxSizeMode.CenterImage:
-					imageRect = new Rectangle(Width / 2 - image.Width / 2, Height / 2 - Image.Height / 2, Width, Height);
+					imageRect = new Rectangle(csize.Width / 2 - image.Width / 2, csize.Height / 2 - Image.Height / 2, image.Width, image.Height);
 					break;
 				case PictureBoxSizeMode.StretchImage:
-					imageRect = new Rectangle(Point.Empty, Size);
+					imageRect = new Rectangle(Point.Empty, csize);
 					break;
 				case PictureBoxSizeMode.Zoom:
-					float xrat = (float)Width / (float)image.Width;
-					float yrat = (float)Height / (float)image.Height;
+					float xrat = (float)csize.Width / (float)image.Width;
+					float yrat = (float)csize.Height / (float)image.Height;
 					float rat = Math.Min(xrat, yrat);
 					SizeF dispsize = new SizeF(image.Width * rat, image.Height * rat);
-					imageRect = Rectangle.Round(new RectangleF(Width / 2f - dispsize.Width / 2f, Height / 2f - dispsize.Height / 2f, dispsize.Width, dispsize.Height));
+					imageRect = Rectangle.Round(new RectangleF(csize.Width / 2f - dispsize.Width / 2f, csize.Height / 2f - dispsize.Height / 2f, dispsize.Width, dispsize.Height));
 					break;
 			}
 			if (!boundsset) Invalidate();
@@ -1236,6 +1297,24 @@ namespace UCIS.FBGUI {
 			if (!Visible) return;
 			base.Paint(g);
 			if (image != null) g.DrawImage(image, imageRect);
+		}
+		public Point PointToImage(Point point) {
+			switch (sizeMode) {
+				case PictureBoxSizeMode.AutoSize:
+				case PictureBoxSizeMode.Normal:
+					break;
+				case PictureBoxSizeMode.CenterImage:
+					point.X -= imageRect.X;
+					point.Y -= imageRect.Y;
+					break;
+				case PictureBoxSizeMode.StretchImage:
+				case PictureBoxSizeMode.Zoom:
+				default:
+					point.X = (point.X - imageRect.X) * image.Width / imageRect.Width;
+					point.Y = (point.Y - imageRect.Y) * image.Height / imageRect.Height;
+					break;
+			}
+			return point;
 		}
 	}
 	public class FBGListBox : FBGControl {
