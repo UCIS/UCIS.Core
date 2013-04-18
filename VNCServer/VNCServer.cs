@@ -253,7 +253,7 @@ namespace UCIS.VNCServer {
 			return true;
 		}
 	}
-	public class VNCServer {
+	public class VNCServer : IHTTPContentProvider {
 		public event EventHandler<VNCClientConnectedEventArgs> ClientConnected;
 		public EndPoint LocalEndPoint { get; protected set; }
 		public Boolean Listening { get; protected set; }
@@ -297,6 +297,10 @@ namespace UCIS.VNCServer {
 			}
 			if (Listening) socket.BeginAccept(AcceptCallback, socket);
 		}
+		void IHTTPContentProvider.ServeRequest(HTTPContext context) {
+			WebSocketPacketStream stream = new WebSocketPacketStream(context);
+			ClientAccepted(new VNCServerConnection(stream, context.Socket));
+		}
 		protected void ClientAccepted(VNCServerConnection client) {
 			VNCClientConnectedEventArgs clientargs = new VNCClientConnectedEventArgs(this, client, client.RemoteEndPoint);
 			if (ClientConnected != null) ClientConnected(this, clientargs);
@@ -313,7 +317,7 @@ namespace UCIS.VNCServer {
 		public WebVNCServer(int port) : this(new IPEndPoint(IPAddress.Any, port)) { }
 		public WebVNCServer(EndPoint ep) : base(ep) {
 			httpserver = new HTTPServer();
-			httpserver.ContentProvider = new HTTPContentProviderFunction(HandleClient);
+			httpserver.ContentProvider = this;
 			httpserver.ServeFlashPolicyFile = true;
 		}
 		public override void Listen(EndPoint ep) {
@@ -321,10 +325,6 @@ namespace UCIS.VNCServer {
 		}
 		public override void Close() {
 			httpserver.Dispose();
-		}
-		public void HandleClient(HTTPContext context) {
-			WebSocketPacketStream stream = new WebSocketPacketStream(context);
-			ClientAccepted(new VNCServerConnection(stream, context.Socket));
 		}
 	}
 	public interface IZLibCompressor {
