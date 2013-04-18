@@ -712,6 +712,7 @@ namespace UCIS.FBGUI {
 		private NonClientOps moveresize = 0;
 		private String text = String.Empty;
 		public event EventHandler TextChanged;
+		public event EventHandler Closed;
 		public Boolean Sizable { get; set; }
 		public Boolean Movable { get; set; }
 		public Boolean Closable { get; set; }
@@ -847,6 +848,7 @@ namespace UCIS.FBGUI {
 		}
 		public void Close() {
 			Parent.RemoveControl(this);
+			RaiseEvent(Closed);
 		}
 	}
 	public class FBGDesktop : FBGContainerControl {
