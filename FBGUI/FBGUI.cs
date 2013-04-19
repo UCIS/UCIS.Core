@@ -1370,9 +1370,20 @@ namespace UCIS.FBGUI {
 	}
 	public class FBGImageBox : FBGControl {
 		Image image = null;
+		Image scaledImage = null;
+		Size imageSize;
+		Boolean ownsImage = false;
 		PictureBoxSizeMode sizeMode = PictureBoxSizeMode.Normal;
 		Rectangle imageRect;
-		public Image Image { get { return image; } set { image = value; UpdateImageRect(Size.Empty); } }
+		public Image Image { get { return image; } set { SetImage(value, false); } }
+		public Boolean PreScaleImage { get; set; }
+		public void SetOwnedImage(Image img) { SetImage(img, true); }
+		private void SetImage(Image img, Boolean owned) {
+			image = img;
+			imageSize = img == null ? Size.Empty : img.Size;
+			ownsImage = owned;
+			UpdateImageRect(Size.Empty);
+		}
 		public FBGImageBox(IFBGContainerControl parent) : base(parent) { }
 		public PictureBoxSizeMode SizeMode { get { return sizeMode; } set { sizeMode = value; UpdateImageRect(Size.Empty); } }
 		public override Rectangle Bounds {
@@ -1380,43 +1391,48 @@ namespace UCIS.FBGUI {
 				return base.Bounds;
 			}
 			set {
-				UpdateImageRect(value.Size);
+				if (Bounds.Size != value.Size) UpdateImageRect(value.Size);
 				base.Bounds = value;
 			}
 		}
 		private void UpdateImageRect(Size csize) {
+			if (scaledImage != null && scaledImage != image) scaledImage.Dispose();
+			scaledImage = null;
 			if (image == null) return;
 			Boolean boundsset = !csize.IsEmpty;
 			if (!boundsset && sizeMode == PictureBoxSizeMode.AutoSize) {
-				Size = Image.Size;
+				scaledImage = image;
+				Size = imageSize;
 				return;
 			}
 			if (!boundsset) csize = Bounds.Size;
 			switch (sizeMode) {
 				case PictureBoxSizeMode.AutoSize:
 				case PictureBoxSizeMode.Normal:
-					imageRect = new Rectangle(Point.Empty, image.Size);
+					imageRect = new Rectangle(Point.Empty, imageSize);
 					break;
 				case PictureBoxSizeMode.CenterImage:
-					imageRect = new Rectangle(csize.Width / 2 - image.Width / 2, csize.Height / 2 - Image.Height / 2, image.Width, image.Height);
+					imageRect = new Rectangle(csize.Width / 2 - imageSize.Width / 2, csize.Height / 2 - imageSize.Height / 2, imageSize.Width, imageSize.Height);
 					break;
 				case PictureBoxSizeMode.StretchImage:
 					imageRect = new Rectangle(Point.Empty, csize);
 					break;
 				case PictureBoxSizeMode.Zoom:
-					float xrat = (float)csize.Width / (float)image.Width;
-					float yrat = (float)csize.Height / (float)image.Height;
+					float xrat = (float)csize.Width / (float)imageSize.Width;
+					float yrat = (float)csize.Height / (float)imageSize.Height;
 					float rat = Math.Min(xrat, yrat);
-					SizeF dispsize = new SizeF(image.Width * rat, image.Height * rat);
+					SizeF dispsize = new SizeF(imageSize.Width * rat, imageSize.Height * rat);
 					imageRect = Rectangle.Round(new RectangleF(csize.Width / 2f - dispsize.Width / 2f, csize.Height / 2f - dispsize.Height / 2f, dispsize.Width, dispsize.Height));
 					break;
 			}
+			if (imageRect.Size == imageSize) scaledImage = image;
 			if (!boundsset) Invalidate();
 		}
 		protected override void Paint(Graphics g) {
 			if (!Visible) return;
 			base.Paint(g);
-			if (image != null) g.DrawImage(image, imageRect);
+			if (PreScaleImage && scaledImage == null && image != null) scaledImage = new Bitmap(image, imageRect.Size);
+			if (scaledImage != null) g.DrawImage(image, imageRect);
 		}
 		public Point PointToImage(Point point) {
 			switch (sizeMode) {
@@ -1430,11 +1446,20 @@ namespace UCIS.FBGUI {
 				case PictureBoxSizeMode.StretchImage:
 				case PictureBoxSizeMode.Zoom:
 				default:
-					point.X = (point.X - imageRect.X) * image.Width / imageRect.Width;
-					point.Y = (point.Y - imageRect.Y) * image.Height / imageRect.Height;
+					point.X = (point.X - imageRect.X) * imageSize.Width / imageRect.Width;
+					point.Y = (point.Y - imageRect.Y) * imageSize.Height / imageRect.Height;
 					break;
 			}
 			return point;
+		}
+		protected override void Orphaned() {
+			base.Orphaned();
+			if (scaledImage != null && scaledImage != image) scaledImage.Dispose();
+			scaledImage = null;
+			if (ownsImage) {
+				image.Dispose();
+				image = null;
+			}
 		}
 	}
 	public class FBGListBox : FBGControl {
