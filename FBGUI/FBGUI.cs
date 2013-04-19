@@ -12,32 +12,95 @@ using UCIS.VNCServer;
 using ThreadingTimer = System.Threading.Timer;
 
 namespace UCIS.FBGUI {
+	public abstract class FBGEvent {
+	}
+	public enum FBGPointingEventType {
+		Move,
+		ButtonDown,
+		ButtonUp
+	}
+	public class FBGPointingEvent : FBGEvent {
+		private Point position;
+		public Point Position { get { return position; } set { position = value; } }
+		public int X { get { return position.X; } set { position.X = value; } }
+		public int Y { get { return position.Y; } set { position.Y = value; } }
+		public MouseButtons Buttons { get; private set; }
+		public FBGPointingEventType Type { get; private set; }
+		public FBGCursor Cursor { get; set; }
+		public FBGPointingEvent(Point position, MouseButtons buttons, FBGPointingEventType type) {
+			this.Position = position;
+			this.Buttons = buttons;
+			this.Type = type;
+		}
+	}
+	public class FBGKeyboardEvent : FBGEvent {
+		public Keys KeyData { get; private set; }
+		public Keys KeyCode { get { return KeyData & Keys.KeyCode; } }
+		public Keys Modifiers { get { return KeyData & Keys.Modifiers; } }
+		public Boolean Shift { get { return (KeyData & Keys.Shift) != 0; } }
+		public Boolean Control { get { return (KeyData & Keys.Control) != 0; } }
+		public Boolean Alt { get { return (KeyData & Keys.Alt) != 0; } }
+		public Boolean IsDown { get; private set; }
+		public Char KeyChar { get; private set; }
+		public FBGKeyboardEvent(Keys keyData, Char keyChar, Boolean isDown) {
+			this.KeyData = keyData;
+			this.KeyChar = keyChar;
+			this.IsDown = isDown;
+		}
+	}
+	public class FBGPaintEvent : FBGEvent {
+		public Graphics Canvas { get; private set; }
+		public FBGPaintEvent(Graphics canvas) {
+			this.Canvas = canvas;
+		}
+	}
+	public class FBGKeyboardCaptureEvent : FBGEvent {
+		public Boolean Capture { get; set; }
+		public FBGKeyboardCaptureEvent(Boolean capture) {
+			this.Capture = capture;
+		}
+	}
+	public abstract class FBGMessage {
+		public IFBGControl Source { get; private set; }
+		protected FBGMessage(IFBGControl source) {
+			this.Source = source;
+		}
+	}
+	public class FBGInvalidateMessage : FBGMessage {
+		public Rectangle Area { get; set; }
+		public FBGInvalidateMessage(IFBGControl source, Rectangle area) : base(source) {
+			this.Area = area;
+		}
+	}
+	public class FBGPointingCaptureMessage : FBGMessage {
+		public Boolean Capture { get; set; }
+		public FBGPointingCaptureMessage(IFBGControl source, Boolean capture) : base(source) {
+			this.Capture = capture;
+		}
+	}
+	public class FBGKeyboardCaptureMessage : FBGMessage {
+		public Boolean Capture { get; set; }
+		public FBGKeyboardCaptureMessage(IFBGControl source, Boolean capture) : base(source) {
+			this.Capture = capture;
+		}
+	}
+
 	public interface IFBGControl {
 		Rectangle Bounds { get; set; }
 		Boolean Visible { get; set; }
-		FBGCursor Cursor { get; }
-		void Paint(Graphics g);
-		void MouseMove(Point position, MouseButtons buttons);
-		void MouseDown(Point position, MouseButtons buttons);
-		void MouseUp(Point position, MouseButtons buttons);
-		void KeyDown(Keys key);
-		void KeyPress(Char keyChar);
-		void KeyUp(Keys key);
-		void LostKeyboardCapture();
+		void HandleEvent(FBGEvent e);
 		void Orphaned();
 	}
 	public interface IFBGContainerControl {
-		void Invalidate(IFBGControl control, Rectangle rect);
 		void AddControl(IFBGControl control);
 		void RemoveControl(IFBGControl control);
-		Boolean CaptureMouse(IFBGControl control, Boolean capture);
-		Boolean CaptureKeyboard(IFBGControl control, Boolean capture);
+		void HandleMessage(IFBGControl sender, FBGMessage e);
 	}
+
 	public class FBGControl : IFBGControl {
 		private Rectangle bounds = new Rectangle(0, 0, 100, 100);
 		private Color backColor = Color.Transparent;
 		private Boolean visible = true;
-		protected FBGCursor CurrentCursor = null;
 		public virtual IFBGContainerControl Parent { get; private set; }
 		public event MouseEventHandler OnMouseDown;
 		public event MouseEventHandler OnMouseMove;
@@ -55,7 +118,7 @@ namespace UCIS.FBGUI {
 				if (bounds == value) return;
 				Rectangle old = bounds;
 				bounds = value;
-				Parent.Invalidate(this, Rectangle.Union(new Rectangle(Point.Empty, value.Size), new Rectangle(old.X - value.X, old.Y - value.Y, old.Width, old.Height)));
+				Invalidate(Rectangle.Union(new Rectangle(Point.Empty, value.Size), new Rectangle(old.X - value.X, old.Y - value.Y, old.Width, old.Height)));
 				if (value.Location != old.Location) RaiseEvent(OnMove);
 				if (value.Size != old.Size) RaiseEvent(OnResize);
 			}
@@ -67,8 +130,7 @@ namespace UCIS.FBGUI {
 				Invalidate();
 			}
 		}
-		FBGCursor IFBGControl.Cursor { get { return CurrentCursor; } }
-		public virtual FBGCursor Cursor { get { return CurrentCursor; } set { CurrentCursor = value; } }
+		public virtual FBGCursor Cursor { get; set; }
 		public Size Size { get { return Bounds.Size; } set { Rectangle r = Bounds; r.Size = value; Bounds = r; } }
 		public Point Location { get { return Bounds.Location; } set { Rectangle r = Bounds; r.Location = value; Bounds = r; } }
 		public int Left { get { return Bounds.Left; } set { Rectangle r = Bounds; r.X = value; Bounds = r; } }
@@ -80,16 +142,39 @@ namespace UCIS.FBGUI {
 			Invalidate(new Rectangle(Point.Empty, Bounds.Size));
 		}
 		public virtual void Invalidate(Rectangle rect) {
-			Parent.Invalidate(this, rect);
+			Parent.HandleMessage(this, new FBGInvalidateMessage(this, rect));
 		}
-		void IFBGControl.Paint(Graphics g) { Paint(g); }
-		void IFBGControl.MouseMove(Point position, MouseButtons buttons) { MouseMove(position, buttons); }
-		void IFBGControl.MouseDown(Point position, MouseButtons buttons) { MouseDown(position, buttons); }
-		void IFBGControl.MouseUp(Point position, MouseButtons buttons) { MouseUp(position, buttons); }
-		void IFBGControl.KeyDown(Keys g) { KeyDown(g); }
-		void IFBGControl.KeyPress(Char g) { KeyPress(g); }
-		void IFBGControl.KeyUp(Keys g) { KeyUp(g); }
-		void IFBGControl.LostKeyboardCapture() { LostKeyboardCapture(); }
+		void IFBGControl.HandleEvent(FBGEvent e) {
+			HandleEvent(e);
+		}
+		protected virtual void HandleEvent(FBGEvent e) {
+			if (e is FBGPaintEvent) HandlePaintEvent((FBGPaintEvent)e);
+			else if (e is FBGPointingEvent) HandlePointingEvent((FBGPointingEvent)e);
+			else if (e is FBGKeyboardEvent) HandleKeyboardEvent((FBGKeyboardEvent)e);
+			else if (e is FBGKeyboardCaptureEvent) HandleKeyboardCaptureEvent((FBGKeyboardCaptureEvent)e);
+		}
+		protected virtual void HandlePaintEvent(FBGPaintEvent e) {
+			Paint(e.Canvas);
+		}
+		protected virtual void HandlePointingEvent(FBGPointingEvent e) {
+			if (Cursor != null) e.Cursor = Cursor;
+			switch (e.Type) {
+				case FBGPointingEventType.Move: MouseMove(e.Position, e.Buttons); break;
+				case FBGPointingEventType.ButtonDown: MouseDown(e.Position, e.Buttons); break;
+				case FBGPointingEventType.ButtonUp: MouseUp(e.Position, e.Buttons); break;
+			}
+		}
+		protected virtual void HandleKeyboardEvent(FBGKeyboardEvent e) {
+			if (e.IsDown) {
+				if (e.KeyData != Keys.None) KeyDown(e.KeyData);
+				if (e.KeyChar != Char.MinValue) KeyPress(e.KeyChar);
+			} else {
+				if (e.KeyData != Keys.None) KeyUp(e.KeyData);
+			}
+		}
+		protected virtual void HandleKeyboardCaptureEvent(FBGKeyboardCaptureEvent e) {
+			if (!e.Capture) LostKeyboardCapture();
+		}
 		void IFBGControl.Orphaned() { Orphaned(); }
 		protected virtual void Paint(Graphics g) {
 			if (!visible) return;
@@ -101,13 +186,17 @@ namespace UCIS.FBGUI {
 		protected virtual void MouseDown(Point position, MouseButtons buttons) { RaiseEvent(OnMouseDown, new MouseEventArgs(buttons, 1, position.X, position.Y, 0)); }
 		protected virtual void MouseUp(Point position, MouseButtons buttons) { RaiseEvent(OnMouseUp, new MouseEventArgs(buttons, 1, position.X, position.Y, 0)); }
 		protected virtual Boolean CaptureMouse(Boolean capture) {
-			return Parent.CaptureMouse(this, capture);
+			FBGPointingCaptureMessage m = new FBGPointingCaptureMessage(this, capture);
+			Parent.HandleMessage(this, m);
+			return capture == m.Capture;
 		}
 		protected virtual void KeyDown(Keys key) { }
 		protected virtual void KeyPress(Char keyChar) { }
 		protected virtual void KeyUp(Keys key) { }
 		protected virtual Boolean CaptureKeyboard(Boolean capture) {
-			return Parent.CaptureKeyboard(this, capture);
+			FBGKeyboardCaptureMessage m = new FBGKeyboardCaptureMessage(this, capture);
+			Parent.HandleMessage(this, m);
+			return capture == m.Capture;
 		}
 		protected virtual void LostKeyboardCapture() { }
 		protected virtual void Orphaned() {
@@ -127,10 +216,8 @@ namespace UCIS.FBGUI {
 		protected IFBGControl mouseCaptureControl = null;
 		protected IFBGControl keyboardCaptureControl = null;
 		private Rectangle childarea = Rectangle.Empty;
-		protected FBGCursor DefaultCursor = null;
 		public Rectangle ClientRectangle { get { return childarea; } protected set { childarea = value; Invalidate(); } }
 		public Size ClientSize { get { return childarea.Size; } set { Bounds = new Rectangle(Bounds.Location, Bounds.Size - childarea.Size + value); } }
-		public override FBGCursor Cursor { get { return DefaultCursor; } set { DefaultCursor = value; } }
 		public FBGContainerControl(IFBGContainerControl parent) : base(parent) { }
 		void IFBGContainerControl.AddControl(IFBGControl control) { AddControl(control); }
 		protected virtual void AddControl(IFBGControl control) {
@@ -140,8 +227,8 @@ namespace UCIS.FBGUI {
 		public virtual void RemoveControl(IFBGControl control) {
 			if (controls.Remove(control)) {
 				if (control.Visible) Invalidate(control);
-				CaptureMouse(control, false);
-				CaptureKeyboard(control, false);
+				HandleMessage(control, new FBGPointingCaptureMessage(control, false));
+				HandleMessage(control, new FBGKeyboardCaptureMessage(control, false));
 				control.Orphaned();
 			}
 		}
@@ -164,10 +251,11 @@ namespace UCIS.FBGUI {
 		public virtual void Invalidate(IFBGControl control, Rectangle rect) {
 			Invalidate(new Rectangle(PointFromChild(control, rect.Location), rect.Size));
 		}
-		protected override void Paint(Graphics g) {
-			base.Paint(g);
+		protected override void HandlePaintEvent(FBGPaintEvent e) {
+			base.HandlePaintEvent(e);
 			if (controls == null) return;
 			GraphicsState state2 = null;
+			Graphics g = e.Canvas;
 			if (!childarea.IsEmpty) {
 				state2 = g.Save();
 				g.TranslateTransform(childarea.X, childarea.Y, MatrixOrder.Append);
@@ -180,7 +268,7 @@ namespace UCIS.FBGUI {
 				GraphicsState state = g.Save();
 				g.TranslateTransform(control.Bounds.X, control.Bounds.Y, MatrixOrder.Append);
 				g.IntersectClip(new Rectangle(Point.Empty, control.Bounds.Size));
-				control.Paint(g);
+				control.HandleEvent(e);
 				g.Restore(state);
 			}
 			if (state2 != null) g.Restore(state2);
@@ -190,65 +278,52 @@ namespace UCIS.FBGUI {
 			p.Offset(-childarea.X, -childarea.Y);
 			return ((List<IFBGControl>)controls).FindLast(delegate(IFBGControl control) { return control.Visible && control.Bounds.Contains(p); });
 		}
-		protected override void MouseMove(Point position, MouseButtons buttons) {
-			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(position);
+		protected override void HandlePointingEvent(FBGPointingEvent e) {
+			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(e.Position);
 			if (control == null) {
-				base.MouseMove(position, buttons);
+				base.HandlePointingEvent(e);
 			} else {
-				control.MouseMove(PointToChild(control, position), buttons);
+				if (Cursor != null) e.Cursor = Cursor;
+				e.Position = PointToChild(control, e.Position);
+				control.HandleEvent(e);
 			}
-			CurrentCursor = control == null || control.Cursor == null ? DefaultCursor : control.Cursor;
 		}
-		protected override void MouseDown(Point position, MouseButtons buttons) {
-			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(position);
-			if (control == null) {
-				base.MouseDown(position, buttons);
-			} else {
-				control.MouseDown(PointToChild(control, position), buttons);
+		void IFBGContainerControl.HandleMessage(IFBGControl sender, FBGMessage e) {
+			HandleMessage(sender, e);
+		}
+		protected virtual void HandleMessage(IFBGControl sender, FBGMessage e) {
+			if (e is FBGPointingCaptureMessage) HandlePointingCaptureMessage(sender, (FBGPointingCaptureMessage)e);
+			else if (e is FBGKeyboardCaptureMessage) HandleKeyboardCaptureMessage(sender, (FBGKeyboardCaptureMessage)e);
+			else if (e is FBGInvalidateMessage) HandleInvalidateMessage(sender, (FBGInvalidateMessage)e);
+		}
+		protected virtual void HandleInvalidateMessage(IFBGControl sender, FBGInvalidateMessage e) {
+			e.Area = new Rectangle(PointFromChild(sender, e.Area.Location), e.Area.Size);
+			Parent.HandleMessage(this, e);
+		}
+		protected virtual void HandlePointingCaptureMessage(IFBGControl sender, FBGPointingCaptureMessage e) {
+			if (e.Capture && !(ReferenceEquals(mouseCaptureControl, null) || ReferenceEquals(mouseCaptureControl, sender))) e.Capture = false;
+			else if (!e.Capture && !ReferenceEquals(mouseCaptureControl, sender)) e.Capture = false;
+			else {
+				Parent.HandleMessage(this, e);
+				mouseCaptureControl = e.Capture ? sender : null;
 			}
-			CurrentCursor = control == null || control.Cursor == null ? DefaultCursor : control.Cursor;
 		}
-		protected override void MouseUp(Point position, MouseButtons buttons) {
-			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(position);
-			if (control == null) {
-				base.MouseUp(position, buttons);
-			} else {
-				control.MouseUp(PointToChild(control, position), buttons);
+		protected override void HandleKeyboardEvent(FBGKeyboardEvent e) {
+			if (ReferenceEquals(keyboardCaptureControl, null)) base.HandleKeyboardEvent(e);
+			else keyboardCaptureControl.HandleEvent(e);
+		}
+		protected virtual void HandleKeyboardCaptureMessage(IFBGControl sender, FBGKeyboardCaptureMessage e) {
+			if (!e.Capture && !(ReferenceEquals(mouseCaptureControl, null) || ReferenceEquals(mouseCaptureControl, sender))) e.Capture = false;
+			else {
+				Parent.HandleMessage(this, e);
+				IFBGControl prev = keyboardCaptureControl;
+				keyboardCaptureControl = e.Capture ? sender : null;
+				if (prev != null && prev != sender) prev.HandleEvent(new FBGKeyboardCaptureEvent(false));
 			}
-			CurrentCursor = control == null || control.Cursor == null ? DefaultCursor : control.Cursor;
 		}
-		Boolean IFBGContainerControl.CaptureMouse(IFBGControl control, Boolean capture) { return CaptureMouse(control, capture); }
-		protected Boolean CaptureMouse(IFBGControl control, Boolean capture) {
-			if (capture && !ReferenceEquals(mouseCaptureControl, null)) return false;
-			if (!capture && !ReferenceEquals(mouseCaptureControl, control)) return false;
-			if (!CaptureMouse(capture)) return false;
-			mouseCaptureControl = capture ? control : null;
-			return true;
-		}
-		protected override void KeyDown(Keys key) {
-			if (ReferenceEquals(keyboardCaptureControl, null)) base.KeyDown(key);
-			else keyboardCaptureControl.KeyDown(key);
-		}
-		protected override void KeyPress(Char keyChar) {
-			if (ReferenceEquals(keyboardCaptureControl, null)) base.KeyPress(keyChar);
-			else keyboardCaptureControl.KeyPress(keyChar);
-		}
-		protected override void KeyUp(Keys key) {
-			if (ReferenceEquals(keyboardCaptureControl, null)) base.KeyUp(key);
-			else keyboardCaptureControl.KeyUp(key);
-		}
-		Boolean IFBGContainerControl.CaptureKeyboard(IFBGControl control, Boolean capture) { return CaptureKeyboard(control, capture); }
-		protected Boolean CaptureKeyboard(IFBGControl control, Boolean capture) {
-			if (!capture && !ReferenceEquals(keyboardCaptureControl, control)) return false;
-			if (!CaptureKeyboard(capture)) return false;
-			IFBGControl prev = keyboardCaptureControl;
-			keyboardCaptureControl = capture ? control : null;
-			if (prev != null) LostKeyboardCapture();
-			return true;
-		}
-		protected override void LostKeyboardCapture() {
-			base.LostKeyboardCapture();
-			if (keyboardCaptureControl != null) keyboardCaptureControl.LostKeyboardCapture();
+		protected override void HandleKeyboardCaptureEvent(FBGKeyboardCaptureEvent e) {
+			if (keyboardCaptureControl != null) keyboardCaptureControl.HandleEvent(new FBGKeyboardCaptureEvent(false));
+			base.HandleKeyboardCaptureEvent(e);
 		}
 		protected override void Orphaned() {
 			base.Orphaned();
@@ -422,9 +497,6 @@ namespace UCIS.FBGUI {
 			return point + (Size)child.Bounds.Location;
 		}
 
-		void IFBGContainerControl.Invalidate(IFBGControl control, Rectangle rect) {
-			Invalidate(new Rectangle(PointFromChild(control, rect.Location), rect.Size));
-		}
 		void IFBGContainerControl.AddControl(IFBGControl control) {
 			if (!ReferenceEquals(childControl, null)) throw new InvalidOperationException("This container can have only one child control");
 			childControl = control;
@@ -439,16 +511,20 @@ namespace UCIS.FBGUI {
 			if (keyboardCaptureControl == control) control = null;
 			control.Orphaned();
 		}
-		Boolean IFBGContainerControl.CaptureMouse(IFBGControl control, Boolean capture) {
-			if (capture && !ReferenceEquals(mouseCaptureControl, null)) return false;
-			if (!capture && !ReferenceEquals(mouseCaptureControl, control)) return false;
-			mouseCaptureControl = capture ? control : null;
-			return true;
-		}
-		Boolean IFBGContainerControl.CaptureKeyboard(IFBGControl control, Boolean capture) {
-			if (!capture && !ReferenceEquals(keyboardCaptureControl, control)) return false;
-			keyboardCaptureControl = capture ? control : null;
-			return true;
+		void IFBGContainerControl.HandleMessage(IFBGControl sender, FBGMessage e) {
+			if (e is FBGInvalidateMessage) {
+				FBGInvalidateMessage p = (FBGInvalidateMessage)e;
+				Invalidate(new Rectangle(PointFromChild(sender, p.Area.Location), p.Area.Size));
+			} else if (e is FBGPointingCaptureMessage) {
+				FBGPointingCaptureMessage p = (FBGPointingCaptureMessage)e;
+				if (p.Capture && !(ReferenceEquals(mouseCaptureControl, null) || ReferenceEquals(mouseCaptureControl, sender))) p.Capture = false;
+				else if (!p.Capture && !ReferenceEquals(mouseCaptureControl, sender)) p.Capture = false;
+				else mouseCaptureControl = p.Capture ? sender : null;
+			} else if (e is FBGKeyboardCaptureMessage) {
+				FBGKeyboardCaptureMessage p = (FBGKeyboardCaptureMessage)e;
+				if (!p.Capture && !ReferenceEquals(keyboardCaptureControl, sender)) p.Capture = false;
+				else keyboardCaptureControl = p.Capture ? sender : null;
+			}
 		}
 
 		protected override void OnPaint(PaintEventArgs e) {
@@ -461,26 +537,27 @@ namespace UCIS.FBGUI {
 			if (!g.ClipBounds.IntersectsWith((RectangleF)childControl.Bounds)) return;
 			g.TranslateTransform(childControl.Bounds.X, childControl.Bounds.Y, MatrixOrder.Append);
 			g.IntersectClip(new Rectangle(Point.Empty, childControl.Bounds.Size));
-			childControl.Paint(g);
+			childControl.HandleEvent(new FBGPaintEvent(g));
 			g.Restore(state);
 		}
 		protected override void OnResize(EventArgs e) {
 			if (!ReferenceEquals(childControl, null)) childControl.Bounds = new Rectangle(Point.Empty, ClientSize);
 			base.OnResize(e);
 		}
+		void DispatchMouseEvent(MouseEventArgs e, FBGPointingEventType type) {
+			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : childControl;
+			if (control != null) control.HandleEvent(new FBGPointingEvent(e.Location, e.Button, type));
+		}
 		protected override void OnMouseDown(MouseEventArgs e) {
 			base.OnMouseDown(e);
-			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : childControl;
-			if (control != null) control.MouseDown(PointToChild(control, e.Location), e.Button);
+			DispatchMouseEvent(e, FBGPointingEventType.ButtonDown);
 		}
 		protected override void OnMouseUp(MouseEventArgs e) {
 			base.OnMouseUp(e);
-			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : childControl;
-			if (control != null) control.MouseUp(PointToChild(control, e.Location), e.Button);
+			DispatchMouseEvent(e, FBGPointingEventType.ButtonUp);
 		}
 		protected override void OnMouseMove(MouseEventArgs e) {
-			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : childControl;
-			if (control != null) control.MouseMove(PointToChild(control, e.Location), e.Button);
+			DispatchMouseEvent(e, FBGPointingEventType.Move);
 		}
 		protected override bool IsInputChar(char charCode) {
 			return true;
@@ -490,15 +567,15 @@ namespace UCIS.FBGUI {
 		}
 		protected override void OnKeyDown(KeyEventArgs e) {
 			//base.OnKeyDown(e);
-			if (!ReferenceEquals(keyboardCaptureControl, null)) keyboardCaptureControl.KeyDown(e.KeyData);
+			if (!ReferenceEquals(keyboardCaptureControl, null)) keyboardCaptureControl.HandleEvent(new FBGKeyboardEvent(e.KeyData, Char.MinValue, true));
 		}
 		protected override void OnKeyPress(KeyPressEventArgs e) {
 			//base.OnKeyPress(e);
-			if (!ReferenceEquals(keyboardCaptureControl, null)) keyboardCaptureControl.KeyPress(e.KeyChar);
+			if (!ReferenceEquals(keyboardCaptureControl, null)) keyboardCaptureControl.HandleEvent(new FBGKeyboardEvent(Keys.None, e.KeyChar, true));
 		}
 		protected override void OnKeyUp(KeyEventArgs e) {
 			//base.OnKeyUp(e);
-			if (!ReferenceEquals(keyboardCaptureControl, null)) keyboardCaptureControl.KeyUp(e.KeyData);
+			if (!ReferenceEquals(keyboardCaptureControl, null)) keyboardCaptureControl.HandleEvent(new FBGKeyboardEvent(e.KeyData, Char.MinValue, false));
 		}
 		protected override void OnHandleDestroyed(EventArgs e) {
 			if (!ReferenceEquals(childControl, null)) childControl.Orphaned();
@@ -631,6 +708,10 @@ namespace UCIS.FBGUI {
 		protected FBGRenderer() : base(null) {
 			BackColor = SystemColors.Control;
 		}
+		protected override void HandleInvalidateMessage(IFBGControl sender, FBGInvalidateMessage e) {
+			e.Area = new Rectangle(PointFromChild(sender, e.Area.Location), e.Area.Size);
+			Invalidate(e.Area);
+		}
 		public override void Invalidate(Rectangle rect) {
 			if (rect.Width == 0 || rect.Height == 0) return;
 			lock (RenderLock) {
@@ -671,14 +752,28 @@ namespace UCIS.FBGUI {
 				RaiseEvent(Painted, new InvalidateEventArgs(rect));
 			}
 		}
-		protected override void Paint(Graphics g) {
-			base.Paint(g);
+		public virtual new void Paint(Graphics g) {
+			HandleEvent(new FBGPaintEvent(g));
 			if (cursor != null) {
 				Point r = CursorPosition;
 				r.Offset(-cursor.Hotspot.X, -cursor.Hotspot.Y);
 				g.DrawImage(cursor.Image, new Rectangle(r, cursor.Size));
 			}
 		}
+		protected override void HandlePointingCaptureMessage(IFBGControl sender, FBGPointingCaptureMessage e) {
+			if (e.Capture && !(ReferenceEquals(mouseCaptureControl, null) || ReferenceEquals(mouseCaptureControl, sender))) e.Capture = false;
+			else if (!e.Capture && !ReferenceEquals(mouseCaptureControl, sender)) e.Capture = false;
+			else mouseCaptureControl = e.Capture ? sender : null;
+		}
+		protected override void HandleKeyboardCaptureMessage(IFBGControl sender, FBGKeyboardCaptureMessage e) {
+			if (!e.Capture && !ReferenceEquals(keyboardCaptureControl, sender)) e.Capture = false;
+			else {
+				IFBGControl prev = keyboardCaptureControl;
+				keyboardCaptureControl = e.Capture ? sender : null;
+				if (prev != null && prev != sender) prev.HandleEvent(new FBGKeyboardCaptureEvent(false));
+			}
+		}
+
 		protected override Boolean CaptureMouse(Boolean capture) {
 			return true;
 		}
@@ -700,12 +795,19 @@ namespace UCIS.FBGUI {
 		public void UnlockBitmapBuffer() {
 			Monitor.Exit(RenderLock);
 		}
-		public new void MouseMove(Point position, MouseButtons buttons) { base.MouseMove(position, buttons); UpdateCursor(cursorposition, CurrentCursor); }
-		public new void MouseDown(Point position, MouseButtons buttons) { base.MouseDown(position, buttons); UpdateCursor(cursorposition, CurrentCursor); }
-		public new void MouseUp(Point position, MouseButtons buttons) { base.MouseUp(position, buttons); UpdateCursor(cursorposition, CurrentCursor); }
-		public new void KeyDown(Keys key) { base.KeyDown(key); }
-		public new void KeyPress(Char key) { base.KeyPress(key); }
-		public new void KeyUp(Keys key) { base.KeyUp(key); }
+		void DispatchPointingEvent(Point position, MouseButtons buttons, FBGPointingEventType type) {
+			FBGPointingEvent e = new FBGPointingEvent(position, buttons, type);
+			HandleEvent(e);
+			UpdateCursor(cursorposition, e.Cursor);
+		}
+		public new void MouseMove(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.Move); }
+		public new void MouseDown(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.ButtonDown); }
+		public new void MouseUp(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.ButtonUp); }
+		public new void KeyDown(Keys key) { KeyDown(key, Char.MinValue); }
+		public new void KeyPress(Char key) { KeyDown(Keys.None, key); }
+		public new void KeyUp(Keys key) { KeyUp(key, Char.MinValue); }
+		public void KeyDown(Keys key, Char keyChar) { HandleEvent(new FBGKeyboardEvent(key, keyChar, true)); }
+		public void KeyUp(Keys key, Char keyChar) { HandleEvent(new FBGKeyboardEvent(key, keyChar, false)); }
 	}
 	public class FBGForm : FBGDockContainer {
 		private Point prevPosition = Point.Empty;
@@ -756,35 +858,49 @@ namespace UCIS.FBGUI {
 			if (mr == 0 && Movable && p.Y < 20) mr = NonClientOps.Move;
 			return mr;
 		}
-		private void SetCursorForNonClientOperation(NonClientOps op) {
+		private void SetCursorForNonClientOperation(NonClientOps op, FBGPointingEvent e) {
 			switch (op & NonClientOps.MoveResize) {
-				case NonClientOps.Move: CurrentCursor = FBGCursor.Move; break;
-				case NonClientOps.ResizeLeft: CurrentCursor = FBGCursor.SizeLeft; break;
-				case NonClientOps.ResizeRight: CurrentCursor = FBGCursor.SizeRight; break;
-				case NonClientOps.ResizeBottom: CurrentCursor = FBGCursor.SizeBottom; break;
-				case NonClientOps.ResizeTop: CurrentCursor = FBGCursor.SizeTop; break;
-				case NonClientOps.ResizeTop | NonClientOps.ResizeLeft: CurrentCursor = FBGCursor.SizeTopLeft; break;
-				case NonClientOps.ResizeTop | NonClientOps.ResizeRight: CurrentCursor = FBGCursor.SizeTopRight; break;
-				case NonClientOps.ResizeBottom | NonClientOps.ResizeLeft: CurrentCursor = FBGCursor.SizeBottomLeft; break;
-				case NonClientOps.ResizeBottom | NonClientOps.ResizeRight: CurrentCursor = FBGCursor.SizeBottomRight; break;
-				default: CurrentCursor = DefaultCursor; break;
+				case NonClientOps.Move: e.Cursor = FBGCursor.Move; break;
+				case NonClientOps.ResizeLeft: e.Cursor = FBGCursor.SizeLeft; break;
+				case NonClientOps.ResizeRight: e.Cursor = FBGCursor.SizeRight; break;
+				case NonClientOps.ResizeBottom: e.Cursor = FBGCursor.SizeBottom; break;
+				case NonClientOps.ResizeTop: e.Cursor = FBGCursor.SizeTop; break;
+				case NonClientOps.ResizeTop | NonClientOps.ResizeLeft: e.Cursor = FBGCursor.SizeTopLeft; break;
+				case NonClientOps.ResizeTop | NonClientOps.ResizeRight: e.Cursor = FBGCursor.SizeTopRight; break;
+				case NonClientOps.ResizeBottom | NonClientOps.ResizeLeft: e.Cursor = FBGCursor.SizeBottomLeft; break;
+				case NonClientOps.ResizeBottom | NonClientOps.ResizeRight: e.Cursor = FBGCursor.SizeBottomRight; break;
 			}
 		}
-		protected override void MouseDown(Point p, MouseButtons buttons) {
+		protected override void HandlePointingEvent(FBGPointingEvent e) {
+			e.Cursor = Cursor;
+			if (HandlePointingEventA(e)) base.HandlePointingEvent(e);
+		}
+		Boolean HandlePointingEventA(FBGPointingEvent e) {
+			e.Cursor = Cursor;
+			switch (e.Type) {
+				case FBGPointingEventType.Move: return MouseMove(e.Position, e.Buttons, e);
+				case FBGPointingEventType.ButtonDown: return MouseDown(e.Position, e.Buttons, e);
+				case FBGPointingEventType.ButtonUp: return MouseUp(e.Position, e.Buttons, e);
+				default: return true;
+			}
+		}
+		Boolean MouseDown(Point p, MouseButtons buttons, FBGPointingEvent e) {
 			NonClientOps mr = 0;
 			if ((buttons & MouseButtons.Left) != 0) mr = GetNonClientOperation(p);
 			if (mr != 0) {
 				moveresize = mr;
 				prevPosition = p;
+				SetCursorForNonClientOperation(moveresize, e);
 				CaptureMouse(true);
+				return false;
 			} else {
-				base.MouseDown(p, buttons);
+				return true;
 			}
 		}
-		protected override void MouseMove(Point position, MouseButtons buttons) {
-			if (moveresize == 0) {
-				base.MouseMove(position, buttons);
-			} else if ((moveresize & NonClientOps.MoveResize) != 0) {
+		Boolean MouseMove(Point position, MouseButtons buttons, FBGPointingEvent e) {
+			SetCursorForNonClientOperation(moveresize == 0 ? GetNonClientOperation(position) : moveresize, e);
+			if (moveresize == 0) return true;
+			if ((moveresize & NonClientOps.MoveResize) != 0) {
 				Rectangle b = Bounds;
 				int dx = position.X - prevPosition.X;
 				int dy = position.Y - prevPosition.Y;
@@ -809,18 +925,20 @@ namespace UCIS.FBGUI {
 				if (b.Height < 25) b.Height = 25;
 				Bounds = b;
 			}
-			SetCursorForNonClientOperation(moveresize == 0 ? GetNonClientOperation(position) : moveresize);
+			return false;
 		}
-		protected override void MouseUp(Point position, MouseButtons buttons) {
+		Boolean MouseUp(Point position, MouseButtons buttons, FBGPointingEvent e) {
 			if (moveresize == 0) {
-				base.MouseUp(position, buttons);
+				SetCursorForNonClientOperation(GetNonClientOperation(position), e);
+				return true;
 			} else if ((buttons & MouseButtons.Left) != 0) {
 				MouseMove(position, buttons);
 				CaptureMouse(false);
 				if (moveresize == NonClientOps.ButtonClose && (new Rectangle(Bounds.Width - 5 - 14, 4, 14, 14)).Contains(position) && Closable) Close();
 				moveresize = 0;
+				SetCursorForNonClientOperation(GetNonClientOperation(position), e);
 			}
-			SetCursorForNonClientOperation(moveresize == 0 ? GetNonClientOperation(position) : moveresize);
+			return false;
 		}
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
