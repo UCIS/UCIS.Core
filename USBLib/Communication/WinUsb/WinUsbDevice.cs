@@ -172,7 +172,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 		}
 
 		public unsafe override int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
-			if (length > short.MaxValue || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length");
+			if (length > short.MaxValue || offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length");
 			fixed (Byte* b = buffer) {
 				if (!WinUsb_GetDescriptor(InterfaceHandles[0], descriptorType, index, (ushort)langId, (IntPtr)(b + offset), length, out length))
 					throw new Win32Exception(Marshal.GetLastWin32Error(), "Descriptor transfer failed");
