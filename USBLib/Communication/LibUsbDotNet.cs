@@ -14,6 +14,7 @@ using LibUsb1Registry = UCIS.USBLib.Communication.LibUsb1.LibUsb1Registry;
 using nIUsbDevice = UCIS.USBLib.Communication.IUsbDevice;
 using nIUsbInterface = UCIS.USBLib.Communication.IUsbInterface;
 using WinUsbRegistry = UCIS.USBLib.Communication.WinUsb.WinUsbRegistry;
+using USBIORegistry = UCIS.USBLib.Communication.USBIO.USBIORegistry;
 
 namespace LibUsbDotNet {
 	public class UsbDevice : IUsbDevice {
@@ -64,6 +65,7 @@ namespace LibUsbDotNet {
 				if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
 					foreach (IUsbDeviceRegistry reg in WinUsbRegistry.DeviceList) list.Add(new UsbRegistry(reg));
 					foreach (IUsbDeviceRegistry reg in LibUsb0Registry.DeviceList) list.Add(new UsbRegistry(reg));
+					foreach (IUsbDeviceRegistry reg in USBIORegistry.DeviceList) list.Add(new UsbRegistry(reg));
 				} else {
 					foreach (IUsbDeviceRegistry reg in LibUsb1Registry.DeviceList) list.Add(new UsbRegistry(reg));
 				}

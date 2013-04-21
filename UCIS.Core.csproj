@@ -149,6 +149,8 @@
     <Compile Include="USBLib\Communication\UsbControlRequestType.cs" />
     <Compile Include="USBLib\Communication\UsbDescriptorType.cs" />
     <Compile Include="USBLib\Communication\UsbInterface.cs" />
+    <Compile Include="USBLib\Communication\USBIO\USBIODevice.cs" />
+    <Compile Include="USBLib\Communication\USBIO\USBIORegistry.cs" />
     <Compile Include="USBLib\Communication\UsbPipeStream.cs" />
     <Compile Include="USBLib\Communication\WindowsUsbDeviceRegistry.cs" />
     <Compile Include="USBLib\Communication\WinUsb\WinUsbDevice.cs" />

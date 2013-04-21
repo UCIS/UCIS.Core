@@ -43,10 +43,10 @@ namespace UCIS.USBLib.Communication {
 		public abstract int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length);
 		public abstract int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length);
 
-		public UsbPipeStream GetBulkStream(Byte endpoint) {
+		public virtual UsbPipeStream GetBulkStream(Byte endpoint) {
 			return new UsbPipeStream(this, endpoint, false);
 		}
-		public UsbPipeStream GetInterruptStream(Byte endpoint) {
+		public virtual UsbPipeStream GetInterruptStream(Byte endpoint) {
 			return new UsbPipeStream(this, endpoint, true);
 		}
 
