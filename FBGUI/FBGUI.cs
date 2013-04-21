@@ -1373,6 +1373,7 @@ namespace UCIS.FBGUI {
 		Image scaledImage = null;
 		Size imageSize;
 		Boolean ownsImage = false;
+		Boolean shouldScaleImage = false;
 		PictureBoxSizeMode sizeMode = PictureBoxSizeMode.Normal;
 		Rectangle imageRect;
 		public Image Image { get { return image; } set { SetImage(value, false); } }
@@ -1396,12 +1397,12 @@ namespace UCIS.FBGUI {
 			}
 		}
 		private void UpdateImageRect(Size csize) {
-			if (scaledImage != null && scaledImage != image) scaledImage.Dispose();
+			shouldScaleImage = false;
+			if (scaledImage != null) scaledImage.Dispose();
 			scaledImage = null;
 			if (image == null) return;
 			Boolean boundsset = !csize.IsEmpty;
 			if (!boundsset && sizeMode == PictureBoxSizeMode.AutoSize) {
-				scaledImage = image;
 				Size = imageSize;
 				return;
 			}
@@ -1425,14 +1426,18 @@ namespace UCIS.FBGUI {
 					imageRect = Rectangle.Round(new RectangleF(csize.Width / 2f - dispsize.Width / 2f, csize.Height / 2f - dispsize.Height / 2f, dispsize.Width, dispsize.Height));
 					break;
 			}
-			if (imageRect.Size == imageSize) scaledImage = image;
+			shouldScaleImage = imageRect.Size != imageSize;
 			if (!boundsset) Invalidate();
 		}
 		protected override void Paint(Graphics g) {
 			if (!Visible) return;
 			base.Paint(g);
-			if (PreScaleImage && scaledImage == null && image != null) scaledImage = new Bitmap(image, imageRect.Size);
-			if (scaledImage != null) g.DrawImage(image, imageRect);
+			if (shouldScaleImage && PreScaleImage && image != null) {
+				scaledImage = new Bitmap(image, imageRect.Size);
+				shouldScaleImage = false;
+			}
+			if (scaledImage != null) g.DrawImage(scaledImage, imageRect);
+			else if (image != null) g.DrawImage(image, imageRect);
 		}
 		public Point PointToImage(Point point) {
 			switch (sizeMode) {
