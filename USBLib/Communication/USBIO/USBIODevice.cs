@@ -181,7 +181,6 @@ namespace UCIS.USBLib.Communication.USBIO {
 						default:
 							throw new ArgumentException(String.Format("Invalid request: 0x{0:X8}", request));
 					}
-					break;
 				case UsbControlRequestType.TypeVendor:
 				case UsbControlRequestType.TypeClass:
 					USBIO_CLASS_OR_VENDOR_REQUEST req = new USBIO_CLASS_OR_VENDOR_REQUEST() {

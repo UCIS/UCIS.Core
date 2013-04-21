@@ -61,7 +61,7 @@ namespace UCIS.Net.HTTP {
 					goto Failure;
 				}
 				if (closed) baseStream.Close();
-			} catch (Exception ex) {
+			} catch (Exception) {
 				closed = true;
 				context.Close();
 			} finally {

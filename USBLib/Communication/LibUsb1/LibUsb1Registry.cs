@@ -122,5 +122,9 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 			if (r == null) return false;
 			return r.Device.DangerousGetHandle() == Device.DangerousGetHandle();
 		}
+
+		public override int GetHashCode() {
+			return Device.DangerousGetHandle().GetHashCode();
+		}
 	}
 }

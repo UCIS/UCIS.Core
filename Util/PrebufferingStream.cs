@@ -16,7 +16,7 @@ namespace UCIS.Util {
 				this.Count = count;
 				base.SetCompleted(synchronously, error);
 			}
-			public void SetCompleted(Boolean synchronously, Exception error) {
+			public new void SetCompleted(Boolean synchronously, Exception error) {
 				base.SetCompleted(synchronously, error);
 			}
 			public int WaitForCompletion() {
