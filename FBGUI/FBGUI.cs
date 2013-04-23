@@ -872,11 +872,10 @@ namespace UCIS.FBGUI {
 			}
 		}
 		protected override void HandlePointingEvent(FBGPointingEvent e) {
-			e.Cursor = Cursor;
+			if (Cursor != null) e.Cursor = Cursor;
 			if (HandlePointingEventA(e)) base.HandlePointingEvent(e);
 		}
 		Boolean HandlePointingEventA(FBGPointingEvent e) {
-			e.Cursor = Cursor;
 			switch (e.Type) {
 				case FBGPointingEventType.Move: return MouseMove(e.Position, e.Buttons, e);
 				case FBGPointingEventType.ButtonDown: return MouseDown(e.Position, e.Buttons, e);
@@ -898,8 +897,10 @@ namespace UCIS.FBGUI {
 			}
 		}
 		Boolean MouseMove(Point position, MouseButtons buttons, FBGPointingEvent e) {
-			SetCursorForNonClientOperation(moveresize == 0 ? GetNonClientOperation(position) : moveresize, e);
-			if (moveresize == 0) return true;
+			NonClientOps mr = moveresize;
+			if (mr == 0) mr = GetNonClientOperation(position);
+			if (mr == 0) return true;
+			SetCursorForNonClientOperation(mr, e);
 			if ((moveresize & NonClientOps.MoveResize) != 0) {
 				Rectangle b = Bounds;
 				int dx = position.X - prevPosition.X;
