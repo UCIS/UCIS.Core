@@ -22,6 +22,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 		static readonly int IOCTL_USBIO_GET_DESCRIPTOR = _USBIO_IOCTL_CODE(1, METHOD_OUT_DIRECT);
 		static readonly int IOCTL_USBIO_GET_CONFIGURATION = _USBIO_IOCTL_CODE(6, METHOD_BUFFERED);
 		static readonly int IOCTL_USBIO_SET_CONFIGURATION = _USBIO_IOCTL_CODE(9, METHOD_BUFFERED);
+		static readonly int IOCTL_USBIO_UNCONFIGURE_DEVICE = _USBIO_IOCTL_CODE(10, METHOD_BUFFERED);
 		static readonly int IOCTL_USBIO_CLASS_OR_VENDOR_IN_REQUEST = _USBIO_IOCTL_CODE(12, METHOD_OUT_DIRECT);
 		static readonly int IOCTL_USBIO_CLASS_OR_VENDOR_OUT_REQUEST = _USBIO_IOCTL_CODE(13, METHOD_IN_DIRECT);
 		static readonly int IOCTL_USBIO_RESET_DEVICE = _USBIO_IOCTL_CODE(21, METHOD_BUFFERED);
@@ -114,8 +115,8 @@ namespace UCIS.USBLib.Communication.USBIO {
 							req.ConfigurationIndex = (ushort)i;
 							req.NbOfInterfaces = Math.Min((ushort)32, config.Descriptor.InterfaceCount);
 							for (int j = 0; j < req.NbOfInterfaces; j++) {
-								LibUsbDotNet.Info.UsbInterfaceInfo intf = config.InterfaceInfoList[i];
-								*((USBIO_INTERFACE_SETTING*)(req.InterfaceList + sizeof(USBIO_INTERFACE_SETTING) * i)) =
+								LibUsbDotNet.Info.UsbInterfaceInfo intf = config.InterfaceInfoList[j];
+								*((USBIO_INTERFACE_SETTING*)(req.InterfaceList + sizeof(USBIO_INTERFACE_SETTING) * j)) =
 									new USBIO_INTERFACE_SETTING() { InterfaceIndex = intf.Descriptor.InterfaceID, AlternateSettingIndex = 0, MaximumTransferSize = UInt16.MaxValue };
 							}
 							DeviceIoControl(DeviceHandle, IOCTL_USBIO_SET_CONFIGURATION, (IntPtr)(&req), sizeof(USBIO_SET_CONFIGURATION), IntPtr.Zero, 0);
