@@ -110,7 +110,7 @@ namespace LibUsbDotNet {
 				int iConfigs = Info.Descriptor.ConfigurationCount;
 				for (int iConfig = 0; iConfig < iConfigs; iConfig++) {
 					int iBytesTransmitted;
-					if (!GetDescriptor((byte)UsbDescriptorType.Configuration, 0, 0, cfgBuffer, cfgBuffer.Length, out iBytesTransmitted))
+					if (!GetDescriptor((byte)UsbDescriptorType.Configuration, (byte)iConfig, 0, cfgBuffer, cfgBuffer.Length, out iBytesTransmitted))
 						throw new Exception("Could not read configuration descriptor");
 					if (iBytesTransmitted < UsbConfigDescriptor.Size || cfgBuffer[1] != (byte)UsbDescriptorType.Configuration)
 						throw new Exception("GetDeviceConfigs: USB config descriptor is invalid.");
