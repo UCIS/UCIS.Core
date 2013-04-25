@@ -627,6 +627,7 @@ namespace UCIS.FBGUI {
 		public static readonly FBGCursor SizeTopRight = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipX);
 		public static readonly FBGCursor SizeBottomLeft = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipY);
 		public static readonly FBGCursor SizeBottomRight = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipXY);
+		public static readonly FBGCursor Hand = LoadFromResource("cursor_hand", 5, 0);
 		public static FBGCursor ArrowCursor { get { return Arrow; } }
 	}
 	public class FBGRenderer : FBGContainerControl, IDisposable {

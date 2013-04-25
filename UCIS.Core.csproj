@@ -187,6 +187,9 @@
     <EmbeddedResource Include="FBGUI\cursor_left.png" />
     <EmbeddedResource Include="FBGUI\cursor_arrow.png" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="FBGUI\cursor_hand.png" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
