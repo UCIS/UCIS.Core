@@ -756,9 +756,9 @@ namespace UCIS.FBGUI {
 		public virtual new void Paint(Graphics g) {
 			HandleEvent(new FBGPaintEvent(g));
 			if (cursor != null) {
-				Point r = CursorPosition;
-				r.Offset(-cursor.Hotspot.X, -cursor.Hotspot.Y);
-				g.DrawImage(cursor.Image, new Rectangle(r, cursor.Size));
+				Rectangle r = cursor.Area;
+				r.Offset(cursorposition);
+				g.DrawImage(cursor.Image, r);
 			}
 		}
 		protected override void HandlePointingCaptureMessage(IFBGControl sender, FBGPointingCaptureMessage e) {
