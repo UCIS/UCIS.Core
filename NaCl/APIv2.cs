@@ -1,18 +1,23 @@
 ﻿using System;
+using System.Globalization;
+using UCIS.Util;
 using curve25519xsalsa20poly1305impl = UCIS.NaCl.crypto_box.curve25519xsalsa20poly1305;
 using edwards25519sha512batchimpl = UCIS.NaCl.crypto_sign.edwards25519sha512batch;
 using xsalsa20poly1305impl = UCIS.NaCl.crypto_secretbox.xsalsa20poly1305;
 
 namespace UCIS.NaCl.v2 {
 	public class curve25519keypair {
-		private Byte[] publickey, secretkey;
+		private Byte[] secretkey;
+		private Byte[] publickey = null;
 
 		public curve25519keypair() {
 			curve25519xsalsa20poly1305impl.crypto_box_keypair(out publickey, out secretkey);
 		}
 		public curve25519keypair(Byte[] secretkey) {
-			this.publickey = curve25519xsalsa20poly1305impl.crypto_box_getpublickey(secretkey);
 			this.secretkey = secretkey;
+		}
+		public curve25519keypair(String secretkey) {
+			this.secretkey = DecodeHexString(secretkey, curve25519xsalsa20poly1305impl.SECRETKEYBYTES);
 		}
 		public curve25519keypair(Byte[] secretkey, Byte[] publickey) {
 			if (publickey.Length != curve25519xsalsa20poly1305impl.PUBLICKEYBYTES) throw new ArgumentOutOfRangeException("publickey");
@@ -20,39 +25,68 @@ namespace UCIS.NaCl.v2 {
 			this.secretkey = secretkey;
 			this.publickey = publickey;
 		}
-		public Byte[] PublicKey { get { return publickey; } }
+		public Byte[] PublicKey {
+			get {
+				if (publickey == null) publickey = curve25519xsalsa20poly1305impl.crypto_box_getpublickey(secretkey);
+				return publickey;
+			}
+		}
 		public Byte[] SecretKey { get { return secretkey; } }
+		internal static Byte[] DecodeHexString(String str, int length) {
+			if (str.Length != length * 2) throw new ArgumentException("str", "Incorrect key length");
+			Byte[] bytes = new Byte[length];
+			for (int i = 0; i < length; i++) bytes[i] = Byte.Parse(str.Substring(i * 2, 2), NumberStyles.HexNumber);
+			return bytes;
+		}
 	}
 	public class curve25519xsalsa20poly1305 : xsalsa20poly1305 {
-		public curve25519xsalsa20poly1305(Byte[] publickey, curve25519keypair secretkey)
-			: this(publickey, secretkey.SecretKey) {
+		public Byte[] PublicKey { get; private set; }
+		public curve25519keypair SecretKey { get; private set; }
+		public curve25519xsalsa20poly1305(String publickey, String secretkey)
+			: this(curve25519keypair.DecodeHexString(publickey, curve25519xsalsa20poly1305impl.PUBLICKEYBYTES), new curve25519keypair(secretkey)) {
 		}
 		public curve25519xsalsa20poly1305(Byte[] publickey, Byte[] secretkey)
-			: base(curve25519xsalsa20poly1305impl.crypto_box_beforenm(publickey, secretkey)) {
+			: this(publickey, new curve25519keypair(secretkey)) {
+		}
+		public curve25519xsalsa20poly1305(Byte[] publickey, curve25519keypair secretkey)
+			: base(curve25519xsalsa20poly1305impl.crypto_box_beforenm(publickey, secretkey.SecretKey)) {
+			this.PublicKey = publickey;
+			this.SecretKey = secretkey;
 		}
 	}
 	public class xsalsa20poly1305 {
-		Byte[] sharedkey;
-		Byte[] nonce;
+		protected Byte[] sharedkey = new Byte[xsalsa20poly1305impl.KEYBYTES];
+		Byte[] nonce = new Byte[xsalsa20poly1305impl.NONCEBYTES];
 
 		public int SharedKeySize { get { return xsalsa20poly1305impl.KEYBYTES; } }
 
 		public xsalsa20poly1305(Byte[] sharedkey) : this(sharedkey, null) { }
 		public xsalsa20poly1305(Byte[] sharedkey, Byte[] nonce) {
-			if (ReferenceEquals(sharedkey, null)) throw new ArgumentNullException("secretkey");
+			if (sharedkey == null) throw new ArgumentNullException("secretkey");
 			if (sharedkey.Length != xsalsa20poly1305impl.KEYBYTES) throw new ArgumentOutOfRangeException("secretkey", "The key size does not match the expected key length");
-			this.sharedkey = sharedkey;
-			this.nonce = new Byte[xsalsa20poly1305impl.NONCEBYTES];
-			if (!ReferenceEquals(nonce, null)) this.Nonce = nonce;
+			sharedkey.CopyTo(this.sharedkey, 0);
+			if (nonce != null) this.Nonce = nonce;
 		}
 
 		public Byte[] Nonce {
 			get { return this.nonce; }
+			set { NonceValue = value; }
+		}
+		public Byte[] NonceValue {
+			get { return ArrayUtil.ToArray(nonce); }
 			set {
 				if (ReferenceEquals(value, null)) throw new ArgumentNullException("value");
 				if (value.Length > xsalsa20poly1305impl.NONCEBYTES) throw new ArgumentOutOfRangeException("value", "Nonce is too big");
 				value.CopyTo(nonce, 0);
 				Array.Clear(this.nonce, value.Length, this.nonce.Length - value.Length);
+			}
+		}
+		public Byte[] NonceBuffer {
+			get { return this.nonce; }
+			set {
+				if (ReferenceEquals(value, null)) throw new ArgumentNullException("value");
+				if (value.Length > xsalsa20poly1305impl.NONCEBYTES) throw new ArgumentOutOfRangeException("value", "Incorrect nonce length");
+				this.nonce = value;
 			}
 		}
 
