@@ -105,7 +105,6 @@ namespace UCIS.USBLib.Communication.USBIO {
 		public override Byte Configuration {
 			get { return base.Configuration; }
 			set {
-				if (value == Configuration) return;
 				IList<LibUsbDotNet.Info.UsbConfigInfo> configs = (new LibUsbDotNet.UsbDevice(this)).Configs;
 				for (int i = 0; i < configs.Count; i++) {
 					LibUsbDotNet.Info.UsbConfigInfo config = configs[i];
@@ -119,7 +118,12 @@ namespace UCIS.USBLib.Communication.USBIO {
 								*((USBIO_INTERFACE_SETTING*)(req.InterfaceList + sizeof(USBIO_INTERFACE_SETTING) * j)) =
 									new USBIO_INTERFACE_SETTING() { InterfaceIndex = intf.Descriptor.InterfaceID, AlternateSettingIndex = 0, MaximumTransferSize = UInt16.MaxValue };
 							}
-							DeviceIoControl(DeviceHandle, IOCTL_USBIO_SET_CONFIGURATION, (IntPtr)(&req), sizeof(USBIO_SET_CONFIGURATION), IntPtr.Zero, 0);
+							try {
+								DeviceIoControl(DeviceHandle, IOCTL_USBIO_SET_CONFIGURATION, (IntPtr)(&req), sizeof(USBIO_SET_CONFIGURATION), IntPtr.Zero, 0);
+							} catch (Win32Exception ex) {
+								if (ex.NativeErrorCode == unchecked((int)0xE0001005L)) return;
+								throw;
+							}
 						}
 						return;
 					}
