@@ -60,6 +60,10 @@ namespace UCIS.Net.HTTP {
 			if (Listener != null) Listener.Close();
 		}
 
+		public void HandleClient(Socket client) {
+			new HTTPContext(this, client);
+		}
+
 		bool TCPServer.IModule.Accept(TCPStream stream) {
 			new HTTPContext(this, stream);
 			return false;
@@ -103,6 +107,7 @@ namespace UCIS.Net.HTTP {
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
 				this.RemoteEndPoint = socket.RemoteEndPoint;
+				if (socket.ProtocolType == ProtocolType.Tcp) socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 				if (stream == null) stream = new NetworkStream(socket, true);
 			}
 			Init(stream);
