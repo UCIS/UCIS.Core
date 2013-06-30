@@ -158,7 +158,7 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 		[DllImport(LIBUSB1_DLL, CallingConvention = LIBUSB1_CC)]
 		static extern int libusb_set_interface_alt_setting(libusb_device_handle dev, int interface_number, int alternate_setting);
 		[DllImport(LIBUSB1_DLL, CallingConvention = LIBUSB1_CC)]
-		static extern int libusb_clear_halt(libusb_device_handle dev, Byte endpoint);
+		public static extern int libusb_clear_halt(libusb_device_handle dev, Byte endpoint);
 		[DllImport(LIBUSB1_DLL, CallingConvention = LIBUSB1_CC)]
 		public static extern int libusb_reset_device(libusb_device_handle dev);
 

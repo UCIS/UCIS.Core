@@ -87,11 +87,17 @@ namespace UCIS.USBLib.Communication.LibUsb {
 		public override int BulkWrite(byte endpoint, byte[] buffer, int offset, int length) {
 			return PipeTransfer(endpoint, true, false, buffer, offset, length, 0);
 		}
+		public override void BulkReset(byte endpoint) {
+			PipeReset(endpoint);
+		}
 		public override int InterruptRead(byte endpoint, byte[] buffer, int offset, int length) {
 			return PipeTransfer(endpoint, false, false, buffer, offset, length, 0);
 		}
 		public override int InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) {
 			return PipeTransfer(endpoint, true, false, buffer, offset, length, 0);
+		}
+		public override void InterruptReset(byte endpoint) {
+			PipeReset(endpoint);
 		}
 		public unsafe override int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			if (buffer == null) buffer = new Byte[0];

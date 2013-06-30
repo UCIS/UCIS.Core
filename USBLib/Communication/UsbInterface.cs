@@ -38,8 +38,10 @@ namespace UCIS.USBLib.Communication {
 
 		public abstract int BulkWrite(Byte endpoint, Byte[] buffer, int offset, int length);
 		public abstract int BulkRead(Byte endpoint, Byte[] buffer, int offset, int length);
+		public virtual void BulkReset(Byte endpoint) { throw new NotImplementedException(); }
 		public abstract int InterruptWrite(Byte endpoint, Byte[] buffer, int offset, int length);
 		public abstract int InterruptRead(Byte endpoint, Byte[] buffer, int offset, int length);
+		public virtual void InterruptReset(Byte endpoint) { throw new NotImplementedException(); }
 		public abstract int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length);
 		public abstract int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length);
 

@@ -200,17 +200,28 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			return length;
 		}
 
+		public void PipeReset(byte endpoint) {
+			SafeWinUsbInterfaceHandle ih = GetInterfaceHandleForEndpoint(endpoint);
+			WinUsb_ResetPipe(ih, endpoint);
+		}
+
 		public override int BulkWrite(Byte endpoint, Byte[] buffer, int offset, int length) {
 			return PipeWrite(endpoint, buffer, offset, length);
 		}
 		public override int BulkRead(Byte endpoint, Byte[] buffer, int offset, int length) {
 			return PipeRead(endpoint, buffer, offset, length);
 		}
+		public override void BulkReset(Byte endpoint) {
+			PipeReset(endpoint);
+		}
 		public override int InterruptWrite(Byte endpoint, Byte[] buffer, int offset, int length) {
 			return PipeWrite(endpoint, buffer, offset, length);
 		}
 		public override int InterruptRead(Byte endpoint, Byte[] buffer, int offset, int length) {
 			return PipeRead(endpoint, buffer, offset, length);
+		}
+		public override void InterruptReset(Byte endpoint) {
+			PipeReset(endpoint);
 		}
 	}
 }

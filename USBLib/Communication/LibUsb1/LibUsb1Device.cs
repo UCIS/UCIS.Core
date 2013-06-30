@@ -23,6 +23,10 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 		public override int BulkRead(byte endpoint, byte[] buffer, int offset, int length) {
 			return BulkTransfer(endpoint, buffer, offset, length);
 		}
+		public override void BulkReset(byte endpoint) {
+			int ret = libusb1.libusb_clear_halt(Handle, endpoint);
+			if (ret < 0) throw new Exception("libusb_clear_halt returned " + ret.ToString());
+		}
 		private int BulkTransfer(byte endpoint, byte[] buffer, int offset, int length) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			if (length == 0) return 0;
@@ -38,6 +42,9 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 		}
 		public override int InterruptRead(byte endpoint, byte[] buffer, int offset, int length) {
 			return InterruptTransfer(endpoint, buffer, offset, length);
+		}
+		public override void InterruptReset(byte endpoint) {
+			BulkReset(endpoint);
 		}
 		private int InterruptTransfer(byte endpoint, byte[] buffer, int offset, int length) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
