@@ -30,6 +30,11 @@ namespace UCIS.USBLib.Descriptor {
 			if (slen > length) throw new InvalidOperationException("The string has been truncated");
 			return Encoding.Unicode.GetString(buffer, offset + 2, slen - 2);
 		}
+		public static String GetStringFromDevice(IUsbInterface device, byte index, short langId) {
+			Byte[] buff = new Byte[256];
+			int len = device.GetDescriptor((Byte)UsbDescriptorType.String, index, langId, buff, 0, buff.Length);
+			return GetString(buff, 0, len);
+		}
 	}
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public struct UsbDeviceDescriptor {
@@ -65,6 +70,11 @@ namespace UCIS.USBLib.Descriptor {
 			if (length < Size) throw new ArgumentOutOfRangeException("length", "The data length is smaller than the descriptor length");
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer dimensions");
 			fixed (Byte* ptr = buffer) return *(UsbDeviceDescriptor*)(ptr + offset);
+		}
+		public static UsbDeviceDescriptor FromDevice(IUsbInterface device) {
+			Byte[] buff = new Byte[UsbDeviceDescriptor.Size];
+			int len = device.GetDescriptor((Byte)UsbDescriptorType.Device, 0, 0, buff, 0, buff.Length);
+			return FromByteArray(buff, 0, len);
 		}
 		public static unsafe int Size { get { return sizeof(UsbDeviceDescriptor); } }
 	}
