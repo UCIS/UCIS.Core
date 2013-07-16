@@ -65,6 +65,17 @@ namespace UCIS.Util {
 			}
 			return ret;
 		}
+		public static T[] Merge<T>(params IList<T>[] parts) {
+			int count = 0;
+			foreach (IList<T> segment in parts) count += segment.Count;
+			T[] ret = new T[count];
+			int offset = 0;
+			foreach (IList<T> segment in parts) {
+				segment.CopyTo(ret, offset);
+				offset += segment.Count;
+			}
+			return ret;
+		}
 		public static Boolean Equal<T>(T[] a, T[] b, IEqualityComparer<T> comparer) {
 			if (ReferenceEquals(a, b)) return true;
 			if (a == null || b == null) return false;
