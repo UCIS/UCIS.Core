@@ -60,7 +60,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 		//[DllImport(WIN_USB_DLL, SetLastError = true)]
 		//private static extern bool WinUsb_SetPipePolicy(SafeWinUsbInterfaceHandle InterfaceHandle, byte PipeID, UInt32 PolicyType, UInt32 ValueLength, ref Byte Value);
 		SafeFileHandle DeviceHandle;
-		private SafeWinUsbInterfaceHandle[] InterfaceHandles = null;
+		private SafeWinUsbInterfaceHandle[] InterfaceHandles = new SafeWinUsbInterfaceHandle[0];
 		private int[] EndpointToInterfaceIn = new int[0];
 		private int[] EndpointToInterfaceOut = new int[0];
 		public IUsbDeviceRegistry Registry { get; private set; }
@@ -132,7 +132,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 		}
 
 		public override void Close() {
-			foreach (SafeWinUsbInterfaceHandle ih in InterfaceHandles) ih.Close();
+			foreach (SafeWinUsbInterfaceHandle ih in InterfaceHandles) if (ih != null) ih.Close();
 			InterfaceHandles = new SafeWinUsbInterfaceHandle[0];
 			if (DeviceHandle != null) DeviceHandle.Close();
 		}
