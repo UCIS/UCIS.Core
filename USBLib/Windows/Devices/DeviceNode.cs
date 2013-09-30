@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.HWLib.Windows.Devices {
@@ -52,7 +54,10 @@ namespace UCIS.HWLib.Windows.Devices {
 			}
 		}
 		public static IList<DeviceNode> GetDevices(String enumerator) {
-			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, enumerator, IntPtr.Zero, DICFG.PRESENT | DICFG.ALLCLASSES)) {
+			return GetDevices(enumerator, true);
+		}
+		public static IList<DeviceNode> GetDevices(String enumerator, Boolean present) {
+			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, enumerator, IntPtr.Zero, (present ? DICFG.PRESENT : 0) | DICFG.ALLCLASSES)) {
 			//using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, enumerator, IntPtr.Zero, DICFG.ALLCLASSES | DICFG.DEVICEINTERFACE)) {
 				return GetDevicesInSet(dis);
 			}
@@ -126,6 +131,17 @@ namespace UCIS.HWLib.Windows.Devices {
 			return SetupApi.GetAsStringArray(buffer, buffer.Length);
 		}
 
+		public void SetProperty(SPDRP property, Byte[] value) {
+			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
+				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
+				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
+					throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (!SetupApi.SetupDiSetDeviceRegistryProperty(dis, ref dd, property, value, (uint)value.Length))
+					throw new Win32Exception(Marshal.GetLastWin32Error());
+			}
+		}
+
 		public Byte[] GetCustomProperty(String name) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
 				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
@@ -156,6 +172,63 @@ namespace UCIS.HWLib.Windows.Devices {
 			Byte[] buffer = GetCustomProperty(name);
 			if (buffer == null) return null;
 			return SetupApi.GetAsStringArray(buffer, buffer.Length);
+		}
+
+		public RegistryKey OpenRegistryKey(UInt32 scope, UInt32 hwProfile, UInt32 keyType, UInt32 samDesired) {
+			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
+				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
+				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
+					return null;
+				IntPtr handle = SetupApi.SetupDiOpenDevRegKey(dis, ref dd, scope, hwProfile, keyType, samDesired);
+				if (handle == (IntPtr)(-1)) return null;
+				return RegistryKeyFromHandle(handle, true, (samDesired & (0x00000002 | 0x00000004 | 0x00000020)) != 0);
+			}
+		}
+
+		private RegistryKey RegistryKeyFromHandle(IntPtr hKey, bool writable, bool ownsHandle) {
+			BindingFlags privateConstructors = BindingFlags.Instance | BindingFlags.NonPublic;
+			Type safeRegistryHandleType = typeof(SafeHandleZeroOrMinusOneIsInvalid).Assembly.GetType("Microsoft.Win32.SafeHandles.SafeRegistryHandle");
+			Type[] safeRegistryHandleCtorTypes = new Type[] { typeof(IntPtr), typeof(bool) };
+			ConstructorInfo safeRegistryHandleCtorInfo = safeRegistryHandleType.GetConstructor(privateConstructors, null, safeRegistryHandleCtorTypes, null);
+			Object safeHandle = safeRegistryHandleCtorInfo.Invoke(new Object[] { hKey, ownsHandle });
+			Type registryKeyType = typeof(RegistryKey);
+			Type[] registryKeyConstructorTypes = new Type[] { safeRegistryHandleType, typeof(bool) };
+			ConstructorInfo registryKeyCtorInfo = registryKeyType.GetConstructor(privateConstructors, null, registryKeyConstructorTypes, null);
+			RegistryKey resultKey = (RegistryKey)registryKeyCtorInfo.Invoke(new Object[] { safeHandle, writable });
+			return resultKey;
+		}
+
+		public Byte[] GetDeviceProperty(Guid fmtid, UInt32 pid) {
+			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
+				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
+				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
+					return null;
+				byte[] propBuffer = new byte[256];
+				UInt32 requiredSize;
+				UInt32 propertyType;
+				DEVPROPKEY propertyKey = new DEVPROPKEY() { fmtid = fmtid, pid = pid };
+				if (!SetupApi.SetupDiGetDeviceProperty(dis, ref dd, ref propertyKey, out propertyType, propBuffer, (uint)propBuffer.Length, out requiredSize, 0))
+					return null;
+				if (requiredSize > propBuffer.Length) {
+					propBuffer = new Byte[requiredSize];
+					if (!SetupApi.SetupDiGetDeviceProperty(dis, ref dd, ref propertyKey, out propertyType, propBuffer, (uint)propBuffer.Length, out requiredSize, 0))
+						throw new Win32Exception(Marshal.GetLastWin32Error());
+				}
+				if (requiredSize < propBuffer.Length) Array.Resize(ref propBuffer, (int)requiredSize);
+				return propBuffer;
+			}
+		}
+		public String GetDevicePropertyString(Guid fmtid, UInt32 pid) {
+			Byte[] buffer = GetDeviceProperty(fmtid, pid);
+			if (buffer == null) return null;
+			return SetupApi.GetAsString(buffer, buffer.Length);
+		}
+
+		public void Reenumerate(UInt32 flags) {
+			CR ret = SetupApi.CM_Reenumerate_DevNode(DevInst, flags);
+			CMException.Throw(ret, "CM_Reenumerate_DevNode");
 		}
 
 		public String DeviceDescription { get { return GetPropertyString(CMRDP.DEVICEDESC); } }

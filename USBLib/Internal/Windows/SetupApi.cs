@@ -41,14 +41,21 @@ namespace UCIS.USBLib.Internal.Windows {
 		public static extern bool SetupDiGetCustomDeviceProperty(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, string CustomPropertyName, DICUSTOMDEVPROP Flags, out RegistryValueKind PropertyRegDataType, Byte[] PropertyBuffer, int PropertyBufferSize, out int RequiredSize);
 		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Ansi)]
 		public static extern bool SetupDiGetDeviceInstanceIdA(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, StringBuilder DeviceInstanceId, int DeviceInstanceIdSize, out int RequiredSize);
-		[DllImport("setupapi.dll", CharSet = CharSet.Auto)]
-		public static extern bool SetupDiGetDeviceInterfacePropertyKeys(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVICE_INTERFACE_DATA DeviceInterfaceData, byte[] propKeyBuffer, int propKeyBufferElements, out int RequiredPropertyKeyCount, int Flags);
 		[DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
 		public static extern bool SetupDiGetDeviceRegistryProperty(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, SPDRP Property, out RegistryValueKind PropertyRegDataType, byte[] PropertyBuffer, int PropertyBufferSize, out int RequiredSize);
 		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		public static extern bool SetupDiGetDeviceRegistryProperty(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, SPDRP iProperty, out int PropertyRegDataType, IntPtr PropertyBuffer, int PropertyBufferSize, out int RequiredSize);
 		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		public static extern bool SetupDiGetDeviceRegistryProperty(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, SPDRP iProperty, out int PropertyRegDataType, [MarshalAs(UnmanagedType.LPTStr)] StringBuilder PropertyBuffer, int PropertyBufferSize, out int RequiredSize);
+		[DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		public static extern bool SetupDiSetDeviceRegistryProperty(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, SPDRP Property, Byte[] PropertyBuffer, UInt32 PropertyBufferSize);
+
+		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		public static extern IntPtr SetupDiOpenDevRegKey(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, UInt32 Scope, UInt32 HwProfile, UInt32 KeyType, UInt32 samDesired);
+		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		public static extern bool SetupDiGetDeviceProperty(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, ref DEVPROPKEY PropertyKey, out UInt32 PropertyType, Byte[] PropertyBuffer, UInt32 PropertyBufferSize, out UInt32 RequiredSize, UInt32 Flags);
+		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		public static extern bool SetupDiGetDeviceInterfacePropertyKeys(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVICE_INTERFACE_DATA DeviceInterfaceData, byte[] propKeyBuffer, int propKeyBufferElements, out int RequiredPropertyKeyCount, int Flags);
 
 		[DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		public static extern bool SetupDiGetDeviceInstanceId(SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, StringBuilder DeviceInstanceId, int DeviceInstanceIdSize, out int RequiredSize);
@@ -84,7 +91,8 @@ namespace UCIS.USBLib.Internal.Windows {
 		public static extern CR CM_Enumerate_Classes(UInt32 ulClassIndex, out Guid ClassGuid, UInt32 ulFlags);
 		[DllImport("setupapi.dll", CharSet = CharSet.Auto)]
 		public static extern CR CM_Get_DevNode_Status(out UInt32 pulStatus, out UInt32 pulProblemNumber, UInt32 dnDevInst, UInt32 ulFlags);
-
+		[DllImport("setupapi.dll", CharSet = CharSet.Auto)]
+		public static extern CR CM_Reenumerate_DevNode(UInt32 dnDevInst, UInt32 ulFlags);
 
 		//public const int DIGCF_DEFAULT = 0x00000001;  // only valid with DIGCF_DEVICEINTERFACE
 		public const int DIGCF_PRESENT = 0x00000002;
@@ -194,6 +202,12 @@ namespace UCIS.USBLib.Internal.Windows {
 			if (IntPtr.Size == 8) cbSize = 8; //Workaround for x64
 			else cbSize = 4 + (uint)Marshal.SystemDefaultCharSize;
 		}
+	}
+
+	[StructLayout(LayoutKind.Sequential)]
+	struct DEVPROPKEY {
+		public Guid fmtid;
+		public UInt32 pid;
 	}
 
 	enum CR {
