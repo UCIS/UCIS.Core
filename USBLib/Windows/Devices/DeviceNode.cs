@@ -112,7 +112,7 @@ namespace UCIS.HWLib.Windows.Devices {
 			uint proplength = 0;
 			uint proptype;
 			CR ret = SetupApi.CM_Get_DevNode_Registry_Property(DevInst, property, out proptype, null, ref proplength, 0);
-			if (ret == CR.NO_SUCH_VALUE) return null;
+			if (ret == CR.NO_SUCH_VALUE || ret == CR.NO_SUCH_DEVNODE) return null;
 			if (ret != CR.BUFFER_SMALL) CMException.Throw(ret, "CM_Get_DevNode_Registry_Property");
 			Byte[] propbuffer = new Byte[proplength];
 			ret = SetupApi.CM_Get_DevNode_Registry_Property(DevInst, property, out proptype, propbuffer, ref proplength, 0);

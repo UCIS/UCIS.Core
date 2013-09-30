@@ -10,7 +10,7 @@ namespace UCIS.USBLib.Communication {
 		public DeviceNode DeviceNode { get; private set; }
 
 		public static Boolean DecodeDeviceIDs(DeviceNode device, out int vendorID, out int productID, out int revision, out int interfaceID) {
-			String[] hwids = device.GetPropertyStringArray(CMRDP.HARDWAREID);
+			String[] hwids = device.HardwareID;
 			String hwid = null;
 			if (hwids == null || hwids.Length < 1 || hwids[0].Length == 0) {
 				hwid = device.DeviceID;
