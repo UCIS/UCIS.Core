@@ -9,6 +9,29 @@ namespace UCIS.USBLib.Communication {
 	public abstract class WindowsUsbDeviceRegistry {
 		public DeviceNode DeviceNode { get; private set; }
 
+		public static Boolean DecodeDeviceIDs(DeviceNode device, out int vendorID, out int productID, out int revision, out int interfaceID) {
+			String[] hwids = device.GetPropertyStringArray(CMRDP.HARDWAREID);
+			String hwid = null;
+			if (hwids == null || hwids.Length < 1 || hwids[0].Length == 0) {
+				hwid = device.DeviceID;
+			} else {
+				hwid = hwids[0];
+			}
+			vendorID = productID = revision = interfaceID = -1;
+			foreach (String token in hwid.Split(new Char[] { '\\', '#', '&' }, StringSplitOptions.None)) {
+				if (token.StartsWith("VID_", StringComparison.InvariantCultureIgnoreCase)) {
+					if (!Int32.TryParse(token.Substring(4), NumberStyles.HexNumber, null, out vendorID)) vendorID = -1;
+				} else if (token.StartsWith("PID_", StringComparison.InvariantCultureIgnoreCase)) {
+					if (!Int32.TryParse(token.Substring(4), NumberStyles.HexNumber, null, out productID)) productID = -1;
+				} else if (token.StartsWith("REV_", StringComparison.InvariantCultureIgnoreCase)) {
+					if (!Int32.TryParse(token.Substring(4), NumberStyles.Integer, null, out revision)) revision = -1;
+				} else if (token.StartsWith("MI_", StringComparison.InvariantCultureIgnoreCase)) {
+					if (!Int32.TryParse(token.Substring(3), NumberStyles.HexNumber, null, out interfaceID)) interfaceID = -1;
+				}
+			}
+			return vendorID != -1 && productID != -1;
+		}
+
 		// Parsed out of the device ID
 		private bool mIsDeviceIDParsed;
 		private byte mInterfaceID;
@@ -21,8 +44,6 @@ namespace UCIS.USBLib.Communication {
 		public String DevicePath { get; private set; }
 		public String DeviceID { get; private set; }
 		public String SymbolicName { get { return DevicePath; } }
-
-		private static Regex RegHardwareID = null;
 
 		protected WindowsUsbDeviceRegistry(DeviceNode device, String interfacepath) {
 			DeviceNode = device;
@@ -39,28 +60,12 @@ namespace UCIS.USBLib.Communication {
 
 		private void parseDeviceID() {
 			if (mIsDeviceIDParsed) return;
-			if (RegHardwareID == null) {
-				RegexOptions OPTIONS = RegexOptions.CultureInvariant | RegexOptions.IgnorePatternWhitespace | RegexOptions.Singleline | RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase;
-				string PATTERN = "(Vid_(?<Vid>[0-9A-F]{1,4}))|(Pid_(?<Pid>[0-9A-F]{1,4}))|(Rev_(?<Rev>[0-9]{1,4}))|(MI_(?<MI>[0-9A-F]{1,2}))";
-				RegHardwareID = new Regex(PATTERN, OPTIONS);
-			}
-			String[] HardwareIDs = DeviceNode.GetPropertyStringArray(CMRDP.HARDWAREID);
-			String HardwareID = null;
-			if (HardwareIDs == null || HardwareIDs.Length < 1 || HardwareIDs[0].Length == 0) {
-				HardwareID = DeviceID;
-			} else {
-				HardwareID = HardwareIDs[0];
-			}
-			foreach (Match match in RegHardwareID.Matches(HardwareID)) {
-				Group group = match.Groups["Vid"];
-				if (group.Success) ushort.TryParse(group.Value, NumberStyles.HexNumber, null, out mVid);
-				group = match.Groups["Pid"];
-				if (group.Success) ushort.TryParse(group.Value, NumberStyles.HexNumber, null, out mPid);
-				group = match.Groups["Rev"];
-				if (group.Success) ushort.TryParse(group.Value, NumberStyles.Integer, null, out mRevision);
-				group = match.Groups["MI"];
-				if (group.Success) Byte.TryParse(group.Value, NumberStyles.HexNumber, null, out mInterfaceID);
-			}
+			int vid, pid, rev, mid;
+			if (!DecodeDeviceIDs(DeviceNode, out vid, out pid, out rev, out mid)) return;
+			mVid = (UInt16)vid;
+			mPid = (UInt16)pid;
+			mRevision = (UInt16)rev;
+			mInterfaceID = (Byte)mid;
 			mIsDeviceIDParsed = true;
 		}
 		public int Vid {
