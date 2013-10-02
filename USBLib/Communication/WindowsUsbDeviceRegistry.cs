@@ -18,18 +18,20 @@ namespace UCIS.USBLib.Communication {
 				hwid = hwids[0];
 			}
 			vendorID = productID = revision = interfaceID = -1;
-			foreach (String token in hwid.Split(new Char[] { '\\', '#', '&' }, StringSplitOptions.None)) {
+			String[] tokens = hwid.Split(new Char[] { '\\', '#', '&' }, StringSplitOptions.None);
+			Boolean isUSB = tokens.Length > 0 && tokens[0] == "USB";
+			foreach (String token in tokens) {
 				if (token.StartsWith("VID_", StringComparison.InvariantCultureIgnoreCase)) {
-					if (!Int32.TryParse(token.Substring(4), NumberStyles.HexNumber, null, out vendorID)) vendorID = -1;
+					if (vendorID == -1) if (!Int32.TryParse(token.Substring(4), NumberStyles.HexNumber, null, out vendorID)) vendorID = -1;
 				} else if (token.StartsWith("PID_", StringComparison.InvariantCultureIgnoreCase)) {
-					if (!Int32.TryParse(token.Substring(4), NumberStyles.HexNumber, null, out productID)) productID = -1;
+					if (productID == -1) if (!Int32.TryParse(token.Substring(4), NumberStyles.HexNumber, null, out productID)) productID = -1;
 				} else if (token.StartsWith("REV_", StringComparison.InvariantCultureIgnoreCase)) {
-					if (!Int32.TryParse(token.Substring(4), NumberStyles.Integer, null, out revision)) revision = -1;
+					if (revision == -1) if (!Int32.TryParse(token.Substring(4), NumberStyles.Integer, null, out revision)) revision = -1;
 				} else if (token.StartsWith("MI_", StringComparison.InvariantCultureIgnoreCase)) {
-					if (!Int32.TryParse(token.Substring(3), NumberStyles.HexNumber, null, out interfaceID)) interfaceID = -1;
+					if (interfaceID == -1) if (!Int32.TryParse(token.Substring(3), NumberStyles.HexNumber, null, out interfaceID)) interfaceID = -1;
 				}
 			}
-			return vendorID != -1 && productID != -1;
+			return isUSB && vendorID != -1 && productID != -1;
 		}
 
 		// Parsed out of the device ID
