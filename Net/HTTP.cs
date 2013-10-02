@@ -189,11 +189,11 @@ namespace UCIS.Net.HTTP {
 			}
 			return;
 
-SendError400AndClose:
+		SendError400AndClose:
 			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(400);
 			return;
-SendError500AndClose:
+		SendError500AndClose:
 			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(500);
 			return;
@@ -391,56 +391,38 @@ SendError500AndClose:
 				return;
 			}
 			String reqname1 = context.RequestPath;
-			if (reqname1.Length > 0 && reqname1[0] == '/') reqname1 = reqname1.Substring(1);
+			if (reqname1.StartsWith("/")) reqname1 = reqname1.Substring(1);
 			String reqname2 = reqname1;
 			if (reqname2.Length > 0 && !reqname2.EndsWith("/")) reqname2 += "/";
 			reqname2 += "index.htm";
-			using (FileStream fs = File.OpenRead(TarFileName)) {
-				while (true) {
-					Byte[] header = new Byte[512];
-					if (fs.Read(header, 0, 512) != 512) break;
-					int flen = Array.IndexOf<Byte>(header, 0, 0, 100);
-					if (flen == 0) continue;
-					if (flen == -1) flen = 100;
-					String fname = Encoding.ASCII.GetString(header, 0, flen);
-					String fsize = Encoding.ASCII.GetString(header, 124, 11);
-					int fsizei = Convert.ToInt32(fsize, 8);
-					if (fname.StartsWith("./")) fname = fname.Length == 2 ? "/" : fname.Substring(2);
-					if (reqname1.Equals(fname, StringComparison.OrdinalIgnoreCase) || reqname2.Equals(fname)) {
-						context.SendStatus(200);
-						context.SendHeader("Content-Length", fsizei.ToString());
-						String ctype = null;
-						switch (Path.GetExtension(fname).ToLowerInvariant()) {
-							case ".txt": ctype = "text/plain"; break;
-							case ".htm":
-							case ".html": ctype = "text/html"; break;
-							case ".css": ctype = "text/css"; break;
-							case ".js": ctype = "application/x-javascript"; break;
-							case ".png": ctype = "image/png"; break;
-							case ".jpg":
-							case ".jpeg": ctype = "image/jpeg"; break;
-							case ".gif": ctype = "image/gif"; break;
-							case ".ico": ctype = "image/x-icon"; break;
-						}
-						if (ctype != null) context.SendHeader("Content-Type", ctype);
-						Stream response = context.GetResponseStream();
-						int left = fsizei;
-						byte[] buffer = new byte[Math.Min(left, 1024 * 10)];
-						while (left > 0) {
-							int len = fs.Read(buffer, 0, Math.Min(left, buffer.Length));
-							if (len <= 0) break;
-							left -= len;
-							response.Write(buffer, 0, len);
-						}
-						response.Close();
-						return;
-					} else {
-						fs.Seek(fsizei, SeekOrigin.Current);
-					}
-					int padding = fsizei % 512;
-					if (padding != 0) padding = 512 - padding;
-					fs.Seek(padding, SeekOrigin.Current);
+			foreach (TarchiveEntry file in new TarchiveReader(TarFileName)) {
+				if (!file.IsFile) continue;
+				if (!reqname1.Equals(file.Name, StringComparison.OrdinalIgnoreCase) && !reqname2.Equals(file.Name, StringComparison.OrdinalIgnoreCase)) continue;
+				context.SendStatus(200);
+				context.SendHeader("Content-Length", file.Size.ToString());
+				String ctype = null;
+				switch (Path.GetExtension(file.Name).ToLowerInvariant()) {
+					case ".txt": ctype = "text/plain"; break;
+					case ".htm":
+					case ".html": ctype = "text/html"; break;
+					case ".css": ctype = "text/css"; break;
+					case ".js": ctype = "application/x-javascript"; break;
+					case ".png": ctype = "image/png"; break;
+					case ".jpg":
+					case ".jpeg": ctype = "image/jpeg"; break;
+					case ".gif": ctype = "image/gif"; break;
+					case ".ico": ctype = "image/x-icon"; break;
 				}
+				if (ctype != null) context.SendHeader("Content-Type", ctype);
+				using (Stream response = context.GetResponseStream(), source = file.GetStream()) {
+					byte[] buffer = new byte[Math.Min(source.Length, 1024 * 10)];
+					while (source.CanRead) {
+						int len = source.Read(buffer, 0, buffer.Length);
+						if (len <= 0) break;
+						response.Write(buffer, 0, len);
+					}
+				}
+				return;
 			}
 			context.SendErrorAndClose(404);
 		}
