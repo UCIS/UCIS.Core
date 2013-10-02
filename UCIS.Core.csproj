@@ -178,6 +178,7 @@
     <Compile Include="VNCServer\IFramebuffer.cs" />
     <Compile Include="VNCServer\VNCServer.cs" />
     <Compile Include="Windows\ServiceManager.cs" />
+    <Compile Include="Windows\WindowsNamedPipe.cs" />
     <Compile Include="Xml\PolicyFile.cs" />
     <Compile Include="Xml\Server.cs" />
     <Compile Include="Xml\Socket.cs" />
