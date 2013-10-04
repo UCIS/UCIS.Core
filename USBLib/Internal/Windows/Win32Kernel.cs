@@ -14,6 +14,8 @@ namespace UCIS.USBLib.Internal.Windows {
 
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
 		unsafe internal static extern bool DeviceIoControl(SafeHandle hDevice, int IoControlCode, IntPtr InBuffer, int nInBufferSize, IntPtr OutBuffer, int nOutBufferSize, out int pBytesReturned, NativeOverlapped* Overlapped);
+		[DllImport("kernel32.dll", SetLastError = true)]
+		unsafe internal static extern bool DeviceIoControl(SafeHandle hDevice, int IoControlCode, void* InBuffer, int nInBufferSize, void* OutBuffer, int nOutBufferSize, out int pBytesReturned, NativeOverlapped* Overlapped);
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
 		unsafe internal static extern bool GetOverlappedResult(SafeHandle hFile, NativeOverlapped* lpOverlapped, out int lpNumberOfBytesTransferred, Boolean bWait);
 
@@ -30,15 +32,18 @@ namespace UCIS.USBLib.Internal.Windows {
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		public static extern bool DeviceIoControl(SafeHandle hDevice, int dwIoControlCode, [In] ref USB_NODE_CONNECTION_NAME lpInBuffer, int nInBufferSize, out USB_NODE_CONNECTION_NAME lpOutBuffer, int nOutBufferSize, out int lpBytesReturned, IntPtr lpOverlapped);
 
-		//public const uint GENERIC_READ = 0x80000000;
+		public const uint GENERIC_READ = 0x80000000;
 		public const uint GENERIC_WRITE = 0x40000000;
 		//public const uint GENERIC_EXECUTE = 0x20000000;
 		//public const uint GENERIC_ALL = 0x10000000;
-		//public const uint FILE_FLAG_NO_BUFFERING = 0x20000000;
+		public const uint FILE_FLAG_NO_BUFFERING = 0x20000000;
 
-		//public const int FILE_SHARE_READ = 0x1;
+		public const int FILE_SHARE_READ = 0x1;
 		public const int FILE_SHARE_WRITE = 0x2;
 		public const int OPEN_EXISTING = 0x3;
+
+		public const int FILE_ATTRIBUTE_SYSTEM = 0x00000004;
+		public const int FILE_FLAG_OVERLAPPED = 0x40000000;
 	}
 
 	[Flags]

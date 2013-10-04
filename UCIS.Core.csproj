@@ -152,6 +152,7 @@
     <Compile Include="USBLib\Communication\USBIO\USBIODevice.cs" />
     <Compile Include="USBLib\Communication\USBIO\USBIORegistry.cs" />
     <Compile Include="USBLib\Communication\UsbPipeStream.cs" />
+    <Compile Include="USBLib\Communication\VBoxUSB.cs" />
     <Compile Include="USBLib\Communication\WindowsUsbDeviceRegistry.cs" />
     <Compile Include="USBLib\Communication\WinUsb\WinUsbDevice.cs" />
     <Compile Include="USBLib\Communication\WinUsb\WinUsbRegistry.cs" />
