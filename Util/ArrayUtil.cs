@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace UCIS.Util {
@@ -12,6 +13,16 @@ namespace UCIS.Util {
 			if (count < 0) count = input.Length + count - offset;
 			T[] output = new T[count];
 			Array.Copy(input, offset, output, 0, count);
+			return output;
+		}
+		public static Object[] ToArray(ICollection input) {
+			Object[] output = new Object[input.Count];
+			input.CopyTo(output, 0);
+			return output;
+		}
+		public static T[] ToArray<T>(ICollection input) {
+			T[] output = new T[input.Count];
+			input.CopyTo(output, 0);
 			return output;
 		}
 		public static T[] ToArray<T>(ICollection<T> input) {
