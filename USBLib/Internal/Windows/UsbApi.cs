@@ -339,7 +339,7 @@ namespace UCIS.USBLib.Internal.Windows {
 		//public byte[] Data; //UCHAR  Data[0];
 	}
 
-	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 	struct USB_NODE_CONNECTION_NAME {
 		public uint ConnectionIndex;
 		public uint ActualLength;
@@ -347,7 +347,7 @@ namespace UCIS.USBLib.Internal.Windows {
 		public string NodeName; //WCHAR  NodeName[1];
 	}
 
-	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 	struct USB_NODE_CONNECTION_DRIVERKEY_NAME {
 		public uint ConnectionIndex;
 		public uint ActualLength;
