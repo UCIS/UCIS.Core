@@ -33,6 +33,7 @@ namespace UCIS.USBLib.Descriptor {
 		public static String GetStringFromDevice(IUsbInterface device, byte index, short langId) {
 			Byte[] buff = new Byte[256];
 			int len = device.GetDescriptor((Byte)UsbDescriptorType.String, index, langId, buff, 0, buff.Length);
+			if (len == 0) return null;
 			return GetString(buff, 0, len);
 		}
 	}
@@ -199,5 +200,6 @@ namespace UCIS.USBLib.Descriptor {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer dimensions");
 			fixed (Byte* ptr = buffer) return *(UsbHubDescriptor*)(ptr + offset);
 		}
+		public static unsafe int Size { get { return sizeof(UsbHubDescriptor); } }
 	}
 }

@@ -1,45 +1,120 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 using UCIS.HWLib.Windows.Devices;
+using UCIS.USBLib.Communication;
+using UCIS.USBLib.Descriptor;
 using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.HWLib.Windows.USB {
-	public class UsbDevice {
+	public class UsbDevice : IUsbInterface {
+		internal static SafeFileHandle OpenHandle(String path) {
+			SafeFileHandle handle = Kernel32.CreateFile(path, Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_WRITE, IntPtr.Zero, Kernel32.OPEN_EXISTING, 0, IntPtr.Zero);
+			if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			return handle;
+		}
+		internal static Boolean GetNodeInformation(SafeFileHandle handle, out USB_NODE_INFORMATION nodeInfo) {
+			nodeInfo = new USB_NODE_INFORMATION();
+			int nBytes = Marshal.SizeOf(typeof(USB_NODE_INFORMATION));
+			return Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_INFORMATION, ref nodeInfo, nBytes, out nodeInfo, nBytes, out nBytes, IntPtr.Zero);
+		}
+		internal static Boolean GetNodeConnectionInformation(SafeFileHandle handle, UInt32 port, out USB_NODE_CONNECTION_INFORMATION_EX nodeConnection) {
+			int nBytes = Marshal.SizeOf(typeof(USB_NODE_CONNECTION_INFORMATION_EX));
+			nodeConnection = new USB_NODE_CONNECTION_INFORMATION_EX();
+			nodeConnection.ConnectionIndex = port;
+			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX, ref nodeConnection, nBytes, out nodeConnection, nBytes, out nBytes, IntPtr.Zero))
+				throw new Win32Exception(Marshal.GetLastWin32Error());
+			return true;
+		}
+		internal static String GetNodeConnectionName(SafeFileHandle handle, UInt32 port) {
+			int nBytes = Marshal.SizeOf(typeof(USB_NODE_CONNECTION_NAME));
+			USB_NODE_CONNECTION_NAME nameConnection = new USB_NODE_CONNECTION_NAME();
+			nameConnection.ConnectionIndex = port;
+			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_NAME, ref nameConnection, nBytes, out nameConnection, nBytes, out nBytes, IntPtr.Zero))
+				throw new Win32Exception(Marshal.GetLastWin32Error());
+			return nameConnection.NodeName;
+		}
+		internal unsafe static int GetDescriptor(SafeFileHandle handle, UInt32 port, byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
+			int szRequest = Marshal.SizeOf(typeof(USB_DESCRIPTOR_REQUEST));
+			USB_DESCRIPTOR_REQUEST request = new USB_DESCRIPTOR_REQUEST();
+			request.ConnectionIndex = port;
+			request.SetupPacket.wValue = (ushort)((descriptorType << 8) + index);
+			request.SetupPacket.wIndex = (ushort)langId;
+			request.SetupPacket.wLength = (ushort)length;
+			int nBytes = length + szRequest;
+			Byte[] bigbuffer = new Byte[nBytes];
+			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION, ref request, Marshal.SizeOf(typeof(USB_DESCRIPTOR_REQUEST)), bigbuffer, nBytes, out nBytes, IntPtr.Zero)) {
+				int err = Marshal.GetLastWin32Error();
+				if (err != 2 && err != 31 && err != 87) throw new Win32Exception(err);
+				return 0;
+			}
+			nBytes -= szRequest;
+			if (nBytes > length) nBytes = length;
+			if (nBytes < 0) return 0;
+			if (nBytes > 0) Buffer.BlockCopy(bigbuffer, szRequest, buffer, offset, nBytes);
+			return nBytes;
+		}
+		internal unsafe static String GetRootHubName(SafeFileHandle handle) {
+			USB_ROOT_HUB_NAME rootHubName = new USB_ROOT_HUB_NAME();
+			int nBytesReturned;
+			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_ROOT_HUB_NAME, IntPtr.Zero, 0, out rootHubName, Marshal.SizeOf(rootHubName), out nBytesReturned, IntPtr.Zero))
+				throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (rootHubName.ActualLength <= 0) return null;
+			return rootHubName.RootHubName;
+		}
+		internal unsafe static String GetNodeConnectionDriverKey(SafeFileHandle handle, UInt32 port) {
+			USB_NODE_CONNECTION_DRIVERKEY_NAME DriverKeyStruct = new USB_NODE_CONNECTION_DRIVERKEY_NAME();
+			int nBytes = Marshal.SizeOf(DriverKeyStruct);
+			DriverKeyStruct.ConnectionIndex = port;
+			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, ref DriverKeyStruct, nBytes, out DriverKeyStruct, nBytes, out nBytes, IntPtr.Zero))
+				return null;
+			return DriverKeyStruct.DriverKeyName;
+		}
+
 		public UsbDevice Parent { get; protected set; }
-		internal USB_NODE_CONNECTION_INFORMATION_EX NodeConnectionInfo { get; set; }
-		internal USB_DEVICE_DESCRIPTOR DeviceDescriptor { get; private set; }
-		internal IList<USB_CONFIGURATION_DESCRIPTOR> ConfigurationDescriptor { get; private set; }
-		internal IList<USB_INTERFACE_DESCRIPTOR> InterfaceDescriptor { get; private set; }
-		internal IList<USB_ENDPOINT_DESCRIPTOR> EndpointDescriptor { get; private set; }
-		internal IList<HID_DESCRIPTOR> HdiDescriptor { get; private set; }
 		public string DevicePath { get; private set; }
-		public uint AdapterNumber { get; internal set; }
-		public string DriverKey { get; private set; }
+		public uint AdapterNumber { get; private set; }
+		internal USB_NODE_CONNECTION_INFORMATION_EX NodeConnectionInfo { get; set; }
+		internal USB_DEVICE_DESCRIPTOR DeviceDescriptor { get { return NodeConnectionInfo.DeviceDescriptor; } }
 
-		public virtual string DeviceDescription { get { return DeviceNode.GetPropertyString(CMRDP.DEVICEDESC); } }
-		public string DeviceID { get { return DeviceNode.DeviceID; } }
+		public bool IsHub { get { return NodeConnectionInfo.DeviceIsHub != 0; } }
+		public bool IsConnected { get { return NodeConnectionInfo.ConnectionStatus == USB_CONNECTION_STATUS.DeviceConnected; } }
+		public string Status { get { return NodeConnectionInfo.ConnectionStatus.ToString(); } }
+		public string Speed { get { return NodeConnectionInfo.Speed.ToString(); } }
 
-		public bool IsConnected { get; internal set; }
-		public bool IsHub { get; internal set; }
-		public string Status { get; internal set; }
-		public string Speed { get; internal set; }
+		SafeFileHandle OpenHandle() {
+			return OpenHandle(DevicePath);
+		}
 
-		public string Manufacturer { get; private set; }
-		public string SerialNumber { get; private set; }
-		public string Product { get; private set; }
+		public int NumConfigurations { get { return DeviceDescriptor == null ? 0 : DeviceDescriptor.bNumConfigurations; } }
+		public int VendorID { get { return DeviceDescriptor == null ? 0 : DeviceDescriptor.idVendor; } }
+		public int ProductID { get { return DeviceDescriptor == null ? 0 : DeviceDescriptor.idProduct; } }
 
-		public int VendorID { get { return DeviceDescriptor.idVendor; } }
-		public int ProductID { get { return DeviceDescriptor.idProduct; } }
+		private String GetStringSafe(Byte id) {
+			if (id == 0) return null;
+			String s = GetStringDescriptor(id);
+			if (s == null) return s;
+			return s.Trim(' ', '\0');
+		}
+
+		public string Manufacturer { get { return DeviceDescriptor == null ? null : GetStringSafe(DeviceDescriptor.iManufacturer); } }
+		public string Product { get { return DeviceDescriptor == null ? null : GetStringSafe(DeviceDescriptor.iProduct); } }
+		public string SerialNumber { get { return DeviceDescriptor == null ? null : GetStringSafe(DeviceDescriptor.iSerialNumber); } }
+		public virtual string DriverKey { get { using (SafeFileHandle handle = OpenHandle(DevicePath)) return UsbHub.GetNodeConnectionDriverKey(handle, AdapterNumber); } }
+
+		public virtual string DeviceDescription { get { return DeviceNode == null ? null : DeviceNode.GetPropertyString(CMRDP.DEVICEDESC); } }
+		public string DeviceID { get { return DeviceNode == null ? null : DeviceNode.DeviceID; } }
 
 		private DeviceNode mDeviceNode;
 		public DeviceNode DeviceNode {
 			get {
-				if (mDeviceNode == null && DriverKey != null) {
+				String dk = DriverKey;
+				if (mDeviceNode == null && dk != null) {
 					foreach (DeviceNode node in DeviceNode.GetDevices("USB")) {
-						if (DriverKey.Equals(node.DriverKey, StringComparison.InvariantCultureIgnoreCase)) {
+						if (dk.Equals(node.DriverKey, StringComparison.InvariantCultureIgnoreCase)) {
 							mDeviceNode = node;
 							break;
 						}
@@ -49,131 +124,84 @@ namespace UCIS.HWLib.Windows.USB {
 			}
 		}
 
-		internal UsbDevice(UsbDevice parent, USB_DEVICE_DESCRIPTOR deviceDescriptor, uint adapterNumber)
-			: this(parent, deviceDescriptor, adapterNumber, null) { }
-		unsafe internal UsbDevice(UsbDevice parent, USB_DEVICE_DESCRIPTOR deviceDescriptor, uint adapterNumber, string devicePath) {
+		internal UsbDevice(UsbDevice parent, USB_NODE_CONNECTION_INFORMATION_EX nci, uint port, string devicePath) {
 			this.Parent = parent;
-			this.AdapterNumber = adapterNumber;
-			this.DeviceDescriptor = deviceDescriptor;
+			this.NodeConnectionInfo = nci;
 			this.DevicePath = devicePath;
-			ConfigurationDescriptor = new List<USB_CONFIGURATION_DESCRIPTOR>();
-			InterfaceDescriptor = new List<USB_INTERFACE_DESCRIPTOR>();
-			HdiDescriptor = new List<HID_DESCRIPTOR>();
-			EndpointDescriptor = new List<USB_ENDPOINT_DESCRIPTOR>();
+			this.AdapterNumber = port;
 			if (devicePath == null) return;
-
-			using (SafeFileHandle handel = Kernel32.CreateFile(devicePath, Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_WRITE, IntPtr.Zero, Kernel32.OPEN_EXISTING, 0, IntPtr.Zero)) {
-				if (handel.IsInvalid) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-				int nBytesReturned;
-				int nBytes = UsbApi.MAX_BUFFER_SIZE;
-
-				USB_DESCRIPTOR_REQUEST Request1 = new USB_DESCRIPTOR_REQUEST();
-				Request1.ConnectionIndex = adapterNumber;// portCount;
-				Request1.SetupPacket.wValue = (ushort)((UsbApi.USB_CONFIGURATION_DESCRIPTOR_TYPE << 8));
-				Request1.SetupPacket.wLength = (ushort)(nBytes - Marshal.SizeOf(Request1));
-				Request1.SetupPacket.wIndex = 0; // 0x409; // Language Code
-
-				// Use an IOCTL call to request the String Descriptor
-				Byte[] buffer = new Byte[nBytes];
-				fixed (Byte* bufferptr = buffer) {
-					if (!Kernel32.DeviceIoControl(handel, UsbApi.IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION, ref Request1, Marshal.SizeOf(typeof(USB_DESCRIPTOR_REQUEST)), (IntPtr)bufferptr, nBytes, out nBytesReturned, IntPtr.Zero)) {
-						int err = Marshal.GetLastWin32Error();
-						Console.WriteLine("IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION returned {0} {1}", err, (new System.ComponentModel.Win32Exception(err)).Message);
-						//SerialNumber = (new System.ComponentModel.Win32Exception(err)).Message;
-						if (err != 2 && err != 31 && err != 87) throw new System.ComponentModel.Win32Exception(err);
-					} else {
-						if (nBytesReturned > nBytes) throw new IndexOutOfRangeException("IOCtl returned too much data");
-						if (nBytesReturned < 0) throw new IndexOutOfRangeException("IOCtl returned insufficient data");
-						Byte* ptr = bufferptr + Marshal.SizeOf(Request1);
-						nBytesReturned -= Marshal.SizeOf(Request1);
-						if (nBytesReturned < 0) throw new IndexOutOfRangeException("IOCtl returned insufficient data");
-
-						int offset = 0;
-						while (offset < nBytesReturned) {
-							if (offset + Marshal.SizeOf(typeof(USB_DESCRIPTOR)) >= nBytesReturned) throw new IndexOutOfRangeException("Error in configuration descriptor");
-							USB_DESCRIPTOR* desc = (USB_DESCRIPTOR*)(ptr + offset);
-							offset += desc->bLength;
-							if (offset > nBytesReturned) throw new IndexOutOfRangeException("Error in configuration descriptor");
-							Console.WriteLine("Descriptor type {0} length {1}", desc->bDescriptorType, desc->bLength);
-							if (desc->bDescriptorType == USB_DESCRIPTOR_TYPE.ConfigurationDescriptorType) {
-								if (desc->bLength < 9) throw new IndexOutOfRangeException("Error in configuration descriptor");
-								USB_CONFIGURATION_DESCRIPTOR configurationDescriptor = *(USB_CONFIGURATION_DESCRIPTOR*)desc;
-								ConfigurationDescriptor.Add(configurationDescriptor);
-							} else if (desc->bDescriptorType == USB_DESCRIPTOR_TYPE.InterfaceDescriptorType) {
-								if (desc->bLength < 9) throw new IndexOutOfRangeException("Error in configuration descriptor");
-								USB_INTERFACE_DESCRIPTOR interfaceDescriptor = *(USB_INTERFACE_DESCRIPTOR*)desc;
-								InterfaceDescriptor.Add(interfaceDescriptor);
-							} else if (desc->bDescriptorType == USB_DESCRIPTOR_TYPE.EndpointDescriptorType) {
-								if (desc->bLength < 7) throw new IndexOutOfRangeException("Error in configuration descriptor");
-								USB_ENDPOINT_DESCRIPTOR endpointDescriptor1 = *(USB_ENDPOINT_DESCRIPTOR*)desc;
-								EndpointDescriptor.Add(endpointDescriptor1);
-							}
-						}
-					}
-					// The iManufacturer, iProduct and iSerialNumber entries in the
-					// device descriptor are really just indexes.  So, we have to 
-					// request a string descriptor to get the values for those strings.
-					if (DeviceDescriptor != null) {
-						if (DeviceDescriptor.iManufacturer > 0) Manufacturer = GetStringDescriptor(handel, DeviceDescriptor.iManufacturer);
-						if (DeviceDescriptor.iProduct > 0) Product = GetStringDescriptor(handel, DeviceDescriptor.iProduct);
-						if (DeviceDescriptor.iSerialNumber > 0) SerialNumber = GetStringDescriptor(handel, DeviceDescriptor.iSerialNumber);
-					}
-				}
-				// Get the Driver Key Name (usefull in locating a device)
-				USB_NODE_CONNECTION_DRIVERKEY_NAME DriverKeyStruct = new USB_NODE_CONNECTION_DRIVERKEY_NAME();
-				DriverKeyStruct.ConnectionIndex = adapterNumber;
-				// Use an IOCTL call to request the Driver Key Name
-				if (Kernel32.DeviceIoControl(handel, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, ref DriverKeyStruct, Marshal.SizeOf(DriverKeyStruct), out DriverKeyStruct, Marshal.SizeOf(DriverKeyStruct), out nBytesReturned, IntPtr.Zero)) {
-					DriverKey = DriverKeyStruct.DriverKeyName;
-				}
-			}
 		}
 
-		private unsafe String GetStringDescriptor(SafeFileHandle handel, Byte id) {
-			int nBytes = UsbApi.MAX_BUFFER_SIZE;
-			int nBytesReturned = 0;
-			Byte[] buffer = new Byte[nBytes];
-			fixed (Byte* bufferptr = buffer) {
-				// Build a request for string descriptor.
-				USB_DESCRIPTOR_REQUEST Request = new USB_DESCRIPTOR_REQUEST();
-				Request.ConnectionIndex = AdapterNumber;
-				Request.SetupPacket.wValue = (ushort)((UsbApi.USB_STRING_DESCRIPTOR_TYPE << 8) + id);
-				Request.SetupPacket.wLength = (ushort)(nBytes - Marshal.SizeOf(Request));
-				Request.SetupPacket.wIndex = 0x409; // The language code.
-				// Use an IOCTL call to request the string descriptor.
-				if (Kernel32.DeviceIoControl(handel, UsbApi.IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION, ref Request, Marshal.SizeOf(Request), (IntPtr)bufferptr, nBytes, out nBytesReturned, IntPtr.Zero)) {
-					if (nBytesReturned < nBytes) buffer[nBytesReturned] = 0;
-					if (nBytesReturned + 1 < nBytes) buffer[nBytesReturned + 1] = 0;
-					// The location of the string descriptor is immediately after
-					// the Request structure.  Because this location is not "covered"
-					// by the structure allocation, we're forced to zero out this
-					// chunk of memory by using the StringToHGlobalAuto() hack above
-					//*(UsbApi.USB_STRING_DESCRIPTOR*)(bufferptr + Marshal.SizeOf(Request));
-					USB_STRING_DESCRIPTOR StringDesc = (USB_STRING_DESCRIPTOR)Marshal.PtrToStructure((IntPtr)(bufferptr + Marshal.SizeOf(Request)), typeof(USB_STRING_DESCRIPTOR));
-					//return StringDesc.bString;
-					int len = Math.Min(nBytesReturned - Marshal.SizeOf(Request) - 2, StringDesc.bLength);
-					return Encoding.Unicode.GetString(buffer, 2 + Marshal.SizeOf(Request), len);
-				} else {
-					return null;
-				}
-			}
+		private String GetStringDescriptor(Byte index) {
+			return UsbStringDescriptor.GetStringFromDevice(this, index, 0); //0x409
 		}
 
-		/*public static UsbDevice GetUsbDevice(DeviceNode node) {
-			String[] hubinterface = node.GetInterfaces(UsbApi.GUID_DEVINTERFACE_USB_HUB);
-			if (hubinterface != null && hubinterface.Length > 0) return new UsbHub(null, hubinterface[0], false);
-			String[] devinterface = node.GetInterfaces(UsbApi.GUID_DEVINTERFACE_USB_DEVICE);
-			if (devinterface == null || devinterface.Length == 0) throw new InvalidOperationException("Device is not an USB device");
+		static UsbDevice GetUsbDevice(DeviceNode node, out Boolean isHostController) {
+			String[] hciinterface = node.GetInterfaces(UsbApi.GUID_DEVINTERFACE_USB_HOST_CONTROLLER);
+			if (hciinterface != null && hciinterface.Length > 0) {
+				isHostController = true;
+				return (new UsbController(null, node, hciinterface[0])).RootHub;
+			}
+			isHostController = false;
 			DeviceNode parent = node.GetParent();
-			if (parent == null) throw new InvalidOperationException("Could not find parent hub device");
+			Boolean isHostControllerA;
+			UsbDevice usbdev = GetUsbDevice(parent, out isHostControllerA);
+			if (isHostControllerA) return usbdev;
+			UsbHub usbhub = usbdev as UsbHub;
+			if (usbhub == null) return null;
+			String driverkey = node.DriverKey;
+			foreach (UsbDevice child in usbhub.Devices) {
+				if (driverkey.Equals(child.DriverKey, StringComparison.InvariantCultureIgnoreCase)) return child;
+			}
+			return null;
+		}
+		public static UsbDevice GetUsbDevice(DeviceNode node) {
+			Boolean isHostController;
+			return GetUsbDevice(node, out isHostController);
+			/*
+
+			String[] hubinterface = node.GetInterfaces(UsbApi.GUID_DEVINTERFACE_USB_HUB);
+			if (hubinterface != null && hubinterface.Length > 0) {
+				USB_NODE_CONNECTION_INFORMATION_EX nodeConnection;
+				using (SafeFileHandle handle = OpenHandle(hubinterface[0])) {
+					if (!GetNodeConnectionInformation(handle, 0, out nodeConnection)) return null;
+				}
+				return new UsbHub(null, nodeConnection, hubinterface[0], false);
+			}
+			String[] devinterface = node.GetInterfaces(UsbApi.GUID_DEVINTERFACE_USB_DEVICE);
+			if (devinterface == null || devinterface.Length == 0) return null;
+			DeviceNode parent = node.GetParent();
+			if (parent == null) return null;
 			UsbHub usbhub = GetUsbDevice(parent) as UsbHub;
-			if (usbhub == null) throw new InvalidOperationException("Could not find parent hub device");
+			if (usbhub == null) return null;
 			String driverkey = node.DriverKey;
 			foreach (UsbDevice usbdev in usbhub.Devices) {
 				if (driverkey.Equals(usbdev.DriverKey, StringComparison.InvariantCultureIgnoreCase)) return usbdev;
 			}
-			throw new InvalidOperationException("Could not find device on parent hub");
-			//return null;
-		}*/
+			return null;*/
+		}
+
+		#region IUsbInterface Members
+		byte IUsbInterface.Configuration { get { throw new NotImplementedException(); } }
+		void IUsbInterface.Close() { }
+		public virtual int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
+			using (SafeFileHandle handle = UsbHub.OpenHandle(DevicePath)) return UsbHub.GetDescriptor(handle, AdapterNumber, descriptorType, index, langId, buffer, offset, length);
+		}
+		string IUsbInterface.GetString(short langId, byte stringIndex) {
+			return UsbStringDescriptor.GetStringFromDevice(this, stringIndex, langId);
+		}
+		int IUsbInterface.BulkWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		int IUsbInterface.BulkRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		void IUsbInterface.BulkReset(byte endpoint) { throw new NotImplementedException(); }
+		int IUsbInterface.InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		int IUsbInterface.InterruptRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		void IUsbInterface.InterruptReset(byte endpoint) { throw new NotImplementedException(); }
+		int IUsbInterface.ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		int IUsbInterface.ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		UsbPipeStream IUsbInterface.GetBulkStream(byte endpoint) { throw new NotImplementedException(); }
+		UsbPipeStream IUsbInterface.GetInterruptStream(byte endpoint) { throw new NotImplementedException(); }
+		void IDisposable.Dispose() { }
+		#endregion
 	}
+	
 }

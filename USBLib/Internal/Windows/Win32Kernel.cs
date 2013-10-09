@@ -24,7 +24,7 @@ namespace UCIS.USBLib.Internal.Windows {
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		public static extern bool DeviceIoControl(SafeHandle hDevice, int dwIoControlCode, [In] ref USB_NODE_INFORMATION lpInBuffer, int nInBufferSize, out USB_NODE_INFORMATION lpOutBuffer, int nOutBufferSize, out int lpBytesReturned, IntPtr lpOverlapped);
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-		public static extern bool DeviceIoControl(SafeHandle hDevice, int dwIoControlCode, [In] ref USB_DESCRIPTOR_REQUEST lpInBuffer, int nInBufferSize, IntPtr lpOutBuffer, int nOutBufferSize, out int lpBytesReturned, IntPtr lpOverlapped);
+		public static extern bool DeviceIoControl(SafeHandle hDevice, int dwIoControlCode, [In] ref USB_DESCRIPTOR_REQUEST lpInBuffer, int nInBufferSize, Byte[] lpOutBuffer, int nOutBufferSize, out int lpBytesReturned, IntPtr lpOverlapped);
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		public static extern bool DeviceIoControl(SafeHandle hDevice, int dwIoControlCode, [In] ref USB_NODE_CONNECTION_DRIVERKEY_NAME lpInBuffer, int nInBufferSize, out USB_NODE_CONNECTION_DRIVERKEY_NAME lpOutBuffer, int nOutBufferSize, out int lpBytesReturned, IntPtr lpOverlapped);
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
