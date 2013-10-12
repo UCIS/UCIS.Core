@@ -142,6 +142,7 @@ namespace UCIS.HWLib.Windows.USB {
 			}
 			isHostController = false;
 			DeviceNode parent = node.GetParent();
+			if (parent == null) return null;
 			Boolean isHostControllerA;
 			UsbDevice usbdev = GetUsbDevice(parent, out isHostControllerA);
 			if (isHostControllerA) return usbdev;

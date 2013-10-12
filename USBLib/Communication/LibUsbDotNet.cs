@@ -108,16 +108,24 @@ namespace LibUsbDotNet {
 		public IList<UsbConfigInfo> Configs {
 			get {
 				List<UsbConfigInfo> rtnConfigs = new List<UsbConfigInfo>();
-				byte[] cfgBuffer = new byte[UsbConstants.MAX_CONFIG_SIZE];
 				int iConfigs = Info.Descriptor.ConfigurationCount;
 				for (int iConfig = 0; iConfig < iConfigs; iConfig++) {
 					int iBytesTransmitted;
+					byte[] cfgBuffer = new byte[9];
 					if (!GetDescriptor((byte)UsbDescriptorType.Configuration, (byte)iConfig, 0, cfgBuffer, cfgBuffer.Length, out iBytesTransmitted))
 						throw new Exception("Could not read configuration descriptor");
 					if (iBytesTransmitted < UsbConfigDescriptor.Size || cfgBuffer[1] != (byte)UsbDescriptorType.Configuration)
 						throw new Exception("GetDeviceConfigs: USB config descriptor is invalid.");
 					UsbConfigDescriptor configDescriptor = new UsbConfigDescriptor();
 					Helper.BytesToObject(cfgBuffer, 0, Math.Min(UsbConfigDescriptor.Size, cfgBuffer[0]), configDescriptor);
+					if (configDescriptor.TotalLength > cfgBuffer.Length) {
+						cfgBuffer = new Byte[configDescriptor.TotalLength];
+						if (!GetDescriptor((byte)UsbDescriptorType.Configuration, (byte)iConfig, 0, cfgBuffer, cfgBuffer.Length, out iBytesTransmitted))
+							throw new Exception("Could not read configuration descriptor");
+						if (iBytesTransmitted < UsbConfigDescriptor.Size || cfgBuffer[1] != (byte)UsbDescriptorType.Configuration)
+							throw new Exception("GetDeviceConfigs: USB config descriptor is invalid.");
+						Helper.BytesToObject(cfgBuffer, 0, Math.Min(UsbConfigDescriptor.Size, cfgBuffer[0]), configDescriptor);
+					}
 					if (configDescriptor.TotalLength != iBytesTransmitted) throw new Exception("GetDeviceConfigs: USB config descriptor length doesn't match the length received.");
 					List<byte[]> rawDescriptorList = new List<byte[]>();
 					int iRawLengthPosition = configDescriptor.Length;
