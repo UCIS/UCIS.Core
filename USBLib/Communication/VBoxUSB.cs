@@ -238,9 +238,57 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		public UInt32 numIsoPkts;
 		public fixed byte aIsoPkts[8 * 8];
 	}
-	class USBRegistry : WindowsUsbDeviceRegistry, IUsbDeviceRegistry {
+	class USBRegistry : IUsbDeviceRegistry {
+		public DeviceNode DeviceNode { get; private set; }
+		public String DevicePath { get; private set; }
+		public String DeviceID { get; private set; }
+		public String SymbolicName { get { return DevicePath; } }
+		private UCIS.HWLib.Windows.USB.UsbDevice usbdev = null;
+		private Boolean hasDeviceDescriptor = false;
+		private UCIS.USBLib.Descriptor.UsbDeviceDescriptor deviceDescriptor;
+		private IDictionary<string, object> mDeviceProperties;
+		public UCIS.HWLib.Windows.USB.UsbDevice USBDevice {
+			get {
+				if (usbdev == null) usbdev = UCIS.HWLib.Windows.USB.UsbDevice.GetUsbDevice(DeviceNode);
+				return usbdev;
+			}
+		}
+		public UCIS.USBLib.Descriptor.UsbDeviceDescriptor DeviceDescriptor {
+			get {
+				if (!hasDeviceDescriptor) deviceDescriptor = UCIS.USBLib.Descriptor.UsbDeviceDescriptor.FromDevice(USBDevice);
+				return deviceDescriptor;
+			}
+		}
+		public IDictionary<string, object> DeviceProperties {
+			get {
+				if (mDeviceProperties == null) mDeviceProperties = SetupApi.GetSPDRPProperties(DeviceNode);
+				return mDeviceProperties;
+			}
+		}
+
+		internal USBRegistry(DeviceNode device, String interfacepath) {
+			DeviceNode = device;
+			DeviceID = device.DeviceID;
+			DevicePath = interfacepath;
+		}
+
+		public int Vid { get { return DeviceDescriptor.VendorID; } }
+		public int Pid { get { return DeviceDescriptor.ProductID; } }
+		public byte InterfaceID { get { return 0; } }
+
+		public string Name { get { return DeviceNode.GetPropertyString(CMRDP.DEVICEDESC); } }
+		public string Manufacturer { get { return DeviceNode.GetPropertyString(CMRDP.MFG); } }
+		public string FullName {
+			get {
+				String desc = Name;
+				String mfg = Manufacturer;
+				if (mfg == null) return desc;
+				if (desc == null) return mfg;
+				return mfg + " - " + desc;
+			}
+		}
+
 		public IUsbDevice Open() { return new VBoxUSB(this); }
-		public USBRegistry(DeviceNode devnode, String intf) : base(devnode, intf) { }
 	}
 
 	public class VBoxUSB : UsbInterface, IUsbDevice {
@@ -269,10 +317,15 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		static SafeFileHandle hMonitor = null;
 		const String USBMON_DEVICE_NAME = "\\\\.\\VBoxUSBMon";
 
-		static unsafe void SyncIoControl(SafeHandle hDevice, int IoControlCode, void* InBuffer, int nInBufferSize, void* OutBuffer, int nOutBufferSize) {
+		static unsafe int SyncIoControl(SafeHandle hDevice, int IoControlCode, void* InBuffer, int nInBufferSize, void* OutBuffer, int nOutBufferSize, Boolean throwError) {
 			Int32 pBytesReturned = 0;
-			if (!Kernel32.DeviceIoControl(hDevice, IoControlCode, InBuffer, nInBufferSize, OutBuffer, nOutBufferSize, out pBytesReturned, null))
-				throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (Kernel32.DeviceIoControl(hDevice, IoControlCode, InBuffer, nInBufferSize, OutBuffer, nOutBufferSize, out pBytesReturned, null)) return 0;
+			int ret = Marshal.GetLastWin32Error();
+			if (throwError) throw new Win32Exception(ret);
+			return ret;
+		}
+		static unsafe void SyncIoControl(SafeHandle hDevice, int IoControlCode, void* InBuffer, int nInBufferSize, void* OutBuffer, int nOutBufferSize) {
+			SyncIoControl(hDevice, IoControlCode, InBuffer, nInBufferSize, OutBuffer, nOutBufferSize, true);
 		}
 		
 		unsafe static void InitMonitor() {
@@ -326,8 +379,8 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 			initFilterFromDevice(ref Filter, aDevice);
 			IntPtr pvId = USBLibAddFilter(ref Filter);
 			if (pvId == IntPtr.Zero) throw new Exception("Add one-shot Filter failed");
-			//USBLibRunFilters();
-			aDevice.Reenumerate(0);
+			USBLibRunFilters();
+			//aDevice.Reenumerate(0);
 		}
 		public unsafe static void Release(DeviceNode aDevice) {
 			InitMonitor();
@@ -335,8 +388,8 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 			initFilterFromDevice(ref Filter, aDevice);
 			IntPtr pvId = USBLibAddFilter(ref Filter);
 			if (pvId == IntPtr.Zero) throw new Exception("Add one-shot Filter failed");
-			//USBLibRunFilters();
-			aDevice.Reenumerate(0);
+			USBLibRunFilters();
+			//aDevice.Reenumerate(0);
 		}
 		public static IUsbDeviceRegistry GetDeviceForDeviceNode(DeviceNode device) {
 			String[] intfpath = device.GetInterfaces(new Guid(0x873fdf, 0xCAFE, 0x80EE, 0xaa, 0x5e, 0x0, 0xc0, 0x4f, 0xb1, 0x72, 0xb));
@@ -368,7 +421,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		public unsafe override void Close() {
 			if (!hDev.IsInvalid && !hDev.IsClosed) {
 				USBSUP_CLAIMDEV release = new USBSUP_CLAIMDEV() { bInterfaceNumber = bInterfaceNumber };
-				SyncIoControl(hDev, SUPUSB_IOCTL_USB_RELEASE_DEVICE, &release, sizeof(USBSUP_CLAIMDEV), null, 0);
+				SyncIoControl(hDev, SUPUSB_IOCTL_USB_RELEASE_DEVICE, &release, sizeof(USBSUP_CLAIMDEV), null, 0, false);
 			}
 			hDev.Close();
 		}
@@ -409,6 +462,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		}
 
 		private unsafe int BlockTransfer(USBSUP_TRANSFER_TYPE type, USBSUP_DIRECTION dir, USBSUP_XFER_FLAG flags, UInt32 ep, Byte[] buffer, int offset, int length) {
+			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			fixed (Byte* ptr = buffer) {
 				USBSUP_URB urb = new USBSUP_URB();
 				urb.type = type;
@@ -416,7 +470,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 				urb.flags = flags;
 				urb.ep = ep;
 				urb.len = (UIntPtr)length;
-				urb.buf = ptr;
+				urb.buf = ptr + offset;
 				HandleURB(&urb);
 				return (int)urb.len;
 			}

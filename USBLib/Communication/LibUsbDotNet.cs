@@ -20,6 +20,7 @@ namespace LibUsbDotNet {
 	public class UsbDevice : IUsbDevice {
 		public nIUsbInterface Device { get; private set; }
 		public UsbDevice(nIUsbInterface dev) {
+			if (dev == null) throw new ArgumentNullException("dev");
 			Device = dev;
 		}
 		public bool GetDescriptor(byte descriptorType, byte index, short langId, Byte[] buffer, int bufferLength, out int transferLength) {
@@ -87,6 +88,7 @@ namespace LibUsbDotNet {
 			nIUsbDevice dev = Device as nIUsbDevice;
 			if (dev == null) return false;
 			try {
+				if (dev.Configuration == 0) dev.Configuration = 1;
 				dev.ClaimInterface(interfaceID);
 				return true;
 			} catch {

@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using UCIS.USBLib.Internal.Windows;
-using System.ComponentModel;
-using UCIS.USBLib.Communication;
 
 namespace UCIS.HWLib.Windows.USB {
 	public class UsbHub : UsbDevice {
@@ -18,7 +17,7 @@ namespace UCIS.HWLib.Windows.USB {
 		public override string DriverKey {
 			get {
 				if (Parent == null) return null;
-				using (SafeFileHandle handle = OpenHandle(Parent.DevicePath)) return UsbHub.GetNodeConnectionDriverKey(handle, AdapterNumber);
+				using (SafeFileHandle handle = OpenHandle(Parent.DevicePath)) return GetNodeConnectionDriverKey(handle, AdapterNumber);
 			}
 		}
 		
@@ -34,7 +33,7 @@ namespace UCIS.HWLib.Windows.USB {
 
 		public override int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
 			if (Parent == null) return 0;
-			using (SafeFileHandle handle = UsbHub.OpenHandle(Parent.DevicePath)) return UsbHub.GetDescriptor(handle, AdapterNumber, descriptorType, index, langId, buffer, offset, length);
+			using (SafeFileHandle handle = UsbHub.OpenHandle(Parent.DevicePath)) return GetDescriptor(handle, AdapterNumber, descriptorType, index, langId, buffer, offset, length);
 		}
 
 
