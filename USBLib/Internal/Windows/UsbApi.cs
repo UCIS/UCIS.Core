@@ -1,13 +1,11 @@
 using System;
 using System.Runtime.InteropServices;
+using UCIS.USBLib.Communication;
+using UCIS.USBLib.Communication.WinUsb;
+using UCIS.USBLib.Descriptor;
 
 namespace UCIS.USBLib.Internal.Windows {
 	class UsbApi {
-		//public const int INVALID_HANDLE_VALUE = -1;
-
-		public const int USBUSER_GET_CONTROLLER_INFO_0 = 0x00000001;
-		public const int USBUSER_GET_CONTROLLER_DRIVER_KEY = 0x00000002;
-
 		public const int IOCTL_GET_HCD_DRIVERKEY_NAME = 0x220424;
 		public const int IOCTL_USB_GET_ROOT_HUB_NAME = 0x220408;
 		public const int IOCTL_USB_GET_NODE_INFORMATION = 0x220408;
@@ -17,32 +15,16 @@ namespace UCIS.USBLib.Internal.Windows {
 		public const int IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME = 0x220420;
 		public const int IOCTL_STORAGE_GET_DEVICE_NUMBER = 0x2D1080;
 
-		public const int USB_DEVICE_DESCRIPTOR_TYPE = 0x1;
-		public const int USB_CONFIGURATION_DESCRIPTOR_TYPE = 0x2;
-		public const int USB_STRING_DESCRIPTOR_TYPE = 0x3;
-		public const int USB_INTERFACE_DESCRIPTOR_TYPE = 0x4;
-		public const int USB_ENDPOINT_DESCRIPTOR_TYPE = 0x5;
-
-		public const string GUID_DEVINTERFACE_HUBCONTROLLER = "3abf6f2d-71c4-462a-8a92-1e6861e6af27";
 		public const string GUID_DEVINTERFACE_USB_HOST_CONTROLLER = "{3ABF6F2D-71C4-462A-8A92-1E6861E6AF27}";
 		public const string GUID_DEVINTERFACE_USB_HUB = "{F18A0E88-C30C-11D0-8815-00A0C906BED8}";
 		public const string GUID_DEVINTERFACE_USB_DEVICE = "{A5DCBF10-6530-11D2-901F-00C04FB951ED}";
 
 		public const int MAX_BUFFER_SIZE = 2048;
-		public const int MAXIMUM_USB_STRING_LENGTH = 255;
-		public const string REGSTR_KEY_USB = "USB";
-		public const int REG_SZ = 1;
 		public const int DIF_PROPERTYCHANGE = 0x00000012;
 		public const int DICS_FLAG_GLOBAL = 0x00000001;
 
-
-		//public const int SPDRP_DRIVER = 0x9;
-		//public const int SPDRP_DEVICEDESC = 0x0;
-
 		public const int DICS_ENABLE = 0x00000001;
 		public const int DICS_DISABLE = 0x00000002;
-
-		//#endregion
 	}
 
 	#region enumerations
@@ -78,31 +60,6 @@ namespace UCIS.USBLib.Internal.Windows {
 	enum USB_HUB_NODE {
 		UsbHub,
 		UsbMIParent
-	}
-
-	enum USB_DESCRIPTOR_TYPE : byte {
-		DeviceDescriptorType = 0x1,
-		ConfigurationDescriptorType = 0x2,
-		StringDescriptorType = 0x3,
-		InterfaceDescriptorType = 0x4,
-		EndpointDescriptorType = 0x5,
-		HubDescriptor = 0x29
-	}
-
-	[Flags]
-	enum USB_CONFIGURATION : byte {
-		RemoteWakeUp = 32,
-		SelfPowered = 64,
-		BusPowered = 128,
-		RemoteWakeUp_BusPowered = 160,
-		RemoteWakeUp_SelfPowered = 96
-	}
-
-	enum USB_TRANSFER : byte {
-		Control = 0x0,
-		Isochronous = 0x1,
-		Bulk = 0x2,
-		Interrupt = 0x3
 	}
 
 	enum USB_CONNECTION_STATUS : int {
@@ -203,7 +160,7 @@ namespace UCIS.USBLib.Internal.Windows {
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	struct USB_HUB_DESCRIPTOR {
 		public byte bDescriptorLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
+		public UsbDescriptorType bDescriptorType;
 		public byte bNumberOfPorts;
 		public ushort wHubCharacteristics;
 		public byte bPowerOnToPowerGood;
@@ -228,7 +185,7 @@ namespace UCIS.USBLib.Internal.Windows {
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	struct USB_NODE_CONNECTION_INFORMATION_EX {
 		public uint ConnectionIndex;
-		public USB_DEVICE_DESCRIPTOR DeviceDescriptor;
+		public UsbDeviceDescriptor DeviceDescriptor;
 		public byte CurrentConfigurationValue;
 		public USB_DEVICE_SPEED Speed;
 		public byte DeviceIsHub; //BOOLEAN  DeviceIsHub;
@@ -240,73 +197,6 @@ namespace UCIS.USBLib.Internal.Windows {
 		//Byte[] PipeList;
 	}
 
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	struct USB_DESCRIPTOR {
-		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
-	}
-
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	class USB_DEVICE_DESCRIPTOR {
-		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
-		public ushort bcdUSB;
-		public UsbDeviceClass bDeviceClass;
-		public byte bDeviceSubClass;
-		public byte bDeviceProtocol;
-		public byte bMaxPacketSize0;
-		public ushort idVendor;
-		public ushort idProduct;
-		public ushort bcdDevice;
-		public byte iManufacturer;
-		public byte iProduct;
-		public byte iSerialNumber;
-		public byte bNumConfigurations;
-	}
-
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	struct USB_ENDPOINT_DESCRIPTOR {
-		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
-		public byte bEndpointAddress;
-		public USB_TRANSFER bmAttributes;
-		public short wMaxPacketSize;
-		public byte bInterval;
-	}
-
-	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-	struct USB_STRING_DESCRIPTOR {
-		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
-		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = UsbApi.MAXIMUM_USB_STRING_LENGTH)]
-		public string bString; //WCHAR bString[1];
-	}
-
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	struct USB_INTERFACE_DESCRIPTOR {
-		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
-		public byte bInterfaceNumber;
-		public byte bAlternateSetting;
-		public byte bNumEndpoints;
-		public byte bInterfaceClass;
-		public byte bInterfaceSubClass;
-		public byte bInterfaceProtocol;
-		public byte Interface;
-	}
-
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	struct USB_CONFIGURATION_DESCRIPTOR {
-		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
-		public ushort wTotalLength;
-		public byte bNumInterface;
-		public byte bConfigurationsValue;
-		public byte iConfiguration;
-		public USB_CONFIGURATION bmAttributes;
-		public byte MaxPower;
-	}
-
 	[StructLayout(LayoutKind.Sequential)]
 	struct HID_DESCRIPTOR_DESC_LIST {
 		public byte bReportType;
@@ -316,26 +206,17 @@ namespace UCIS.USBLib.Internal.Windows {
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	struct HID_DESCRIPTOR {
 		public byte bLength;
-		public USB_DESCRIPTOR_TYPE bDescriptorType;
+		public UsbDescriptorType bDescriptorType;
 		public ushort bcdHID;
 		public byte bCountry;
 		public byte bNumDescriptors;
 		public HID_DESCRIPTOR_DESC_LIST hid_desclist; //DescriptorList [1];
 	}
 
-	[StructLayout(LayoutKind.Sequential)]
-	struct USB_SETUP_PACKET {
-		public byte bmRequest;
-		public byte bRequest;
-		public ushort wValue;
-		public ushort wIndex;
-		public ushort wLength;
-	}
-
-	[StructLayout(LayoutKind.Sequential)]
+	[StructLayout(LayoutKind.Sequential, Pack = 8)]
 	struct USB_DESCRIPTOR_REQUEST {
 		public uint ConnectionIndex;
-		public USB_SETUP_PACKET SetupPacket;
+		public UsbSetupPacket SetupPacket;
 		//public byte[] Data; //UCHAR  Data[0];
 	}
 
@@ -361,26 +242,5 @@ namespace UCIS.USBLib.Internal.Windows {
 		public uint DeviceNumber;
 		public uint PartitionNumber;
 	}
-
-	[StructLayout(LayoutKind.Sequential)]
-	class SP_DEVINFO_DATA1 {
-		public int cbSize;
-		public Guid ClassGuid;
-		public int DevInst;
-		public ulong Reserved;
-	};
-
-	[StructLayout(LayoutKind.Sequential)]
-	class RAW_ROOTPORT_PARAMETERS {
-		public ushort PortNumber;
-		public ushort PortStatus;
-	}
-
-	[StructLayout(LayoutKind.Sequential)]
-	class USB_UNICODE_NAME {
-		public uint Length;
-		public string str; //WCHAR  String[1];
-	}
-
 	#endregion
 }

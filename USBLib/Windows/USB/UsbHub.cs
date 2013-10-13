@@ -58,7 +58,7 @@ namespace UCIS.HWLib.Windows.USB {
 			UsbDevice device = null;
 			if (nodeConnection.ConnectionStatus != USB_CONNECTION_STATUS.DeviceConnected) {
 				device = new UsbDevice(parent, nodeConnection, portCount, devicePath);
-			} else if (nodeConnection.DeviceDescriptor.bDeviceClass == UsbDeviceClass.HubDevice) {
+			} else if (nodeConnection.DeviceDescriptor.DeviceClass == (Byte)UsbDeviceClass.HubDevice) {
 				String nodeName = GetNodeConnectionName(handle, portCount);
 				device = new UsbHub(parent, nodeConnection, @"\\?\" + nodeName, portCount, false);
 			} else {

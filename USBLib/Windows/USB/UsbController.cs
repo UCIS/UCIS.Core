@@ -6,7 +6,7 @@ using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.HWLib.Windows.USB {
 	public class UsbController {
-		static readonly Guid IID_DEVINTERFACE_USB_CONTROLLER = new Guid(UsbApi.GUID_DEVINTERFACE_HUBCONTROLLER);
+		static readonly Guid IID_DEVINTERFACE_USB_HOST_CONTROLLER = new Guid(UsbApi.GUID_DEVINTERFACE_USB_HOST_CONTROLLER);
 		public String DevicePath { get; private set; }
 		public DeviceNode DeviceNode { get; private set; }
 		public String DeviceDescription { get { return DeviceNode.DeviceDescription; } }
@@ -24,14 +24,14 @@ namespace UCIS.HWLib.Windows.USB {
 		}
 
 		public static UsbController GetControllerForDeviceNode(DeviceNode node) {
-			String[] interfaces = node.GetInterfaces(IID_DEVINTERFACE_USB_CONTROLLER);
+			String[] interfaces = node.GetInterfaces(IID_DEVINTERFACE_USB_HOST_CONTROLLER);
 			if (interfaces == null || interfaces.Length == 0) return null;
 			return new UsbController(node, interfaces[0]);
 		}
 
 		public static IList<UsbController> GetControllers() {
 			IList<UsbController>  devices = new List<UsbController>();
-			foreach (DeviceNode dev in DeviceNode.GetDevices(IID_DEVINTERFACE_USB_CONTROLLER)) {
+			foreach (DeviceNode dev in DeviceNode.GetDevices(IID_DEVINTERFACE_USB_HOST_CONTROLLER)) {
 				UsbController controller = GetControllerForDeviceNode(dev);
 				if (controller != null) devices.Add(controller);
 			}

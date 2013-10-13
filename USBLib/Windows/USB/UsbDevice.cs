@@ -39,9 +39,9 @@ namespace UCIS.HWLib.Windows.USB {
 			int szRequest = Marshal.SizeOf(typeof(USB_DESCRIPTOR_REQUEST));
 			USB_DESCRIPTOR_REQUEST request = new USB_DESCRIPTOR_REQUEST();
 			request.ConnectionIndex = port;
-			request.SetupPacket.wValue = (ushort)((descriptorType << 8) + index);
-			request.SetupPacket.wIndex = (ushort)langId;
-			request.SetupPacket.wLength = (ushort)length;
+			request.SetupPacket.Value = (short)((descriptorType << 8) + index);
+			request.SetupPacket.Index = (short)langId;
+			request.SetupPacket.Length = (short)length;
 			int nBytes = length + szRequest;
 			Byte[] bigbuffer = new Byte[nBytes];
 			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION, ref request, Marshal.SizeOf(typeof(USB_DESCRIPTOR_REQUEST)), bigbuffer, nBytes, out nBytes, IntPtr.Zero)) {
@@ -76,20 +76,23 @@ namespace UCIS.HWLib.Windows.USB {
 		public String DevicePath { get; private set; }
 		public UInt32 AdapterNumber { get; private set; }
 		internal USB_NODE_CONNECTION_INFORMATION_EX NodeConnectionInfo { get; set; }
-		private USB_DEVICE_DESCRIPTOR DeviceDescriptor { get { return NodeConnectionInfo.DeviceDescriptor; } }
+		public UsbDeviceDescriptor DeviceDescriptor { get { return NodeConnectionInfo.DeviceDescriptor; } }
 
 		public bool IsHub { get { return NodeConnectionInfo.DeviceIsHub != 0; } }
 		public bool IsConnected { get { return NodeConnectionInfo.ConnectionStatus == USB_CONNECTION_STATUS.DeviceConnected; } }
 		public string Status { get { return NodeConnectionInfo.ConnectionStatus.ToString(); } }
 		public string Speed { get { return NodeConnectionInfo.Speed.ToString(); } }
+		public Byte CurrentConfigurationValue { get { return NodeConnectionInfo.CurrentConfigurationValue; } }
+		public UInt16 DeviceAddress { get { return NodeConnectionInfo.DeviceAddress; } }
+		public UInt32 NumberOfOpenPipes { get { return NodeConnectionInfo.NumberOfOpenPipes; } }
 
 		SafeFileHandle OpenHandle() {
 			return OpenHandle(DevicePath);
 		}
 
-		public int NumConfigurations { get { return DeviceDescriptor == null ? 0 : DeviceDescriptor.bNumConfigurations; } }
-		public int VendorID { get { return DeviceDescriptor == null ? 0 : DeviceDescriptor.idVendor; } }
-		public int ProductID { get { return DeviceDescriptor == null ? 0 : DeviceDescriptor.idProduct; } }
+		public int NumConfigurations { get { return DeviceDescriptor.NumConfigurations; } }
+		public int VendorID { get { return DeviceDescriptor.VendorID; } }
+		public int ProductID { get { return DeviceDescriptor.ProductID; } }
 
 		private String GetStringSafe(Byte id) {
 			if (id == 0) return null;
@@ -98,9 +101,9 @@ namespace UCIS.HWLib.Windows.USB {
 			return s.Trim(' ', '\0');
 		}
 
-		public string Manufacturer { get { return DeviceDescriptor == null ? null : GetStringSafe(DeviceDescriptor.iManufacturer); } }
-		public string Product { get { return DeviceDescriptor == null ? null : GetStringSafe(DeviceDescriptor.iProduct); } }
-		public string SerialNumber { get { return DeviceDescriptor == null ? null : GetStringSafe(DeviceDescriptor.iSerialNumber); } }
+		public string Manufacturer { get { return GetStringSafe(DeviceDescriptor.ManufacturerStringID); } }
+		public string Product { get { return GetStringSafe(DeviceDescriptor.ProductStringID); } }
+		public string SerialNumber { get { return GetStringSafe(DeviceDescriptor.SerialNumberStringID); } }
 		public virtual string DriverKey { get { using (SafeFileHandle handle = OpenHandle(DevicePath)) return UsbHub.GetNodeConnectionDriverKey(handle, AdapterNumber); } }
 
 		public virtual string DeviceDescription { get { return DeviceNode == null ? null : DeviceNode.DeviceDescription; } }
