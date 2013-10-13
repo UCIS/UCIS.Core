@@ -244,6 +244,7 @@ namespace UCIS.HWLib.Windows.Devices {
 		public String PhysicalDeviceObjectName { get { return GetPropertyString(CMRDP.PHYSICAL_DEVICE_OBJECT_NAME); } }
 		public Guid? BusTypeGuid { get { return SetupApi.GetAsGuid(GetProperty(CMRDP.BUSTYPEGUID)); } }
 		public Int32? BusNumber { get { return SetupApi.GetAsInt32(GetProperty(CMRDP.BUSNUMBER)); } }
+		public Int32? Address { get { return SetupApi.GetAsInt32(GetProperty(CMRDP.ADDRESS)); } }
 		public String EnumeratorName { get { return GetPropertyString(CMRDP.ENUMERATOR_NAME); } }
 
 		public String[] GetInterfaces(String classGuid) {

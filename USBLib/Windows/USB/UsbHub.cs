@@ -3,69 +3,108 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using UCIS.HWLib.Windows.Devices;
 using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.HWLib.Windows.USB {
 	public class UsbHub : UsbDevice {
+		internal static SafeFileHandle OpenHandle(String path) {
+			SafeFileHandle handle = Kernel32.CreateFile(path, Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_WRITE, IntPtr.Zero, Kernel32.OPEN_EXISTING, 0, IntPtr.Zero);
+			if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			return handle;
+		}
+
+		private Boolean HasNodeInformation = false;
+		private USB_NODE_INFORMATION NodeInformation;
+
+		private void GetNodeInformation() {
+			if (HasNodeInformation) return;
+			NodeInformation = new USB_NODE_INFORMATION();
+			int nBytes = Marshal.SizeOf(typeof(USB_NODE_INFORMATION));
+			using (SafeFileHandle handle = OpenHandle()) 
+				if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_INFORMATION, ref NodeInformation, nBytes, out NodeInformation, nBytes, out nBytes, IntPtr.Zero))
+					throw new Win32Exception(Marshal.GetLastWin32Error());
+		}
+
 		public bool IsRootHub { get; private set; }
-		internal USB_NODE_INFORMATION NodeInformation { get; private set; }
+		public int PortCount { get { GetNodeInformation(); return NodeInformation.HubInformation.HubDescriptor.bNumberOfPorts; } }
+		public bool IsBusPowered { get { GetNodeInformation(); return NodeInformation.HubInformation.HubIsBusPowered; } }
+		public override string DeviceDescription { get { return IsRootHub ? "Root hub" : base.DeviceDescription; } }
 
-		public int PortCount { get { return NodeInformation.HubInformation.HubDescriptor.bNumberOfPorts; } }
-		public bool IsBusPowered { get { return NodeInformation.HubInformation.HubIsBusPowered; } }
-		public override string DeviceDescription { get { return IsRootHub ? "RootHub" : "Standard-USB-Hub"; } }
+		public String DevicePath { get; private set; }
 
-		public override string DriverKey {
-			get {
-				if (Parent == null) return null;
-				using (SafeFileHandle handle = OpenHandle(Parent.DevicePath)) return GetNodeConnectionDriverKey(handle, AdapterNumber);
-			}
-		}
-		
-		internal UsbHub(UsbDevice parent, USB_NODE_CONNECTION_INFORMATION_EX nci, string devicePath, uint port, Boolean roothub)
-			: base(parent, nci, port, devicePath) {
-			this.IsRootHub = roothub;
-			using (SafeFileHandle handle = OpenHandle(DevicePath)) {
-				USB_NODE_INFORMATION NodeInfo;
-				GetNodeInformation(handle, out NodeInfo);
-				this.NodeInformation = NodeInfo;
-			}
+		internal UsbHub(UsbHub parent, string devicePath, uint port)
+			: base(null, parent, port) {
+			this.DevicePath = devicePath;
+			this.IsRootHub = (parent == null);
+			if (IsRootHub) SetNodeConnectionInfo(new USB_NODE_CONNECTION_INFORMATION_EX());
 		}
 
-		public override int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
-			if (Parent == null) return 0;
-			using (SafeFileHandle handle = UsbHub.OpenHandle(Parent.DevicePath)) return GetDescriptor(handle, AdapterNumber, descriptorType, index, langId, buffer, offset, length);
+		private UsbHub(DeviceNode devnode, string devicePath)
+			: base(devnode, null, 0) {
+			this.DevicePath = devicePath;
+			this.IsRootHub = false;
 		}
 
+		internal SafeFileHandle OpenHandle() {
+			return OpenHandle(DevicePath);
+		}
 
 		public IList<UsbDevice> Devices {
 			get {
-				List<UsbDevice> devices = new List<UsbDevice>();
-				using (SafeFileHandle handle = OpenHandle(DevicePath)) {
+				UsbDevice[] devices = new UsbDevice[PortCount];
+				using (SafeFileHandle handle = OpenHandle()) {
 					for (uint index = 1; index <= PortCount; index++) {
-						devices.Add(BuildDevice(this, index, this.DevicePath, handle));
+						USB_NODE_CONNECTION_INFORMATION_EX nodeConnection = GetNodeConnectionInformation(handle, index);
+						UsbDevice device;
+						if (nodeConnection.ConnectionStatus != USB_CONNECTION_STATUS.DeviceConnected) {
+							device = new UsbDevice(null, this, index);
+						} else if (nodeConnection.DeviceDescriptor.DeviceClass == (Byte)UsbDeviceClass.HubDevice) {
+							int nBytes = Marshal.SizeOf(typeof(USB_NODE_CONNECTION_NAME));
+							USB_NODE_CONNECTION_NAME nameConnection = new USB_NODE_CONNECTION_NAME();
+							nameConnection.ConnectionIndex = index;
+							if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_NAME, ref nameConnection, nBytes, out nameConnection, nBytes, out nBytes, IntPtr.Zero))
+								throw new Win32Exception(Marshal.GetLastWin32Error());
+							device = new UsbHub(this, @"\\?\" + nameConnection.NodeName, index);
+						} else {
+							device = new UsbDevice(null, this, index);
+						}
+						device.SetNodeConnectionInfo(nodeConnection);
+						devices[index - 1] = device;
 					}
 				}
 				return devices;
 			}
 		}
 
-		internal static UsbDevice BuildDevice(UsbDevice parent, uint portCount, string devicePath) {
-			using (SafeFileHandle handle = OpenHandle(devicePath)) return BuildDevice(parent, portCount, devicePath, handle);
+		static readonly Guid IID_DEVINTERFACE_USB_HUB = new Guid(UsbApi.GUID_DEVINTERFACE_USB_HUB);
+		public static UsbHub GetHubForDeviceNode(DeviceNode node) {
+			if (node == null) return null;
+			String[] interfaces = node.GetInterfaces(IID_DEVINTERFACE_USB_HUB);
+			if (interfaces == null || interfaces.Length == 0) return null;
+			return new UsbHub(node, interfaces[0]);
 		}
-		internal static UsbDevice BuildDevice(UsbDevice parent, uint portCount, string devicePath, SafeFileHandle handle) {
-			USB_NODE_CONNECTION_INFORMATION_EX nodeConnection;
-			if (!GetNodeConnectionInformation(handle, portCount, out nodeConnection)) throw new Win32Exception(Marshal.GetLastWin32Error());
-			UsbDevice device = null;
-			if (nodeConnection.ConnectionStatus != USB_CONNECTION_STATUS.DeviceConnected) {
-				device = new UsbDevice(parent, nodeConnection, portCount, devicePath);
-			} else if (nodeConnection.DeviceDescriptor.DeviceClass == (Byte)UsbDeviceClass.HubDevice) {
-				String nodeName = GetNodeConnectionName(handle, portCount);
-				device = new UsbHub(parent, nodeConnection, @"\\?\" + nodeName, portCount, false);
-			} else {
-				device = new UsbDevice(parent, nodeConnection, portCount, devicePath);
+
+		public static IList<UsbHub> GetHubs() {
+			IList<UsbHub> devices = new List<UsbHub>();
+			foreach (DeviceNode dev in DeviceNode.GetDevices(IID_DEVINTERFACE_USB_HUB)) {
+				UsbHub hub = GetHubForDeviceNode(dev);
+				if (hub != null) devices.Add(hub);
 			}
-			device.NodeConnectionInfo = nodeConnection;
-			return device;
+			return devices;
+		}
+
+		public UsbDevice FindChildForDeviceNode(DeviceNode node) {
+			String driverkey = node.DriverKey;
+			if (driverkey != null) {
+				foreach (UsbDevice child in Devices) if (driverkey.Equals(child.DriverKey, StringComparison.InvariantCultureIgnoreCase)) return child;
+			} else {
+				int? address = node.Address;
+				if (address == null || address.Value == 0) return null;
+				int port = address.Value;
+				foreach (UsbDevice child in Devices) if (port == child.AdapterNumber) return child;
+			}
+			return null;
 		}
 	}
 }

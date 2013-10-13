@@ -27,8 +27,6 @@ namespace UCIS.USBLib.Internal.Windows {
 		public const int DICS_DISABLE = 0x00000002;
 	}
 
-	#region enumerations
-
 	enum UsbDeviceClass : byte {
 		UnspecifiedDevice = 0x00,
 		AudioInterface = 0x01,
@@ -54,12 +52,6 @@ namespace UCIS.USBLib.Internal.Windows {
 	enum HubCharacteristics : byte {
 		GangedPowerSwitching = 0x00,
 		IndividualPotPowerSwitching = 0x01,
-		// to do
-	}
-
-	enum USB_HUB_NODE {
-		UsbHub,
-		UsbMIParent
 	}
 
 	enum USB_CONNECTION_STATUS : int {
@@ -100,8 +92,6 @@ namespace UCIS.USBLib.Internal.Windows {
 		HighSpeed = 0x0400,
 		TestMode = 0x0800,
 		Indicator = 0x1000,
-		// these are the bits which cause the hub port state machine to keep moving 
-		//kHubPortStateChangeMask = kHubPortConnection | kHubPortEnabled | kHubPortSuspend | kHubPortOverCurrent | kHubPortBeingReset 
 	}
 
 	enum HubStatus : byte {
@@ -125,10 +115,6 @@ namespace UCIS.USBLib.Internal.Windows {
 		SetPowerOn = 1
 	}
 
-	#endregion
-
-	#region structures
-
 	[StructLayout(LayoutKind.Sequential)]
 	struct SP_CLASSINSTALL_HEADER {
 		public int cbSize;
@@ -143,18 +129,18 @@ namespace UCIS.USBLib.Internal.Windows {
 		public int HwProfile;
 	}
 
-	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 	struct USB_HCD_DRIVERKEY_NAME {
-		public uint ActualLength;
+		public UInt32 ActualLength;
 		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = UsbApi.MAX_BUFFER_SIZE)]
-		public string DriverKeyName; //WCHAR DriverKeyName[1];
+		public String DriverKeyName;
 	}
 
-	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 	struct USB_ROOT_HUB_NAME {
-		public uint ActualLength;
+		public UInt32 ActualLength;
 		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = UsbApi.MAX_BUFFER_SIZE)]
-		public string RootHubName; //WCHAR  RootHubName[1];
+		public String RootHubName;
 	}
 
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -177,9 +163,8 @@ namespace UCIS.USBLib.Internal.Windows {
 
 	[StructLayout(LayoutKind.Sequential)]
 	struct USB_NODE_INFORMATION {
-		//public int NodeType;
-		public USB_HUB_NODE NodeType;
-		public USB_HUB_INFORMATION HubInformation; // union { USB_HUB_INFORMATION  HubInformation; USB_MI_PARENT_INFORMATION  MiParentInformation; }
+		public int NodeType;
+		public USB_HUB_INFORMATION HubInformation;
 	}
 
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -225,7 +210,7 @@ namespace UCIS.USBLib.Internal.Windows {
 		public uint ConnectionIndex;
 		public uint ActualLength;
 		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = UsbApi.MAX_BUFFER_SIZE)]
-		public string NodeName; //WCHAR  NodeName[1];
+		public string NodeName;
 	}
 
 	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -233,7 +218,7 @@ namespace UCIS.USBLib.Internal.Windows {
 		public uint ConnectionIndex;
 		public uint ActualLength;
 		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = UsbApi.MAX_BUFFER_SIZE)]
-		public string DriverKeyName; //WCHAR  DriverKeyName[1];
+		public string DriverKeyName;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -242,5 +227,4 @@ namespace UCIS.USBLib.Internal.Windows {
 		public uint DeviceNumber;
 		public uint PartitionNumber;
 	}
-	#endregion
 }
