@@ -39,8 +39,8 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 			return DeviceDescriptor.Value;
 		}
 
-		public int Vid { get { return GetDeviceDescriptor().idVendor; } }
-		public int Pid { get { return GetDeviceDescriptor().idProduct; } }
+		public UInt16 Vid { get { return GetDeviceDescriptor().idVendor; } }
+		public UInt16 Pid { get { return GetDeviceDescriptor().idProduct; } }
 		public byte InterfaceID { get { return 0; } }
 
 		public string Name {

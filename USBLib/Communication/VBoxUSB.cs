@@ -272,8 +272,8 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 			DevicePath = interfacepath;
 		}
 
-		public int Vid { get { return DeviceDescriptor.VendorID; } }
-		public int Pid { get { return DeviceDescriptor.ProductID; } }
+		public UInt16 Vid { get { return DeviceDescriptor.VendorID; } }
+		public UInt16 Pid { get { return DeviceDescriptor.ProductID; } }
 		public byte InterfaceID { get { return 0; } }
 
 		public string Name { get { return DeviceNode.GetPropertyString(CMRDP.DEVICEDESC); } }

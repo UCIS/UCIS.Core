@@ -59,10 +59,10 @@ namespace UCIS.USBLib.Descriptor {
 		public Byte DeviceClass { get { return bDeviceClass; } }
 		public Byte DeviceSubClass { get { return bDeviceSubClass; } }
 		public Byte DeviceProtocol { get { return bDeviceProtocol; } }
-		public short DeviceVersion { get { return UsbDescriptor.FromLittleEndian(bcdDevice); } }
+		public UInt16 DeviceVersion { get { return (UInt16)UsbDescriptor.FromLittleEndian(bcdDevice); } }
 		public Byte MaxControlPacketSize { get { return bMaxControlPacketSize; } }
-		public short VendorID { get { return UsbDescriptor.FromLittleEndian(idVendor); } }
-		public short ProductID { get { return UsbDescriptor.FromLittleEndian(idProduct); } }
+		public UInt16 VendorID { get { return (UInt16)UsbDescriptor.FromLittleEndian(idVendor); } }
+		public UInt16 ProductID { get { return (UInt16)UsbDescriptor.FromLittleEndian(idProduct); } }
 		public Byte ManufacturerStringID { get { return iManufacturer; } }
 		public Byte ProductStringID { get { return iProduct; } }
 		public Byte SerialNumberStringID { get { return iSerialNumber; } }

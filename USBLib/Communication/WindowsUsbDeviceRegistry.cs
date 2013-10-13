@@ -70,13 +70,13 @@ namespace UCIS.USBLib.Communication {
 			mInterfaceID = (Byte)mid;
 			mIsDeviceIDParsed = true;
 		}
-		public int Vid {
+		public UInt16 Vid {
 			get {
 				parseDeviceID();
 				return mVid;
 			}
 		}
-		public int Pid {
+		public UInt16 Pid {
 			get {
 				parseDeviceID();
 				return mPid;

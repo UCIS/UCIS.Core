@@ -7,8 +7,8 @@ using UCIS.USBLib.Communication.WinUsb;
 namespace UCIS.USBLib.Communication {
 	public interface IUsbDeviceRegistry {
 		IDictionary<String, Object> DeviceProperties { get; }
-		Int32 Vid { get; }
-		Int32 Pid { get; }
+		UInt16 Vid { get; }
+		UInt16 Pid { get; }
 		Byte InterfaceID { get; }
 
 		String Name { get; } //Device product name (or null if not available)
