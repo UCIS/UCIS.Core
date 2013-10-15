@@ -175,6 +175,7 @@
     <Compile Include="Util\PrebufferingStream.cs" />
     <Compile Include="Util\QueuedPacketStream.cs" />
     <Compile Include="Util\TapeArchive.cs" />
+    <Compile Include="Util\WorkQueue.cs" />
     <Compile Include="VNCServer\IFramebuffer.cs" />
     <Compile Include="VNCServer\VNCServer.cs" />
     <Compile Include="Windows\ServiceManager.cs" />
