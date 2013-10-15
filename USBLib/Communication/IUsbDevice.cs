@@ -8,8 +8,6 @@ namespace UCIS.USBLib.Communication {
 		void ResetDevice();
 
 		IUsbDeviceRegistry Registry { get; }
-
-		//void Close();
 	}
 	public interface IUsbInterface : IDisposable {
 		Byte Configuration { get; }
@@ -17,7 +15,6 @@ namespace UCIS.USBLib.Communication {
 
 		//int ControlTransfer(byte requestType, byte request, short value, short index, Byte[] buffer, int offset, int length);
 		int GetDescriptor(byte descriptorType, byte index, short langId, Byte[] buffer, int offset, int length);
-		String GetString(short langId, byte stringIndex);
 
 		int BulkWrite(Byte endpoint, Byte[] buffer, int offset, int length);
 		int BulkRead(Byte endpoint, Byte[] buffer, int offset, int length);

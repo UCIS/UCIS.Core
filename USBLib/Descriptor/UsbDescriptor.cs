@@ -103,6 +103,11 @@ namespace UCIS.USBLib.Descriptor {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer dimensions");
 			fixed (Byte* ptr = buffer) return *(UsbConfigurationDescriptor*)(ptr + offset);
 		}
+		public static UsbConfigurationDescriptor FromDevice(IUsbInterface device, Byte index) {
+			Byte[] buff = new Byte[UsbConfigurationDescriptor.Size];
+			int len = device.GetDescriptor((Byte)UsbDescriptorType.Configuration, index, 0, buff, 0, buff.Length);
+			return FromByteArray(buff, 0, len);
+		}
 		public static unsafe int Size { get { return sizeof(UsbConfigurationDescriptor); } }
 	}
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]

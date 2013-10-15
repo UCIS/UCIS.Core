@@ -18,12 +18,6 @@ namespace UCIS.USBLib.Communication {
 				throw new NotImplementedException();
 			}
 		}
-		public unsafe virtual string GetString(short langId, byte stringIndex) {
-			Byte[] buffer = new Byte[256];
-			int tl = GetDescriptor((byte)UsbDescriptorType.String, stringIndex, langId, buffer, 0, buffer.Length);
-			if (tl < 2) return null;
-			return UsbStringDescriptor.GetString(buffer, 0, tl);
-		}
 		public virtual int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
 			return ControlRead(
 				UsbControlRequestType.EndpointIn | UsbControlRequestType.RecipDevice | UsbControlRequestType.TypeStandard,

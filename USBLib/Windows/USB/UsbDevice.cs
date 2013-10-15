@@ -51,7 +51,7 @@ namespace UCIS.HWLib.Windows.USB {
 
 		private String GetStringSafe(Byte id) {
 			if (id == 0) return null;
-			String s = GetString(id, 0);
+			String s = UsbStringDescriptor.GetStringFromDevice(this, id, 0);
 			if (s == null) return s;
 			return s.Trim(' ', '\0');
 		}
@@ -152,27 +152,24 @@ namespace UCIS.HWLib.Windows.USB {
 				return nBytes;
 			}
 		}
-		public String GetString(short langId, byte stringIndex) {
-			return UsbStringDescriptor.GetStringFromDevice(this, stringIndex, langId);
-		}
-		byte IUsbInterface.Configuration { get { throw new NotImplementedException(); } }
+		byte IUsbInterface.Configuration { get { return CurrentConfigurationValue; } }
+		byte IUsbDevice.Configuration { get { return CurrentConfigurationValue; } set { throw new NotSupportedException(); } }
+		void IUsbDevice.ResetDevice() { throw new NotImplementedException(); }
+		IUsbDeviceRegistry IUsbDevice.Registry { get { throw new NotImplementedException(); } }
 		void IUsbInterface.Close() { }
-		int IUsbInterface.BulkWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
-		int IUsbInterface.BulkRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		int IUsbInterface.BulkWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		int IUsbInterface.BulkRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
 		void IUsbInterface.BulkReset(byte endpoint) { throw new NotImplementedException(); }
-		int IUsbInterface.InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
-		int IUsbInterface.InterruptRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
-		void IUsbInterface.InterruptReset(byte endpoint) { throw new NotImplementedException(); }
-		int IUsbInterface.ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
-		int IUsbInterface.ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
-		UsbPipeStream IUsbInterface.GetBulkStream(byte endpoint) { throw new NotImplementedException(); }
-		UsbPipeStream IUsbInterface.GetInterruptStream(byte endpoint) { throw new NotImplementedException(); }
+		int IUsbInterface.InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		int IUsbInterface.InterruptRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		void IUsbInterface.InterruptReset(byte endpoint) { throw new NotSupportedException(); }
+		int IUsbInterface.ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		int IUsbInterface.ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		UsbPipeStream IUsbInterface.GetBulkStream(byte endpoint) { throw new NotSupportedException(); }
+		UsbPipeStream IUsbInterface.GetInterruptStream(byte endpoint) { throw new NotSupportedException(); }
 		void IDisposable.Dispose() { }
-		byte IUsbDevice.Configuration { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
 		void IUsbDevice.ClaimInterface(int interfaceID) { }
 		void IUsbDevice.ReleaseInterface(int interfaceID) {	}
-		void IUsbDevice.ResetDevice() { throw new NotSupportedException(); }
-		IUsbDeviceRegistry IUsbDevice.Registry { get { throw new NotImplementedException(); } }
 		#endregion
 	}
 }

@@ -9,6 +9,7 @@ using LibUsbDotNet.Descriptors;
 using LibUsbDotNet.Info;
 using LibUsbDotNet.Main;
 using UCIS.USBLib.Communication;
+using UCIS.USBLib.Descriptor;
 using LibUsb0Registry = UCIS.USBLib.Communication.LibUsb.LibUsb0Registry;
 using LibUsb1Registry = UCIS.USBLib.Communication.LibUsb1.LibUsb1Registry;
 using nIUsbDevice = UCIS.USBLib.Communication.IUsbDevice;
@@ -17,7 +18,7 @@ using WinUsbRegistry = UCIS.USBLib.Communication.WinUsb.WinUsbRegistry;
 using USBIORegistry = UCIS.USBLib.Communication.USBIO.USBIORegistry;
 
 namespace LibUsbDotNet {
-	public class UsbDevice : IUsbDevice {
+	public class UsbDevice {
 		public nIUsbInterface Device { get; private set; }
 		public UsbDevice(nIUsbInterface dev) {
 			if (dev == null) throw new ArgumentNullException("dev");
@@ -39,17 +40,6 @@ namespace LibUsbDotNet {
 				lengthTransferred = Device.ControlWrite((UsbControlRequestType)setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, buffer, 0, bufferLength);
 			}
 			return true;
-		}
-		public DriverModeType DriverMode { get { return DriverModeType.Unknown; } }
-		public enum DriverModeType {
-			Unknown,
-			LibUsb,
-			WinUsb,
-			MonoLibUsb,
-			LibUsbWinBack
-		}
-		public UsbEndpointWriter OpenEndpointWriter(WriteEndpointID writeEndpointID, EndpointType endpointType) {
-			return new UsbEndpointWriter(Device, (Byte)writeEndpointID, endpointType);
 		}
 		public UsbEndpointReader OpenEndpointReader(ReadEndpointID readEndpointID, int buffersize, EndpointType endpointType) {
 			UsbEndpointReader reader = new UsbEndpointReader(Device, (Byte)readEndpointID, endpointType);
@@ -73,7 +63,6 @@ namespace LibUsbDotNet {
 				return list;
 			}
 		}
-		private SafeHandle Handle { get { return null; } }
 		public bool SetConfiguration(byte config) {
 			nIUsbDevice dev = Device as nIUsbDevice;
 			if (dev == null) return false;
@@ -108,24 +97,18 @@ namespace LibUsbDotNet {
 		public IList<UsbConfigInfo> Configs {
 			get {
 				List<UsbConfigInfo> rtnConfigs = new List<UsbConfigInfo>();
-				int iConfigs = Info.Descriptor.ConfigurationCount;
-				for (int iConfig = 0; iConfig < iConfigs; iConfig++) {
+				int iConfigs = Info.Descriptor.NumConfigurations;
+				for (Byte iConfig = 0; iConfig < iConfigs; iConfig++) {
+					UsbConfigurationDescriptor configDescriptor = UsbConfigurationDescriptor.FromDevice(Device, iConfig);
+					if (configDescriptor.Length < UsbConfigurationDescriptor.Size || configDescriptor.Type != UsbDescriptorType.Configuration)
+						throw new Exception("GetDeviceConfigs: USB config descriptor is invalid.");
+					Byte[] cfgBuffer = new Byte[configDescriptor.TotalLength];
 					int iBytesTransmitted;
-					byte[] cfgBuffer = new byte[9];
 					if (!GetDescriptor((byte)UsbDescriptorType.Configuration, (byte)iConfig, 0, cfgBuffer, cfgBuffer.Length, out iBytesTransmitted))
 						throw new Exception("Could not read configuration descriptor");
-					if (iBytesTransmitted < UsbConfigDescriptor.Size || cfgBuffer[1] != (byte)UsbDescriptorType.Configuration)
+					configDescriptor = UsbConfigurationDescriptor.FromByteArray(cfgBuffer, 0, iBytesTransmitted);
+					if (configDescriptor.Length < UsbConfigurationDescriptor.Size || configDescriptor.Type != UsbDescriptorType.Configuration)
 						throw new Exception("GetDeviceConfigs: USB config descriptor is invalid.");
-					UsbConfigDescriptor configDescriptor = new UsbConfigDescriptor();
-					Helper.BytesToObject(cfgBuffer, 0, Math.Min(UsbConfigDescriptor.Size, cfgBuffer[0]), configDescriptor);
-					if (configDescriptor.TotalLength > cfgBuffer.Length) {
-						cfgBuffer = new Byte[configDescriptor.TotalLength];
-						if (!GetDescriptor((byte)UsbDescriptorType.Configuration, (byte)iConfig, 0, cfgBuffer, cfgBuffer.Length, out iBytesTransmitted))
-							throw new Exception("Could not read configuration descriptor");
-						if (iBytesTransmitted < UsbConfigDescriptor.Size || cfgBuffer[1] != (byte)UsbDescriptorType.Configuration)
-							throw new Exception("GetDeviceConfigs: USB config descriptor is invalid.");
-						Helper.BytesToObject(cfgBuffer, 0, Math.Min(UsbConfigDescriptor.Size, cfgBuffer[0]), configDescriptor);
-					}
 					if (configDescriptor.TotalLength != iBytesTransmitted) throw new Exception("GetDeviceConfigs: USB config descriptor length doesn't match the length received.");
 					List<byte[]> rawDescriptorList = new List<byte[]>();
 					int iRawLengthPosition = configDescriptor.Length;
@@ -136,36 +119,11 @@ namespace LibUsbDotNet {
 						rawDescriptorList.Add(rawDescriptor);
 						iRawLengthPosition += rawDescriptor.Length;
 					}
-					rtnConfigs.Add(new UsbConfigInfo(this, configDescriptor, ref rawDescriptorList));
+					rtnConfigs.Add(new UsbConfigInfo(this, configDescriptor, rawDescriptorList));
 				}
 				return rtnConfigs;
 			}
 		}
-	}
-	public interface IUsbDevice {
-		bool SetConfiguration(byte config);
-		bool ClaimInterface(int interfaceID);
-		bool ReleaseInterface(int interfaceID);
-	}
-	public class UsbEndpointWriter : IDisposable {
-		public nIUsbInterface Device { get; private set; }
-		public Byte EndpointID { get; private set; }
-		public EndpointType EndpointType { get; private set; }
-		public Byte EpNum { get { return EndpointID; } }
-		public UsbEndpointWriter(nIUsbInterface dev, byte epid, EndpointType eptype) {
-			Device = dev;
-			EndpointID = epid;
-			EndpointType = eptype;
-		}
-		public ErrorCode Write(byte[] buffer, int offset, int count, int timeout, out int transferLength) {
-			switch (EndpointType) {
-				case EndpointType.Bulk: transferLength = Device.BulkWrite(EndpointID, buffer, offset, count); break;
-				case EndpointType.Interrupt: transferLength = Device.InterruptWrite(EndpointID, buffer, offset, count); break;
-				default: transferLength = 0; return ErrorCode.Error;
-			}
-			return ErrorCode.Ok;
-		}
-		public void Dispose() { }
 	}
 	public class UsbEndpointReader : IDisposable {
 		public nIUsbInterface Device { get; private set; }
@@ -229,26 +187,6 @@ namespace LibUsbDotNet {
 	}
 }
 namespace LibUsbDotNet.Main {
-	public static class UsbConstants {
-		public const int MAX_CONFIG_SIZE = 4096;
-		public const int MAX_DEVICES = 128;
-		public const int MAX_ENDPOINTS = 32;
-		public const byte ENDPOINT_DIR_MASK = 0x80;
-		public const byte ENDPOINT_NUMBER_MASK = 0xf;
-	}
-	public static class Helper {
-		public static void BytesToObject(byte[] sourceBytes, int iStartIndex, int iLength, object destObject) {
-			GCHandle gch = GCHandle.Alloc(destObject, GCHandleType.Pinned);
-			IntPtr ptrDestObject = gch.AddrOfPinnedObject();
-			Marshal.Copy(sourceBytes, iStartIndex, ptrDestObject, iLength);
-			gch.Free();
-		}
-		public static string ToString(string sep0, string[] names, string sep1, object[] values, string sep2) {
-			StringBuilder sb = new StringBuilder();
-			for (int i = 0; i < names.Length; i++) sb.Append(sep0 + names[i] + sep1 + values[i] + sep2);
-			return sb.ToString();
-		}
-	}
 	public class EndpointDataEventArgs : EventArgs {
 		internal EndpointDataEventArgs(byte[] bytes, int size) {
 			Buffer = bytes;
@@ -281,23 +219,6 @@ namespace LibUsbDotNet.Main {
 		TypeReserved = (0x03 << 5),
 		TypeStandard = (0x00 << 5),
 		TypeVendor = (0x02 << 5),
-	}
-	public enum WriteEndpointID : byte {
-		Ep01 = 0x01,
-		Ep02 = 0x02,
-		Ep03 = 0x03,
-		Ep04 = 0x04,
-		Ep05 = 0x05,
-		Ep06 = 0x06,
-		Ep07 = 0x07,
-		Ep08 = 0x08,
-		Ep09 = 0x09,
-		Ep10 = 0x0A,
-		Ep11 = 0x0B,
-		Ep12 = 0x0C,
-		Ep13 = 0x0D,
-		Ep14 = 0x0E,
-		Ep15 = 0x0F,
 	}
 	public enum ReadEndpointID : byte {
 		Ep01 = 0x81,
@@ -357,44 +278,37 @@ namespace LibUsbDotNet.Info {
 		internal UsbDevice mUsbDevice;
 		internal UsbDeviceInfo(UsbDevice usbDevice) {
 			mUsbDevice = usbDevice;
-			mDeviceDescriptor = new UsbDeviceDescriptor();
-			Byte[] bytes = new Byte[UsbDeviceDescriptor.Size];
-			int ret;
-			usbDevice.GetDescriptor((byte)UsbDescriptorType.Device, 0, 0, bytes, UsbDeviceDescriptor.Size, out ret);
-			Object asobj = mDeviceDescriptor;
-			Helper.BytesToObject(bytes, 0, ret, asobj);
-			mDeviceDescriptor = (UsbDeviceDescriptor)asobj;
+			mDeviceDescriptor = UsbDeviceDescriptor.FromDevice(usbDevice.Device);
 		}
 		public UsbDeviceDescriptor Descriptor { get { return mDeviceDescriptor; } }
 		public String ManufacturerString {
 			get {
-				if (Descriptor.ManufacturerStringIndex == 0) return null;
-				return mUsbDevice.Device.GetString(0, Descriptor.ManufacturerStringIndex);
+				if (Descriptor.ManufacturerStringID == 0) return null;
+				return UsbStringDescriptor.GetStringFromDevice(mUsbDevice.Device, Descriptor.ManufacturerStringID, 0);
 			}
 		}
 		public String ProductString {
 			get {
-				if (Descriptor.ProductStringIndex == 0) return null;
-				return mUsbDevice.Device.GetString(0, Descriptor.ProductStringIndex);
+				if (Descriptor.ProductStringID == 0) return null;
+				return UsbStringDescriptor.GetStringFromDevice(mUsbDevice.Device, Descriptor.ProductStringID, 0);
 			}
 		}
 		public String SerialString {
 			get {
-				if (Descriptor.SerialStringIndex == 0) return null;
-				return mUsbDevice.Device.GetString(0, Descriptor.SerialStringIndex);
+				if (Descriptor.SerialNumberStringID == 0) return null;
+				return UsbStringDescriptor.GetStringFromDevice(mUsbDevice.Device, Descriptor.SerialNumberStringID, 0);
 			}
 		}
 	}
 	public class UsbConfigInfo {
 		private readonly List<UsbInterfaceInfo> mInterfaceList = new List<UsbInterfaceInfo>();
-		internal readonly UsbConfigDescriptor mUsbConfigDescriptor;
+		internal readonly UsbConfigurationDescriptor mUsbConfigDescriptor;
 		internal UsbDevice mUsbDevice;
-		internal UsbConfigInfo(UsbDevice usbDevice, UsbConfigDescriptor descriptor, ref List<byte[]> rawDescriptors) {
+		internal UsbConfigInfo(UsbDevice usbDevice, UsbConfigurationDescriptor descriptor, IEnumerable<byte[]> rawDescriptors) {
 			mUsbDevice = usbDevice;
 			mUsbConfigDescriptor = descriptor;
 			UsbInterfaceInfo currentInterface = null;
-			for (int iRawDescriptor = 0; iRawDescriptor < rawDescriptors.Count; iRawDescriptor++) {
-				byte[] bytesRawDescriptor = rawDescriptors[iRawDescriptor];
+			foreach (Byte[] bytesRawDescriptor in rawDescriptors) {
 				switch (bytesRawDescriptor[1]) {
 					case (byte)UsbDescriptorType.Interface:
 						currentInterface = new UsbInterfaceInfo(usbDevice, bytesRawDescriptor);
@@ -407,7 +321,7 @@ namespace LibUsbDotNet.Info {
 				}
 			}
 		}
-		public UsbConfigDescriptor Descriptor { get { return mUsbConfigDescriptor; } }
+		public UsbConfigurationDescriptor Descriptor { get { return mUsbConfigDescriptor; } }
 		public ReadOnlyCollection<UsbInterfaceInfo> InterfaceInfoList { get { return mInterfaceList.AsReadOnly(); } }
 	}
 	public class UsbInterfaceInfo {
@@ -416,8 +330,7 @@ namespace LibUsbDotNet.Info {
 		internal List<UsbEndpointInfo> mEndpointInfo = new List<UsbEndpointInfo>();
 		internal UsbInterfaceInfo(UsbDevice usbDevice, byte[] descriptor) {
 			mUsbDevice = usbDevice;
-			mUsbInterfaceDescriptor = new UsbInterfaceDescriptor();
-			Helper.BytesToObject(descriptor, 0, Math.Min(UsbInterfaceDescriptor.Size, descriptor[0]), mUsbInterfaceDescriptor);
+			mUsbInterfaceDescriptor = UsbInterfaceDescriptor.FromByteArray(descriptor, 0, descriptor.Length);
 		}
 		public UsbInterfaceDescriptor Descriptor { get { return mUsbInterfaceDescriptor; } }
 		public ReadOnlyCollection<UsbEndpointInfo> EndpointInfoList { get { return mEndpointInfo.AsReadOnly(); } }
@@ -425,8 +338,7 @@ namespace LibUsbDotNet.Info {
 	public class UsbEndpointInfo {
 		internal UsbEndpointDescriptor mUsbEndpointDescriptor;
 		internal UsbEndpointInfo(byte[] descriptor) {
-			mUsbEndpointDescriptor = new UsbEndpointDescriptor();
-			Helper.BytesToObject(descriptor, 0, Math.Min(UsbEndpointDescriptor.Size, descriptor[0]), mUsbEndpointDescriptor);
+			mUsbEndpointDescriptor = UsbEndpointDescriptor.FromByteArray(descriptor, 0, descriptor.Length);
 		}
 		public UsbEndpointDescriptor Descriptor {
 			get { return mUsbEndpointDescriptor; }
@@ -434,23 +346,6 @@ namespace LibUsbDotNet.Info {
 	}
 }
 namespace LibUsbDotNet.Descriptors {
-	public enum DescriptorType : byte {
-		Device = 1,
-		Configuration = 2,
-		String = 3,
-		Interface = 4,
-		Endpoint = 5,
-		DeviceQualifier = 6,
-		OtherSpeedConfiguration = 7,
-		InterfacePower = 8,
-		OTG = 9,
-		Debug = 10,
-		InterfaceAssociation = 11,
-		Hid = 0x21,
-		HidReport = 0x22,
-		Physical = 0x23,
-		Hub = 0x29
-	}
 	public enum ClassCodeType : byte {
 		PerInterface = 0,
 		Audio = 1,
@@ -462,79 +357,5 @@ namespace LibUsbDotNet.Descriptors {
 		Hub = 9,
 		Data = 10,
 		VendorSpec = 0xff
-	}
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	public abstract class UsbDescriptor {
-		public static readonly int Size = Marshal.SizeOf(typeof(UsbDescriptor));
-		public byte Length;
-		public DescriptorType DescriptorType;
-	}
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	public class UsbDeviceDescriptor : UsbDescriptor {
-		public new static readonly int Size = Marshal.SizeOf(typeof(UsbDeviceDescriptor));
-		public short BcdUsb;
-		public ClassCodeType Class;
-		public byte SubClass;
-		public byte Protocol;
-		public byte MaxPacketSize0;
-		public short VendorID;
-		public short ProductID;
-		public short BcdDevice;
-		public byte ManufacturerStringIndex;
-		public byte ProductStringIndex;
-		public byte SerialStringIndex;
-		public byte ConfigurationCount;
-		internal UsbDeviceDescriptor() { }
-	}
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	public class UsbConfigDescriptor : UsbDescriptor {
-		public new static readonly int Size = Marshal.SizeOf(typeof(UsbConfigDescriptor));
-		public readonly short TotalLength;
-		public readonly byte InterfaceCount;
-		public readonly byte ConfigID;
-		public readonly byte StringIndex;
-		public readonly byte Attributes;
-		public readonly byte MaxPower;
-		internal UsbConfigDescriptor() { }
-	}
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	public class UsbInterfaceDescriptor : UsbDescriptor {
-		public new static readonly int Size = Marshal.SizeOf(typeof(UsbInterfaceDescriptor));
-		public readonly byte InterfaceID;
-		public readonly byte AlternateID;
-		public readonly byte EndpointCount;
-		public readonly ClassCodeType Class;
-		public readonly byte SubClass;
-		public readonly byte Protocol;
-		public readonly byte StringIndex;
-		internal UsbInterfaceDescriptor() { }
-	}
-	[StructLayout(LayoutKind.Sequential, Pack = 1)]
-	public class UsbEndpointDescriptor : UsbDescriptor {
-		public new static readonly int Size = Marshal.SizeOf(typeof(UsbEndpointDescriptor));
-		public readonly byte EndpointID;
-		public readonly byte Attributes;
-		public readonly short MaxPacketSize;
-		public readonly byte Interval;
-		public readonly byte Refresh;
-		public readonly byte SynchAddress;
-		internal UsbEndpointDescriptor() { }
-	}
-}
-namespace MonoLibUsb {
-	public static class MonoUsbApi {
-		internal const CallingConvention CC = 0;
-		internal const string LIBUSB_DLL = "libusb-1.0.dll";
-		[DllImport(LIBUSB_DLL, CallingConvention = CC, SetLastError = false, EntryPoint = "libusb_detach_kernel_driver")]
-		public static extern int DetachKernelDriver([In] MonoUsbDeviceHandle deviceHandle, int interfaceNumber);
-		public static int ControlTransfer(MonoUsbDeviceHandle deviceHandle, byte requestType, byte request, short value, short index, object data, short dataLength, int timeout) {
-			throw new NotImplementedException();
-		}
-		public static int BulkTransfer(MonoUsbDeviceHandle deviceHandle, byte endpoint, object data, int length, out int actualLength, int timeout) {
-			throw new NotImplementedException();
-		}
-	}
-	public abstract class MonoUsbDeviceHandle : SafeHandle {
-		public MonoUsbDeviceHandle(Boolean bOwnsHandle) : base(IntPtr.Zero, bOwnsHandle) { }
 	}
 }

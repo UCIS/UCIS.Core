@@ -80,16 +80,16 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			if (InterfaceHandle.IsInvalid || InterfaceHandle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open interface");
 			InterfaceHandles = new SafeWinUsbInterfaceHandle[1] { InterfaceHandle };
 			foreach (LibUsbDotNet.Info.UsbConfigInfo ci in (new LibUsbDotNet.UsbDevice(this)).Configs) {
-				if (ci.Descriptor.ConfigID == Configuration) {
+				if (ci.Descriptor.ConfigurationValue == Configuration) {
 					foreach (LibUsbDotNet.Info.UsbInterfaceInfo ifinfo in ci.InterfaceInfoList) {
 						foreach (LibUsbDotNet.Info.UsbEndpointInfo epinfo in ifinfo.EndpointInfoList) {
-							int epidx = epinfo.Descriptor.EndpointID & 0x7F;
-							if ((epinfo.Descriptor.EndpointID & 0x80) != 0) {
+							int epidx = epinfo.Descriptor.EndpointAddress & 0x7F;
+							if ((epinfo.Descriptor.EndpointAddress & 0x80) != 0) {
 								if (EndpointToInterfaceIn.Length <= epidx) Array.Resize(ref EndpointToInterfaceIn, epidx + 1);
-								EndpointToInterfaceIn[epidx] = ifinfo.Descriptor.InterfaceID;
+								EndpointToInterfaceIn[epidx] = ifinfo.Descriptor.InterfaceNumber;
 							} else {
 								if (EndpointToInterfaceOut.Length <= epidx) Array.Resize(ref EndpointToInterfaceOut, epidx + 1);
-								EndpointToInterfaceOut[epidx] = ifinfo.Descriptor.InterfaceID;
+								EndpointToInterfaceOut[epidx] = ifinfo.Descriptor.InterfaceNumber;
 							}
 						}
 					}

@@ -109,15 +109,15 @@ namespace UCIS.USBLib.Communication.USBIO {
 				IList<LibUsbDotNet.Info.UsbConfigInfo> configs = (new LibUsbDotNet.UsbDevice(this)).Configs;
 				for (int i = 0; i < configs.Count; i++) {
 					LibUsbDotNet.Info.UsbConfigInfo config = configs[i];
-					if (config.Descriptor.ConfigID == value) {
+					if (config.Descriptor.ConfigurationValue == value) {
 						unsafe {
 							USBIO_SET_CONFIGURATION req = new USBIO_SET_CONFIGURATION();
 							req.ConfigurationIndex = (ushort)i;
-							req.NbOfInterfaces = Math.Min((ushort)32, config.Descriptor.InterfaceCount);
+							req.NbOfInterfaces = Math.Min((ushort)32, config.Descriptor.NumInterfaces);
 							for (int j = 0; j < req.NbOfInterfaces; j++) {
 								LibUsbDotNet.Info.UsbInterfaceInfo intf = config.InterfaceInfoList[j];
 								*((USBIO_INTERFACE_SETTING*)(req.InterfaceList + sizeof(USBIO_INTERFACE_SETTING) * j)) =
-									new USBIO_INTERFACE_SETTING() { InterfaceIndex = intf.Descriptor.InterfaceID, AlternateSettingIndex = 0, MaximumTransferSize = UInt16.MaxValue };
+									new USBIO_INTERFACE_SETTING() { InterfaceIndex = intf.Descriptor.InterfaceNumber, AlternateSettingIndex = 0, MaximumTransferSize = UInt16.MaxValue };
 							}
 							try {
 								DeviceIoControl(DeviceHandle, IOCTL_USBIO_SET_CONFIGURATION, (IntPtr)(&req), sizeof(USBIO_SET_CONFIGURATION), IntPtr.Zero, 0);
