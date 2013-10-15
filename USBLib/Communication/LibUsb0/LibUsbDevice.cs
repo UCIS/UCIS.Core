@@ -7,7 +7,6 @@ using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.USBLib.Communication.LibUsb {
 	public class LibUsb0Device : UsbInterface, IUsbDevice {
-		//private readonly List<int> mClaimedInterfaces = new List<int>();
 		public string DeviceFilename { get; private set; }
 		public IUsbDeviceRegistry Registry { get; private set; }
 		private SafeFileHandle DeviceHandle;
@@ -81,25 +80,13 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			}
 			return ret;
 		}
-		public override int BulkRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeTransfer(endpoint, false, false, buffer, offset, length, 0);
+		public override int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+			if ((requestType & UsbControlRequestType.EndpointMask) == UsbControlRequestType.EndpointIn)
+				return ControlRead(requestType, request, value, index, buffer, offset, length);
+			else
+				return ControlWrite(requestType, request, value, index, buffer, offset, length);
 		}
-		public override int BulkWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeTransfer(endpoint, true, false, buffer, offset, length, 0);
-		}
-		public override void BulkReset(byte endpoint) {
-			PipeReset(endpoint);
-		}
-		public override int InterruptRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeTransfer(endpoint, false, false, buffer, offset, length, 0);
-		}
-		public override int InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeTransfer(endpoint, true, false, buffer, offset, length, 0);
-		}
-		public override void InterruptReset(byte endpoint) {
-			PipeReset(endpoint);
-		}
-		public unsafe override int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		public unsafe int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			if (buffer == null) buffer = new Byte[0];
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			int code;
@@ -111,7 +98,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			}
 			return ret;
 		}
-		public unsafe override int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		public unsafe int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			Byte[] inbuffer = new Byte[length + LibUsbRequest.Size];
 			if (length > 0) Buffer.BlockCopy(buffer, offset, inbuffer, LibUsbRequest.Size, length);
 			int code;
@@ -201,6 +188,10 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			}
 		}
 
+		public override int PipeTransfer(Byte epnum, Byte[] buffer, int offset, int length) {
+			return PipeTransfer(epnum, (epnum & (Byte)UsbControlRequestType.EndpointMask) == (Byte)UsbControlRequestType.EndpointOut, false, buffer, offset, length, 0);
+		}
+
 		unsafe int PipeTransfer(Byte epnum, Boolean write, Boolean isochronous, Byte[] buffer, int offset, int length, int packetsize) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			LibUsbRequest req = new LibUsbRequest();
@@ -228,12 +219,19 @@ namespace UCIS.USBLib.Communication.LibUsb {
 				}
 			}
 		}
-		public void PipeReset(byte pipeID) {
+		public override void PipeReset(byte pipeID) {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Endpoint.ID = pipeID;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
 			int ret;
 			DeviceIoControl(DeviceHandle, LibUsbIoCtl.RESET_ENDPOINT, ref req, LibUsbRequest.Size, null, 0, out ret);
+		}
+		public override void PipeAbort(byte pipeID) {
+			LibUsbRequest req = new LibUsbRequest();
+			req.Endpoint.ID = pipeID;
+			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
+			int ret;
+			DeviceIoControl(DeviceHandle, LibUsbIoCtl.ABORT_ENDPOINT, ref req, LibUsbRequest.Size, null, 0, out ret);
 		}
 
 		private unsafe void DeviceIoControl(SafeHandle hDevice, int IoControlCode, [In] ref LibUsbRequest InBuffer, int nInBufferSize, Byte[] OutBuffer, int nOutBufferSize, out int pBytesReturned) {

@@ -17,52 +17,22 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 			if (Handle != null) Handle.Close();
 		}
 
-		public override int BulkWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return BulkTransfer(endpoint, buffer, offset, length);
-		}
-		public override int BulkRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return BulkTransfer(endpoint, buffer, offset, length);
-		}
-		public override void BulkReset(byte endpoint) {
+		public override void PipeReset(byte endpoint) {
 			int ret = libusb1.libusb_clear_halt(Handle, endpoint);
 			if (ret < 0) throw new Exception("libusb_clear_halt returned " + ret.ToString());
 		}
-		private int BulkTransfer(byte endpoint, byte[] buffer, int offset, int length) {
+		public override int PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			if (length == 0) return 0;
 			fixed (Byte* b = buffer) {
 				int ret = libusb1.libusb_bulk_transfer(Handle, endpoint, b + offset, length, out length, 0);
+				//libusb1.libusb_interrupt_transfer(Handle, endpoint, b + offset, length, out length, 0);
 				if (ret < 0) throw new Exception("libusb_bulk_transfer returned " + ret.ToString());
 			}
 			return length;
 		}
 
-		public override int InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return InterruptTransfer(endpoint, buffer, offset, length);
-		}
-		public override int InterruptRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return InterruptTransfer(endpoint, buffer, offset, length);
-		}
-		public override void InterruptReset(byte endpoint) {
-			BulkReset(endpoint);
-		}
-		private int InterruptTransfer(byte endpoint, byte[] buffer, int offset, int length) {
-			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
-			if (length == 0) return 0;
-			fixed (Byte* b = buffer) {
-				int ret = libusb1.libusb_interrupt_transfer(Handle, endpoint, b + offset, length, out length, 0);
-				if (ret < 0) throw new Exception("libusb_interrupt_transfer returned " + ret.ToString());
-			}
-			return length;
-		}
-
-		public override int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer(requestType, request, value, index, buffer, offset, length);
-		}
-		public override int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer(requestType, request, value, index, buffer, offset, length);
-		}
-		private int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		public override int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			if (buffer == null) buffer = new Byte[0];
 			if (offset < 0 || length < 0 || length > ushort.MaxValue || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length");
 			fixed (Byte* b = buffer) {

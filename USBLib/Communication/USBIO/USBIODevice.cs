@@ -28,6 +28,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 		static readonly int IOCTL_USBIO_RESET_DEVICE = _USBIO_IOCTL_CODE(21, METHOD_BUFFERED);
 		static readonly int IOCTL_USBIO_BIND_PIPE = _USBIO_IOCTL_CODE(30, METHOD_BUFFERED);
 		static readonly int IOCTL_USBIO_RESET_PIPE = _USBIO_IOCTL_CODE(32, METHOD_BUFFERED);
+		static readonly int IOCTL_USBIO_ABORT_PIPE = _USBIO_IOCTL_CODE(33, METHOD_BUFFERED);
 
 		[DllImport("kernel32.dll", SetLastError = true)]
 		static unsafe extern bool ReadFile(SafeFileHandle hFile, byte* lpBuffer, uint nNumberOfBytesToRead, out uint lpNumberOfBytesRead, IntPtr lpOverlapped);
@@ -150,31 +151,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 				return DeviceIoControl(DeviceHandle, IOCTL_USBIO_GET_DESCRIPTOR, (IntPtr)(&req), sizeof(USBIO_DESCRIPTOR_REQUEST), (IntPtr)(b + offset), length);
 			}
 		}
-		public override int BulkRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeRead(endpoint, buffer, offset, length);
-		}
-		public override int BulkWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeWrite(endpoint, buffer, offset, length);
-		}
-		public override void BulkReset(byte endpoint) {
-			PipeReset(endpoint);
-		}
-		public override int InterruptRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeRead(endpoint, buffer, offset, length);
-		}
-		public override int InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return PipeWrite(endpoint, buffer, offset, length);
-		}
-		public override void InterruptReset(byte endpoint) {
-			PipeReset(endpoint);
-		}
-		public unsafe override int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer(requestType, request, value, index, buffer, offset, length);
-		}
-		public override int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer(requestType, request, value, index, buffer, offset, length);
-		}
-		private unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		public override unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			if (buffer == null) {
 				if (offset != 0 || length != 0) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			} else {
@@ -245,27 +222,27 @@ namespace UCIS.USBLib.Communication.USBIO {
 				return handle;
 			}
 		}
-		unsafe int PipeRead(Byte epnum, Byte[] buffer, int offset, int length) {
+		public unsafe override int PipeTransfer(Byte epnum, Byte[] buffer, int offset, int length) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			SafeFileHandle handle = GetHandleForPipe(epnum);
 			uint ret;
 			fixed (Byte* b = buffer) {
-				if (!ReadFile(handle, b + offset, (uint)length, out ret, IntPtr.Zero)) throw new Win32Exception(Marshal.GetLastWin32Error());
+				Boolean success;
+				if ((epnum & (Byte)UsbControlRequestType.EndpointMask) == (Byte)UsbControlRequestType.EndpointIn)
+					success = ReadFile(handle, b + offset, (uint)length, out ret, IntPtr.Zero);
+				else
+					success = WriteFile(handle, b + offset, (uint)length, out ret, IntPtr.Zero);
+				if (!success) throw new Win32Exception(Marshal.GetLastWin32Error());
 			}
 			return (int)ret;
 		}
-		unsafe int PipeWrite(Byte epnum, Byte[] buffer, int offset, int length) {
-			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
-			SafeFileHandle handle = GetHandleForPipe(epnum);
-			uint ret;
-			fixed (Byte* b = buffer) {
-				if (!WriteFile(handle, b + offset, (uint)length, out ret, IntPtr.Zero)) throw new Win32Exception(Marshal.GetLastWin32Error());
-			}
-			return (int)ret;
-		}
-		public void PipeReset(byte pipeID) {
+		public override void PipeReset(byte pipeID) {
 			SafeFileHandle handle = GetHandleForPipe(pipeID);
 			DeviceIoControl(handle, IOCTL_USBIO_RESET_PIPE, IntPtr.Zero, 0, IntPtr.Zero, 0);
+		}
+		public override void PipeAbort(byte pipeID) {
+			SafeFileHandle handle = GetHandleForPipe(pipeID);
+			DeviceIoControl(handle, IOCTL_USBIO_ABORT_PIPE, IntPtr.Zero, 0, IntPtr.Zero, 0);
 		}
 
 		private unsafe int DeviceIoControl(SafeHandle hDevice, int IoControlCode, IntPtr InBuffer, int nInBufferSize, IntPtr OutBuffer, int nOutBufferSize) {
@@ -275,16 +252,13 @@ namespace UCIS.USBLib.Communication.USBIO {
 			throw new Win32Exception(Marshal.GetLastWin32Error());
 		}
 
-		public override UsbPipeStream GetBulkStream(byte endpoint) {
-			return new PipeStream(this, endpoint, false, GetHandleForPipe(endpoint));
-		}
-		public override UsbPipeStream GetInterruptStream(byte endpoint) {
-			return new PipeStream(this, endpoint, true, GetHandleForPipe(endpoint));
+		public override UsbPipeStream GetPipeStream(byte endpoint) {
+			return new PipeStream(this, endpoint, GetHandleForPipe(endpoint));
 		}
 
 		class PipeStream : UsbPipeStream {
 			private SafeFileHandle Handle;
-			public PipeStream(IUsbInterface device, Byte endpoint, Boolean interrupt, SafeFileHandle handle) : base(device, endpoint, interrupt) {
+			public PipeStream(IUsbInterface device, Byte endpoint, SafeFileHandle handle) : base(device, endpoint) {
 				this.Handle = handle;
 			}
 

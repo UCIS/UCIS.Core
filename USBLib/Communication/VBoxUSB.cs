@@ -308,6 +308,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		static readonly int SUPUSB_IOCTL_USB_SET_CONFIG = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x60A, METHOD_BUFFERED, FILE_WRITE_ACCESS);
 		static readonly int SUPUSB_IOCTL_USB_SELECT_INTERFACE = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x609, METHOD_BUFFERED, FILE_WRITE_ACCESS);
 		static readonly int SUPUSB_IOCTL_SEND_URB = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x607, METHOD_BUFFERED, FILE_WRITE_ACCESS);
+		static readonly int SUPUSB_IOCTL_USB_ABORT_ENDPOINT = CTL_CODE(FILE_DEVICE_UNKNOWN, 0x610, METHOD_BUFFERED, FILE_WRITE_ACCESS);
 
 		const UInt32 USBDRV_MAJOR_VERSION = 4;
 		const UInt32 USBDRV_MINOR_VERSION = 0;
@@ -426,12 +427,13 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 			hDev.Close();
 		}
 
-		public unsafe override void BulkReset(byte endpoint) {
+		public unsafe override void PipeReset(byte endpoint) {
 			USBSUP_CLEAR_ENDPOINT inp = new USBSUP_CLEAR_ENDPOINT() { bEndpoint = endpoint };
 			SyncIoControl(hDev, SUPUSB_IOCTL_USB_CLEAR_ENDPOINT, &inp, sizeof(USBSUP_CLEAR_ENDPOINT), null, 0);
 		}
-		public override void InterruptReset(byte endpoint) {
-			BulkReset(endpoint);
+		public unsafe override void PipeAbort(byte endpoint) {
+			USBSUP_CLEAR_ENDPOINT inp = new USBSUP_CLEAR_ENDPOINT() { bEndpoint = endpoint };
+			SyncIoControl(hDev, SUPUSB_IOCTL_USB_ABORT_ENDPOINT, &inp, sizeof(USBSUP_CLEAR_ENDPOINT), null, 0);
 		}
 
 		public unsafe void ResetDevice() {
@@ -476,19 +478,11 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 			}
 		}
 
-		public override int BulkWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return BlockTransfer(USBSUP_TRANSFER_TYPE.USBSUP_TRANSFER_TYPE_BULK, USBSUP_DIRECTION.USBSUP_DIRECTION_OUT, USBSUP_XFER_FLAG.USBSUP_FLAG_NONE, endpoint, buffer, offset, length);
+		public override int PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) {
+			return BlockTransfer(USBSUP_TRANSFER_TYPE.USBSUP_TRANSFER_TYPE_BULK, (endpoint & 0x80) == 0 ? USBSUP_DIRECTION.USBSUP_DIRECTION_OUT : USBSUP_DIRECTION.USBSUP_DIRECTION_IN, USBSUP_XFER_FLAG.USBSUP_FLAG_NONE, endpoint, buffer, offset, length);
+			//return BlockTransfer(USBSUP_TRANSFER_TYPE.USBSUP_TRANSFER_TYPE_INTR, USBSUP_DIRECTION.USBSUP_DIRECTION_OUT, USBSUP_XFER_FLAG.USBSUP_FLAG_NONE, endpoint, buffer, offset, length);
 		}
-		public override int BulkRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return BlockTransfer(USBSUP_TRANSFER_TYPE.USBSUP_TRANSFER_TYPE_BULK, USBSUP_DIRECTION.USBSUP_DIRECTION_IN, USBSUP_XFER_FLAG.USBSUP_FLAG_NONE, endpoint, buffer, offset, length);
-		}
-		public override int InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) {
-			return BlockTransfer(USBSUP_TRANSFER_TYPE.USBSUP_TRANSFER_TYPE_INTR, USBSUP_DIRECTION.USBSUP_DIRECTION_OUT, USBSUP_XFER_FLAG.USBSUP_FLAG_NONE, endpoint, buffer, offset, length);
-		}
-		public override int InterruptRead(byte endpoint, byte[] buffer, int offset, int length) {
-			return BlockTransfer(USBSUP_TRANSFER_TYPE.USBSUP_TRANSFER_TYPE_INTR, USBSUP_DIRECTION.USBSUP_DIRECTION_IN, USBSUP_XFER_FLAG.USBSUP_FLAG_NONE, endpoint, buffer, offset, length);
-		}
-		private unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		public override unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			Byte[] bigbuffer = new Byte[sizeof(UsbSetupPacket) + length];
 			Boolean isout = (requestType & UsbControlRequestType.EndpointMask) == UsbControlRequestType.EndpointOut;
 			if (isout && length > 0) Buffer.BlockCopy(buffer, offset, bigbuffer, sizeof(UsbSetupPacket), length);
@@ -499,12 +493,6 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 			if (dlen < 0) dlen = 0;
 			if (!isout) Buffer.BlockCopy(bigbuffer, sizeof(UsbSetupPacket), buffer, offset, dlen);
 			return dlen;
-		}
-		public override int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer(requestType, request, value, index, buffer, offset, length);
-		}
-		public override int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer(requestType, request, value, index, buffer, offset, length);
 		}
 
 		public void ClaimInterface(int interfaceID) {

@@ -145,7 +145,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			}
 		}
 
-		public unsafe int ControlTransfer(byte requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		public override unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			if (buffer == null) buffer = new Byte[0];
 			if (offset < 0 || length < 0 || length > short.MaxValue || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length");
 			SafeWinUsbInterfaceHandle ih = InterfaceHandles[0];
@@ -156,19 +156,11 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			}
 			fixed (Byte* b = buffer) {
 				if (!WinUsb_ControlTransfer(ih,
-					new UsbSetupPacket(requestType, request, value, index, (short)length),
+					new UsbSetupPacket((byte)requestType, request, value, index, (short)length),
 					(IntPtr)(b + offset), length, out length, IntPtr.Zero))
 					throw new Win32Exception(Marshal.GetLastWin32Error(), "Control transfer failed");
 				return length;
 			}
-		}
-
-		public override int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer((byte)(requestType | UsbControlRequestType.EndpointOut), request, value, index, buffer, offset, length);
-		}
-
-		public override int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			return ControlTransfer((byte)(requestType | UsbControlRequestType.EndpointIn), request, value, index, buffer, offset, length);
 		}
 
 		public unsafe override int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
@@ -180,48 +172,27 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			return length;
 		}
 
-		public unsafe int PipeWrite(byte endpoint, byte[] buffer, int offset, int length) {
+		public override unsafe int PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			SafeWinUsbInterfaceHandle ih = GetInterfaceHandleForEndpoint(endpoint);
 			fixed (Byte* b = buffer) {
-				if (!WinUsb_WritePipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero))
-						throw new Win32Exception(Marshal.GetLastWin32Error());
+				Boolean success;
+				if ((endpoint & (Byte)UsbControlRequestType.EndpointMask) == (Byte)UsbControlRequestType.EndpointOut)
+					success = WinUsb_WritePipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero);
+				else
+					success = WinUsb_ReadPipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero);
+				if (!success) throw new Win32Exception(Marshal.GetLastWin32Error());
 			}
 			return length;
 		}
 
-		public unsafe int PipeRead(byte endpoint, byte[] buffer, int offset, int length) {
-			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
-			SafeWinUsbInterfaceHandle ih = GetInterfaceHandleForEndpoint(endpoint);
-			fixed (Byte* b = buffer) {
-				if (!WinUsb_ReadPipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
-			}
-			return length;
-		}
-
-		public void PipeReset(byte endpoint) {
+		public override void PipeReset(byte endpoint) {
 			SafeWinUsbInterfaceHandle ih = GetInterfaceHandleForEndpoint(endpoint);
 			WinUsb_ResetPipe(ih, endpoint);
 		}
-
-		public override int BulkWrite(Byte endpoint, Byte[] buffer, int offset, int length) {
-			return PipeWrite(endpoint, buffer, offset, length);
-		}
-		public override int BulkRead(Byte endpoint, Byte[] buffer, int offset, int length) {
-			return PipeRead(endpoint, buffer, offset, length);
-		}
-		public override void BulkReset(Byte endpoint) {
-			PipeReset(endpoint);
-		}
-		public override int InterruptWrite(Byte endpoint, Byte[] buffer, int offset, int length) {
-			return PipeWrite(endpoint, buffer, offset, length);
-		}
-		public override int InterruptRead(Byte endpoint, Byte[] buffer, int offset, int length) {
-			return PipeRead(endpoint, buffer, offset, length);
-		}
-		public override void InterruptReset(Byte endpoint) {
-			PipeReset(endpoint);
+		public override void PipeAbort(byte endpoint) {
+			SafeWinUsbInterfaceHandle ih = GetInterfaceHandleForEndpoint(endpoint);
+			WinUsb_AbortPipe(ih, endpoint);
 		}
 	}
 }

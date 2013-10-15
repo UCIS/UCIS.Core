@@ -34,11 +34,7 @@ namespace LibUsbDotNet {
 			}
 		}
 		public bool ControlTransfer(ref UsbSetupPacket setupPacket, Byte[] buffer, int bufferLength, out int lengthTransferred) {
-			if ((setupPacket.RequestType & 128) != 0) {
-				lengthTransferred = Device.ControlRead((UsbControlRequestType)setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, buffer, 0, bufferLength);
-			} else {
-				lengthTransferred = Device.ControlWrite((UsbControlRequestType)setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, buffer, 0, bufferLength);
-			}
+			lengthTransferred = Device.ControlTransfer((UsbControlRequestType)setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, buffer, 0, bufferLength);
 			return true;
 		}
 		public UsbEndpointReader OpenEndpointReader(ReadEndpointID readEndpointID, int buffersize, EndpointType endpointType) {
@@ -139,11 +135,7 @@ namespace LibUsbDotNet {
 			ReadBufferSize = 4096;
 		}
 		public ErrorCode Read(byte[] buffer, int offset, int count, int timeout, out int transferLength) {
-			switch (EndpointType) {
-				case EndpointType.Bulk: transferLength = Device.BulkRead(EndpointID, buffer, offset, count); break;
-				case EndpointType.Interrupt: transferLength = Device.InterruptRead(EndpointID, buffer, offset, count); break;
-				default: transferLength = 0; return ErrorCode.Error;
-			}
+			transferLength = Device.PipeTransfer(EndpointID, buffer, offset, count);
 			return ErrorCode.Ok;
 		}
 		public void Dispose() { DataReceivedEnabled = false; }

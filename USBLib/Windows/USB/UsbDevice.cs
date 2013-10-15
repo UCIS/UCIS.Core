@@ -157,19 +157,14 @@ namespace UCIS.HWLib.Windows.USB {
 		void IUsbDevice.ResetDevice() { throw new NotImplementedException(); }
 		IUsbDeviceRegistry IUsbDevice.Registry { get { throw new NotImplementedException(); } }
 		void IUsbInterface.Close() { }
-		int IUsbInterface.BulkWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
-		int IUsbInterface.BulkRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
-		void IUsbInterface.BulkReset(byte endpoint) { throw new NotImplementedException(); }
-		int IUsbInterface.InterruptWrite(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
-		int IUsbInterface.InterruptRead(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
-		void IUsbInterface.InterruptReset(byte endpoint) { throw new NotSupportedException(); }
-		int IUsbInterface.ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
-		int IUsbInterface.ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
-		UsbPipeStream IUsbInterface.GetBulkStream(byte endpoint) { throw new NotSupportedException(); }
-		UsbPipeStream IUsbInterface.GetInterruptStream(byte endpoint) { throw new NotSupportedException(); }
+		int IUsbInterface.PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		void IUsbInterface.PipeReset(byte endpoint) { throw new NotImplementedException(); }
+		void IUsbInterface.PipeAbort(byte endpoint) { throw new NotImplementedException(); }
+		int IUsbInterface.ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		UsbPipeStream IUsbInterface.GetPipeStream(byte endpoint) { throw new NotSupportedException(); }
 		void IDisposable.Dispose() { }
 		void IUsbDevice.ClaimInterface(int interfaceID) { }
-		void IUsbDevice.ReleaseInterface(int interfaceID) {	}
+		void IUsbDevice.ReleaseInterface(int interfaceID) { }
 		#endregion
 	}
 }

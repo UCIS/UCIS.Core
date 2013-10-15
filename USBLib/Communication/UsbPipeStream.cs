@@ -5,12 +5,10 @@ namespace UCIS.USBLib.Communication {
 	public class UsbPipeStream : Stream {
 		public IUsbInterface Device { get; private set; }
 		public Byte Endpoint { get; private set; }
-		public Boolean InterruptEndpoint { get; private set; }
 
-		public UsbPipeStream(IUsbInterface device, Byte endpoint, Boolean interrupt) {
+		public UsbPipeStream(IUsbInterface device, Byte endpoint) {
 			this.Device = device;
 			this.Endpoint = endpoint;
-			this.InterruptEndpoint = interrupt;
 		}
 
 		public override bool CanRead {
@@ -35,12 +33,17 @@ namespace UCIS.USBLib.Communication {
 			set { throw new NotImplementedException(); }
 		}
 
+		public void Abort() {
+			Device.PipeAbort(Endpoint);
+		}
+
+		public void ClearHalt() {
+			Device.PipeReset(Endpoint);
+		}
+
 		public override int Read(byte[] buffer, int offset, int count) {
-			if (InterruptEndpoint) {
-				return Device.InterruptRead(Endpoint, buffer, offset, count);
-			} else {
-				return Device.BulkRead(Endpoint, buffer, offset, count);
-			}
+			if (!CanRead) throw new InvalidOperationException("Can not read from an output endpoint");
+			return Device.PipeTransfer(Endpoint, buffer, offset, count);
 		}
 
 		public override long Seek(long offset, SeekOrigin origin) {
@@ -52,13 +55,14 @@ namespace UCIS.USBLib.Communication {
 		}
 
 		public override void Write(byte[] buffer, int offset, int count) {
-			int written;
-			if (InterruptEndpoint) {
-				written = Device.InterruptWrite(Endpoint, buffer, offset, count);
-			} else {
-				written = Device.BulkWrite(Endpoint, buffer, offset, count);
-			}
+			if (!CanWrite) throw new InvalidOperationException("Can not write to an input endpoint");
+			int written = Device.PipeTransfer(Endpoint, buffer, offset, count);
 			if (written != count) throw new EndOfStreamException("Could not write all data");
+		}
+
+		protected override void Dispose(bool disposing) {
+			if (disposing) try { Abort(); } catch { }
+			base.Dispose(disposing);
 		}
 	}
 }
