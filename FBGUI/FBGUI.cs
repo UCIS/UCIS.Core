@@ -787,7 +787,10 @@ namespace UCIS.FBGUI {
 				PaintTimer = null;
 			}
 			Orphaned();
-			if (Frontbuffer != null) Frontbuffer.Dispose();
+			lock (RenderLock) {
+				if (Frontbuffer != null) Frontbuffer.Dispose();
+				Frontbuffer = null;
+			}
 		}
 		public Bitmap LockBitmapBuffer() {
 			Monitor.Enter(RenderLock);
