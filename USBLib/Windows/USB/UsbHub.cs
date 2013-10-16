@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using UCIS.HWLib.Windows.Devices;
+using UCIS.USBLib.Descriptor;
 using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.HWLib.Windows.USB {
@@ -59,7 +60,7 @@ namespace UCIS.HWLib.Windows.USB {
 						UsbDevice device;
 						if (nodeConnection.ConnectionStatus != USB_CONNECTION_STATUS.DeviceConnected) {
 							device = new UsbDevice(null, this, index);
-						} else if (nodeConnection.DeviceDescriptor.DeviceClass == (Byte)UsbDeviceClass.HubDevice) {
+						} else if (nodeConnection.DeviceDescriptor.DeviceClass == UsbClassCode.Hub) {
 							int nBytes = Marshal.SizeOf(typeof(USB_NODE_CONNECTION_NAME));
 							USB_NODE_CONNECTION_NAME nameConnection = new USB_NODE_CONNECTION_NAME();
 							nameConnection.ConnectionIndex = index;

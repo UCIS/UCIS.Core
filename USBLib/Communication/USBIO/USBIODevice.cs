@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using UCIS.USBLib.Descriptor;
 using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.USBLib.Communication.USBIO {
@@ -107,30 +108,24 @@ namespace UCIS.USBLib.Communication.USBIO {
 		public override Byte Configuration {
 			get { return base.Configuration; }
 			set {
-				IList<LibUsbDotNet.Info.UsbConfigInfo> configs = (new LibUsbDotNet.UsbDevice(this)).Configs;
-				for (int i = 0; i < configs.Count; i++) {
-					LibUsbDotNet.Info.UsbConfigInfo config = configs[i];
-					if (config.Descriptor.ConfigurationValue == value) {
-						unsafe {
-							USBIO_SET_CONFIGURATION req = new USBIO_SET_CONFIGURATION();
-							req.ConfigurationIndex = (ushort)i;
-							req.NbOfInterfaces = Math.Min((ushort)32, config.Descriptor.NumInterfaces);
-							for (int j = 0; j < req.NbOfInterfaces; j++) {
-								LibUsbDotNet.Info.UsbInterfaceInfo intf = config.InterfaceInfoList[j];
-								*((USBIO_INTERFACE_SETTING*)(req.InterfaceList + sizeof(USBIO_INTERFACE_SETTING) * j)) =
-									new USBIO_INTERFACE_SETTING() { InterfaceIndex = intf.Descriptor.InterfaceNumber, AlternateSettingIndex = 0, MaximumTransferSize = UInt16.MaxValue };
-							}
-							try {
-								DeviceIoControl(DeviceHandle, IOCTL_USBIO_SET_CONFIGURATION, (IntPtr)(&req), sizeof(USBIO_SET_CONFIGURATION), IntPtr.Zero, 0);
-							} catch (Win32Exception ex) {
-								if (ex.NativeErrorCode == unchecked((int)0xE0001005L)) return;
-								throw;
-							}
-						}
-						return;
+				UsbConfigurationInfo configuration = UsbDeviceInfo.FromDevice(this).FindConfiguration(value);
+				if (configuration == null) throw new InvalidOperationException("Requested configuration ID not found");
+				unsafe {
+					USBIO_SET_CONFIGURATION req = new USBIO_SET_CONFIGURATION();
+					req.ConfigurationIndex = configuration.Index;
+					req.NbOfInterfaces = Math.Min((ushort)32, configuration.Descriptor.NumInterfaces);
+					for (int j = 0; j < req.NbOfInterfaces; j++) {
+						UsbInterfaceInfo intf = configuration.Interfaces[j];
+						*((USBIO_INTERFACE_SETTING*)(req.InterfaceList + sizeof(USBIO_INTERFACE_SETTING) * j)) =
+							new USBIO_INTERFACE_SETTING() { InterfaceIndex = intf.Descriptor.InterfaceNumber, AlternateSettingIndex = 0, MaximumTransferSize = UInt16.MaxValue };
+					}
+					try {
+						DeviceIoControl(DeviceHandle, IOCTL_USBIO_SET_CONFIGURATION, (IntPtr)(&req), sizeof(USBIO_SET_CONFIGURATION), IntPtr.Zero, 0);
+					} catch (Win32Exception ex) {
+						if (ex.NativeErrorCode == unchecked((int)0xE0001005L)) return;
+						throw;
 					}
 				}
-				throw new InvalidOperationException("Requested configuration ID not found");
 			}
 		}
 

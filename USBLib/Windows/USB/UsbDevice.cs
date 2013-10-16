@@ -141,8 +141,14 @@ namespace UCIS.HWLib.Windows.USB {
 				int nBytes = length + szRequest;
 				Byte[] bigbuffer = new Byte[nBytes];
 				if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION, ref request, Marshal.SizeOf(typeof(USB_DESCRIPTOR_REQUEST)), bigbuffer, nBytes, out nBytes, IntPtr.Zero)) {
+					if (descriptorType == (Byte)UsbDescriptorType.Device && index == 0 && langId == 0) {
+						Byte[] descbytes = DeviceDescriptor.GetBytes();
+						length = Math.Min(descbytes.Length, length);
+						Array.Copy(descbytes, 0, buffer, 0, length);
+						return length;
+					}
 					int err = Marshal.GetLastWin32Error();
-					if (err != 2 && err != 31 && err != 87) throw new Win32Exception(err);
+					if (err != 31) throw new Win32Exception(err);
 					return 0;
 				}
 				nBytes -= szRequest;

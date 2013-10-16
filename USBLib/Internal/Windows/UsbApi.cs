@@ -27,28 +27,6 @@ namespace UCIS.USBLib.Internal.Windows {
 		public const int DICS_DISABLE = 0x00000002;
 	}
 
-	enum UsbDeviceClass : byte {
-		UnspecifiedDevice = 0x00,
-		AudioInterface = 0x01,
-		CommunicationsAndCDCControlBoth = 0x02,
-		HIDInterface = 0x03,
-		PhysicalInterfaceDevice = 0x5,
-		ImageInterface = 0x06,
-		PrinterInterface = 0x07,
-		MassStorageInterface = 0x08,
-		HubDevice = 0x09,
-		CDCDataInterface = 0x0A,
-		SmartCardInterface = 0x0B,
-		ContentSecurityInterface = 0x0D,
-		VidioInterface = 0x0E,
-		PersonalHeathcareInterface = 0x0F,
-		DiagnosticDeviceBoth = 0xDC,
-		WirelessControllerInterface = 0xE0,
-		MiscellaneousBoth = 0xEF,
-		ApplicationSpecificInterface = 0xFE,
-		VendorSpecificBoth = 0xFF
-	}
-
 	enum HubCharacteristics : byte {
 		GangedPowerSwitching = 0x00,
 		IndividualPotPowerSwitching = 0x01,

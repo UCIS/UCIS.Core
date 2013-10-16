@@ -145,9 +145,8 @@
     <Compile Include="USBLib\Communication\LibUsb1\libusb1.cs" />
     <Compile Include="USBLib\Communication\LibUsb1\LibUsb1Device.cs" />
     <Compile Include="USBLib\Communication\LibUsb1\LibUsb1Registry.cs" />
-    <Compile Include="USBLib\Communication\LibUsbDotNet.cs" />
     <Compile Include="USBLib\Communication\UsbControlRequestType.cs" />
-    <Compile Include="USBLib\Communication\UsbDescriptorType.cs" />
+    <Compile Include="USBLib\Descriptor\UsbDescriptorType.cs" />
     <Compile Include="USBLib\Communication\UsbInterface.cs" />
     <Compile Include="USBLib\Communication\USBIO\USBIODevice.cs" />
     <Compile Include="USBLib\Communication\USBIO\USBIORegistry.cs" />
@@ -157,6 +156,7 @@
     <Compile Include="USBLib\Communication\WinUsb\WinUsbDevice.cs" />
     <Compile Include="USBLib\Communication\WinUsb\WinUsbRegistry.cs" />
     <Compile Include="USBLib\Descriptor\UsbDescriptor.cs" />
+    <Compile Include="USBLib\Descriptor\UsbInfo.cs" />
     <Compile Include="USBLib\Internal\Windows\SetupApi.cs" />
     <Compile Include="USBLib\Internal\Windows\UsbApi.cs" />
     <Compile Include="USBLib\Internal\Windows\Win32Kernel.cs" />

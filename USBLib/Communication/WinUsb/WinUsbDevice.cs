@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security;
 using Microsoft.Win32.SafeHandles;
+using UCIS.USBLib.Descriptor;
 using UCIS.USBLib.Internal.Windows;
 
 namespace UCIS.USBLib.Communication.WinUsb {
@@ -79,19 +80,15 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			if (!WinUsb_Initialize(DeviceHandle, out InterfaceHandle)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not initialize WinUsb");
 			if (InterfaceHandle.IsInvalid || InterfaceHandle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open interface");
 			InterfaceHandles = new SafeWinUsbInterfaceHandle[1] { InterfaceHandle };
-			foreach (LibUsbDotNet.Info.UsbConfigInfo ci in (new LibUsbDotNet.UsbDevice(this)).Configs) {
-				if (ci.Descriptor.ConfigurationValue == Configuration) {
-					foreach (LibUsbDotNet.Info.UsbInterfaceInfo ifinfo in ci.InterfaceInfoList) {
-						foreach (LibUsbDotNet.Info.UsbEndpointInfo epinfo in ifinfo.EndpointInfoList) {
-							int epidx = epinfo.Descriptor.EndpointAddress & 0x7F;
-							if ((epinfo.Descriptor.EndpointAddress & 0x80) != 0) {
-								if (EndpointToInterfaceIn.Length <= epidx) Array.Resize(ref EndpointToInterfaceIn, epidx + 1);
-								EndpointToInterfaceIn[epidx] = ifinfo.Descriptor.InterfaceNumber;
-							} else {
-								if (EndpointToInterfaceOut.Length <= epidx) Array.Resize(ref EndpointToInterfaceOut, epidx + 1);
-								EndpointToInterfaceOut[epidx] = ifinfo.Descriptor.InterfaceNumber;
-							}
-						}
+			foreach (UsbInterfaceInfo ifinfo in UsbDeviceInfo.FromDevice(this).FindConfiguration(Configuration).Interfaces) {
+				foreach (UsbEndpointDescriptor epinfo in ifinfo.Endpoints) {
+					int epidx = epinfo.EndpointAddress & 0x7F;
+					if ((epinfo.EndpointAddress & 0x80) != 0) {
+						if (EndpointToInterfaceIn.Length <= epidx) Array.Resize(ref EndpointToInterfaceIn, epidx + 1);
+						EndpointToInterfaceIn[epidx] = ifinfo.Descriptor.InterfaceNumber;
+					} else {
+						if (EndpointToInterfaceOut.Length <= epidx) Array.Resize(ref EndpointToInterfaceOut, epidx + 1);
+						EndpointToInterfaceOut[epidx] = ifinfo.Descriptor.InterfaceNumber;
 					}
 				}
 			}

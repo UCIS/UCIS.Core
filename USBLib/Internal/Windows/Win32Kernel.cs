@@ -16,7 +16,9 @@ namespace UCIS.USBLib.Internal.Windows {
 		unsafe internal static extern bool DeviceIoControl(SafeHandle hDevice, int IoControlCode, IntPtr InBuffer, int nInBufferSize, IntPtr OutBuffer, int nOutBufferSize, out int pBytesReturned, NativeOverlapped* Overlapped);
 		[DllImport("kernel32.dll", SetLastError = true)]
 		unsafe internal static extern bool DeviceIoControl(SafeHandle hDevice, int IoControlCode, void* InBuffer, int nInBufferSize, void* OutBuffer, int nOutBufferSize, out int pBytesReturned, NativeOverlapped* Overlapped);
-		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
+		[DllImport("kernel32.dll", SetLastError = true)]
+		unsafe internal static extern bool DeviceIoControl(SafeHandle hDevice, int IoControlCode, Byte[] InBuffer, int nInBufferSize, Byte[] OutBuffer, int nOutBufferSize, out int pBytesReturned, IntPtr Overlapped);
+		[DllImport("kernel32.dll", SetLastError = true)]
 		unsafe internal static extern bool GetOverlappedResult(SafeHandle hFile, NativeOverlapped* lpOverlapped, out int lpNumberOfBytesTransferred, Boolean bWait);
 
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]

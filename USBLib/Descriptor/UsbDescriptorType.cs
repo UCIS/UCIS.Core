@@ -1,7 +1,6 @@
 ﻿using System;
 
-namespace UCIS.USBLib.Communication {
-	[Flags]
+namespace UCIS.USBLib.Descriptor {
 	public enum UsbDescriptorType : byte {
 		/// <summary>
 		/// Device descriptor type.
@@ -59,5 +58,27 @@ namespace UCIS.USBLib.Communication {
 
 		///<summary> Hub descriptor</summary>
 		Hub = 0x29
+	}
+	public enum UsbClassCode : byte {
+		Unspecified = 0x00,
+		Audio = 0x01,
+		Communications = 0x02,
+		HID = 0x03,
+		PID = 0x05,
+		Image = 0x06,
+		Printer = 0x07,
+		MassStorage = 0x08,
+		Hub = 0x09,
+		Data = 0x0A,
+		SmartCard = 0x0B,
+		ContentSecurity = 0x0D,
+		Video = 0x0E,
+		Healthcare = 0x0F,
+		AV = 0x10,
+		Diagnostic = 0xDC,
+		Wireless = 0xE0,
+		Miscellaneous = 0xEF,
+		ApplicationSpecific = 0xFE,
+		VendorSpecific = 0xFF
 	}
 }
