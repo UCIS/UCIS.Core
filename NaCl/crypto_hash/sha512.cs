@@ -15,6 +15,11 @@ namespace UCIS.NaCl.crypto_hash {
   0x5b,0xe0,0xcd,0x19,0x13,0x7e,0x21,0x79
 };*/
 
+		public static unsafe void crypto_hash(Byte[] outv, Byte[] inv, int inlen) {
+			if (outv.Length < 64) throw new ArgumentException("outv.Length < 64");
+			if (inv.Length < inlen) throw new ArgumentException("inv.Length < inlen");
+			fixed (Byte* outp = outv, inp = inv) crypto_hash(outp, inp, (UInt64)inlen);
+		}
 		public static unsafe void crypto_hash(Byte* outp, Byte* inp, UInt64 inlen) {
 //			Byte[] h = new Byte[64];
 			Byte[] padded = new Byte[256];

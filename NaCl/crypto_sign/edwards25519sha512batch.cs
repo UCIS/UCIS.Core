@@ -1,6 +1,4 @@
 ﻿using System;
-using UCIS.NaCl;
-using System.Runtime.InteropServices;
 
 namespace UCIS.NaCl.crypto_sign {
 	public static class edwards25519sha512batch {
