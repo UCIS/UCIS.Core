@@ -4,6 +4,8 @@ using UCIS.Util;
 using curve25519xsalsa20poly1305impl = UCIS.NaCl.crypto_box.curve25519xsalsa20poly1305;
 using edwards25519sha512batchimpl = UCIS.NaCl.crypto_sign.edwards25519sha512batch;
 using xsalsa20poly1305impl = UCIS.NaCl.crypto_secretbox.xsalsa20poly1305;
+using sha512impl = UCIS.NaCl.crypto_hash.sha512;
+using ed25519impl = UCIS.NaCl.crypto_sign.ed25519;
 
 namespace UCIS.NaCl.v2 {
 	public class curve25519keypair {
@@ -208,29 +210,147 @@ namespace UCIS.NaCl.v2 {
 		}
 	}
 	public class edwards25519sha512batch {
-		public Byte[] Sign(Byte[] message, Byte[] secretkey) {
+		public static Byte[] Sign(Byte[] message, Byte[] secretkey) {
 			return edwards25519sha512batchimpl.crypto_sign(message, secretkey);
 		}
-		public int GetSignedSize(int size) {
+		public static int GetSignedSize(int size) {
 			return size + 64;
 		}
-		public Byte[] Open(Byte[] signed, Byte[] publickey) {
+		public static Byte[] Open(Byte[] signed, Byte[] publickey) {
 			return edwards25519sha512batchimpl.crypto_sign_open(signed, publickey);
 		}
-		public unsafe Boolean Verify(Byte[] signed, Byte[] publickey) {
+		public static unsafe Boolean Verify(Byte[] signed, Byte[] publickey) {
 			if (publickey.Length != edwards25519sha512batchimpl.PUBLICKEYBYTES) throw new ArgumentException("publickey.Length != PUBLICKEYBYTES");
 			UInt64 mlen;
 			fixed (Byte* smp = signed, pkp = publickey) return edwards25519sha512batchimpl.crypto_sign_open(null, out mlen, smp, (ulong)signed.Length, pkp) == 0;
 		}
-		public Byte[] Extract(Byte[] signed) {
+		public static Byte[] Extract(Byte[] signed) {
 			if (signed.Length < 64) return null;
 			Byte[] ret = new Byte[signed.Length - 64];
 			Buffer.BlockCopy(signed, 32, ret, 0, ret.Length);
 			return ret;
 		}
-		public int GetExtractedSize(int size) {
+		public static int GetExtractedSize(int size) {
 			if (size < 64) return -1;
 			return size - 64;
+		}
+	}
+	public class sha512 {
+		sha512impl.sha512state state = new sha512impl.sha512state();
+		public sha512() {
+			state.init();
+		}
+		public unsafe void Process(Byte[] buffer, int offset, int count) {
+			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
+			fixed (Byte* p = buffer) state.process(p + offset, count);
+		}
+		public unsafe void GetHash(Byte[] hash, int offset) {
+			if (offset < 0 || offset + 64 > hash.Length) throw new ArgumentException("hash");
+			fixed (Byte* p = hash) state.finish(p + offset);
+		}
+		public unsafe Byte[] GetHash() {
+			Byte[] hash = new Byte[64];
+			GetHash(hash, 0);
+			return hash;
+		}
+		public static unsafe void GetHash(Byte[] buffer, int offset, int count, Byte[] hash, int hashoffset) {
+			if (offset < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
+			if (offset < 0 || offset + 64 > hash.Length) throw new ArgumentException("hash");
+			sha512impl.sha512state state = new sha512impl.sha512state();
+			state.init();
+			fixed (Byte* p = buffer) state.process(p + offset, count);
+			fixed (Byte* p = hash) state.finish(p + offset);
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer, int offset, int count) {
+			Byte[] hash = new Byte[64];
+			GetHash(buffer,offset,count,hash,0);
+			return hash;
+		}
+	}
+	public class ed25519keypair {
+		internal Byte[] key;
+
+		public ed25519keypair() {
+			Byte[] pk;
+			ed25519impl.crypto_sign_keypair(out pk, out key);
+		}
+		public ed25519keypair(Byte[] key) {
+			if (key.Length == 64) {
+				this.key = ArrayUtil.ToArray(key);
+			}else {
+			Byte[] pk;
+				ed25519impl.crypto_sign_seed_keypair(out pk, out this.key, key);
+				}
+		}
+		public ed25519keypair(String key) : this(curve25519keypair.DecodeHexString(key, key.Length)) { }
+		public Byte[] PublicKey { get { return ArrayUtil.Slice(key, 32, 32); } }
+		public Byte[] SecretKey { get { return ArrayUtil.Slice(key, 0, 32); } }
+		public Byte[] ExpandedKey { get { return ArrayUtil.ToArray(key); } }
+
+		public Byte[] GetSignature(Byte[] message) {
+			return ed25519.GetSignature(message, key);
+		}
+		public Byte[] GetSignature(Byte[] message, int offset, int count) {
+			return ed25519.GetSignature(new ArraySegment<Byte>(message, offset, count), key);
+		}
+		public Byte[] SignMessage(Byte[] message) {
+			return ed25519.SignMessage(message, key);
+		}
+	}
+	public class ed25519 {
+		public static unsafe Byte[] GetSignature(Byte[] message, Byte[] key) {
+			if (message == null) throw new ArgumentNullException("message");
+			if (key.Length != 64) throw new ArgumentException("key");
+			Byte[] sig = new Byte[64];
+			fixed (Byte* sigp = sig, msgp = message, kp = key) ed25519impl.crypto_getsignature(sigp, msgp, message.Length, kp);
+			return sig;
+		}
+		public static unsafe Byte[] GetSignature(ArraySegment<Byte> message, Byte[] key) {
+			if (message == null) throw new ArgumentNullException("message");
+			if (key.Length != 64) throw new ArgumentException("key");
+			if (message.Offset < 0 || message.Count < 0 || message.Offset + message.Count > message.Array.Length) throw new ArgumentException("message");
+			Byte[] sig = new Byte[64];
+			fixed (Byte* sigp = sig, msgp = message.Array, kp = key) ed25519impl.crypto_getsignature(sigp, msgp + message.Offset, message.Count, kp);
+			return sig;
+		}
+		public static unsafe Byte[] SignMessage(Byte[] message, Byte[] key) {
+			if (key.Length != 64) throw new ArgumentException("key");
+			Byte[] ret = new Byte[message.Length + 64];
+			int smlen;
+			fixed (Byte* sm = ret, msgp = message, kp = key) ed25519impl.crypto_sign(sm, out smlen, msgp, message.Length, kp);
+			return ret;
+		}
+		public static unsafe Boolean VerifySignature(Byte[] message, Byte[] signature, Byte[] pk) {
+			if (signature.Length < 64) throw new ArgumentException("signature");
+			if (pk.Length < 32) throw new ArgumentException("pk");
+			fixed (Byte* sp = signature, mp = message, kp = pk) return ed25519impl.crypto_sign_verify(sp, mp, message.Length, kp);
+		}
+		public static unsafe Boolean VerifySignature(ArraySegment<Byte> message, ArraySegment<Byte> signature, Byte[] pk) {
+			if (signature.Offset < 0 || signature.Count < 64 || signature.Offset + signature.Count < signature.Array.Length) throw new ArgumentException("signature");
+			if (message.Offset < 0 || message.Count < 0 || message.Offset + message.Count < message.Array.Length) throw new ArgumentException("message");
+			if (pk.Length < 32) throw new ArgumentException("pk");
+			fixed (Byte* sp = signature.Array, mp = message.Array, kp = pk) return ed25519impl.crypto_sign_verify(sp + signature.Offset, mp + message.Offset, message.Count, kp);
+		}
+		public static unsafe Boolean VerifySignedMessage(Byte[] signedmessage, Byte[] pk) {
+			if (signedmessage.Length < 64) throw new ArgumentException("signedmessage");
+			if (pk.Length < 32) throw new ArgumentException("pk");
+			fixed (Byte* mp = signedmessage, kp = pk) return ed25519impl.crypto_sign_verify(mp, mp + 64, signedmessage.Length - 64, kp);
+		}
+		public static Byte[] ExtractSignedMessage(Byte[] signedmessage) {
+			return ArrayUtil.Slice(signedmessage, 64);
+		}
+		public static Byte[] ExtractSignedMessage(ArraySegment<Byte> signedmessage) {
+			return ArrayUtil.Slice(signedmessage.Array, signedmessage.Offset + 64, signedmessage.Count - 64);
+		}
+		public static ArraySegment<Byte> ExtractSignedMessageFast(Byte[] signedmessage) {
+			return new ArraySegment<Byte>(signedmessage, 64, signedmessage.Length - 64);
+		}
+		public static ArraySegment<Byte> ExtractSignedMessageFast(ArraySegment<Byte> signedmessage) {
+			return new ArraySegment<Byte>(signedmessage.Array, signedmessage.Offset + 64, signedmessage.Count - 64);
+		}
+		public static Byte[] OpenSignedMessage(Byte[] signedmessage, Byte[] pk) {
+			if (!VerifySignedMessage(signedmessage, pk)) return null;
+			return ExtractSignedMessage(signedmessage);
 		}
 	}
 }
