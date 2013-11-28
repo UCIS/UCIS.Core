@@ -589,10 +589,11 @@ namespace UCIS.FBGUI {
 		public FBGCursor(Image image, Point hotspot) {
 			this.Image = image;
 			this.Hotspot = hotspot;
-			this.Size = image.Size;
+			this.Size = image == null ? Size.Empty : image.Size;
 		}
 		public Rectangle Area { get { return new Rectangle(-Hotspot.X, -Hotspot.Y, Size.Width, Size.Height); } }
 		public FBGCursor RotateFlip(RotateFlipType type) {
+			if (Image == null) return this;
 			Image img = new Bitmap(Image);
 			img.RotateFlip(type);
 			Point hs = Hotspot;
@@ -617,6 +618,7 @@ namespace UCIS.FBGUI {
 			}
 		}
 
+		public static readonly FBGCursor None = new FBGCursor(null, Point.Empty);
 		public static readonly FBGCursor Arrow = LoadFromResource("cursor_arrow", 0, 0);
 		public static readonly FBGCursor Move = LoadFromResource("cursor_move", 8, 8);
 		public static readonly FBGCursor SizeLeft = LoadFromResource("cursor_left", 1, 10);
@@ -755,7 +757,7 @@ namespace UCIS.FBGUI {
 		}
 		public virtual new void Paint(Graphics g) {
 			HandleEvent(new FBGPaintEvent(g));
-			if (cursor != null) {
+			if (cursor != null && cursor.Image != null) {
 				Rectangle r = cursor.Area;
 				r.Offset(cursorposition);
 				g.DrawImage(cursor.Image, r);
