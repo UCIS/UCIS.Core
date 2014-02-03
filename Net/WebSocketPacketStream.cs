@@ -40,7 +40,7 @@ namespace UCIS.Net.HTTP {
 					context.SendHeader("Upgrade", "websocket");
 					context.SendHeader("Sec-WebSocket-Accept", hashedKey);
 					context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
-					baseStream = context.GetResponseStream();
+					baseStream = context.GetDirectStream();
 				} else if (SecWebSocketKey1 != null && SecWebSocketKey2 != null) {
 					wsProtocol = 100;
 					Byte[] key = new Byte[4 + 4 + 8];
@@ -53,7 +53,7 @@ namespace UCIS.Net.HTTP {
 					context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					context.SendHeader("Sec-WebSocket-Origin", context.GetRequestHeader("Origin"));
 					context.SendHeader("Sec-WebSocket-Location", "ws://" + context.GetRequestHeader("Host") + context.RequestPath);
-					baseStream = context.GetResponseStream();
+					baseStream = context.GetDirectStream();
 					ReadAllBytes(key, 8, 8);
 					using (MD5 md5 = new MD5CryptoServiceProvider()) key = md5.ComputeHash(key);
 					baseStream.Write(key, 0, key.Length);
@@ -63,7 +63,7 @@ namespace UCIS.Net.HTTP {
 				if (closed) baseStream.Close();
 			} catch (Exception) {
 				closed = true;
-				context.Close();
+				if (baseStream != null) baseStream.Close();
 			} finally {
 				negotiationDone = true;
 				negotiationEvent.Set();
@@ -71,7 +71,7 @@ namespace UCIS.Net.HTTP {
 			return;
 Failure:
 			closed = true;
-			context.SendErrorAndClose(400);
+			context.SendErrorResponse(400);
 			return;
 		}
 
