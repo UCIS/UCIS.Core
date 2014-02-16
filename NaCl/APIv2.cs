@@ -2,10 +2,10 @@
 using System.Globalization;
 using UCIS.Util;
 using curve25519xsalsa20poly1305impl = UCIS.NaCl.crypto_box.curve25519xsalsa20poly1305;
-using edwards25519sha512batchimpl = UCIS.NaCl.crypto_sign.edwards25519sha512batch;
-using xsalsa20poly1305impl = UCIS.NaCl.crypto_secretbox.xsalsa20poly1305;
-using sha512impl = UCIS.NaCl.crypto_hash.sha512;
 using ed25519impl = UCIS.NaCl.crypto_sign.ed25519;
+using edwards25519sha512batchimpl = UCIS.NaCl.crypto_sign.edwards25519sha512batch;
+using sha512impl = UCIS.NaCl.crypto_hash.sha512;
+using xsalsa20poly1305impl = UCIS.NaCl.crypto_secretbox.xsalsa20poly1305;
 
 namespace UCIS.NaCl.v2 {
 	public class curve25519keypair {
@@ -326,8 +326,8 @@ namespace UCIS.NaCl.v2 {
 			fixed (Byte* sp = signature, mp = message, kp = pk) return ed25519impl.crypto_sign_verify(sp, mp, message.Length, kp);
 		}
 		public static unsafe Boolean VerifySignature(ArraySegment<Byte> message, ArraySegment<Byte> signature, Byte[] pk) {
-			if (signature.Offset < 0 || signature.Count < 64 || signature.Offset + signature.Count < signature.Array.Length) throw new ArgumentException("signature");
-			if (message.Offset < 0 || message.Count < 0 || message.Offset + message.Count < message.Array.Length) throw new ArgumentException("message");
+			if (signature.Offset < 0 || signature.Count < 64 || signature.Offset + signature.Count > signature.Array.Length) throw new ArgumentException("signature");
+			if (message.Offset < 0 || message.Count < 0 || message.Offset + message.Count > message.Array.Length) throw new ArgumentException("message");
 			if (pk.Length < 32) throw new ArgumentException("pk");
 			fixed (Byte* sp = signature.Array, mp = message.Array, kp = pk) return ed25519impl.crypto_sign_verify(sp + signature.Offset, mp + message.Offset, message.Count, kp);
 		}
