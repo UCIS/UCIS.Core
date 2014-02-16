@@ -95,6 +95,7 @@ namespace UCIS.FBGUI {
 		void AddControl(IFBGControl control);
 		void RemoveControl(IFBGControl control);
 		void HandleMessage(IFBGControl sender, FBGMessage e);
+		Size ClientSize { get; }
 	}
 
 	public class FBGControl : IFBGControl {
@@ -215,9 +216,8 @@ namespace UCIS.FBGUI {
 		protected List<IFBGControl> controls = new List<IFBGControl>();
 		protected IFBGControl mouseCaptureControl = null;
 		protected IFBGControl keyboardCaptureControl = null;
-		private Rectangle childarea = Rectangle.Empty;
-		public Rectangle ClientRectangle { get { return childarea; } protected set { childarea = value; Invalidate(); } }
-		public Size ClientSize { get { return childarea.Size; } set { Bounds = new Rectangle(Bounds.Location, Bounds.Size - childarea.Size + value); } }
+		public virtual Rectangle ClientRectangle { get { return Bounds; } }
+		public virtual Size ClientSize { get { return ClientRectangle.Size; } set { Bounds = new Rectangle(Bounds.Location, Bounds.Size - ClientRectangle.Size + value); } }
 		public FBGContainerControl(IFBGContainerControl parent) : base(parent) { }
 		void IFBGContainerControl.AddControl(IFBGControl control) { AddControl(control); }
 		protected virtual void AddControl(IFBGControl control) {
@@ -253,10 +253,10 @@ namespace UCIS.FBGUI {
 		}
 		protected override void HandlePaintEvent(FBGPaintEvent e) {
 			base.HandlePaintEvent(e);
-			if (controls == null) return;
 			GraphicsState state2 = null;
 			Graphics g = e.Canvas;
-			if (!childarea.IsEmpty) {
+			Rectangle childarea = ClientRectangle;
+			if (childarea.X != 0 || childarea.Y != 0 || childarea.Width != Bounds.Width || childarea.Height != Bounds.Height) {
 				state2 = g.Save();
 				g.TranslateTransform(childarea.X, childarea.Y, MatrixOrder.Append);
 				g.IntersectClip(new Rectangle(Point.Empty, childarea.Size));
@@ -274,7 +274,8 @@ namespace UCIS.FBGUI {
 			if (state2 != null) g.Restore(state2);
 		}
 		public IFBGControl FindControlAtPosition(Point p) {
-			if (!childarea.IsEmpty && !childarea.Contains(p)) return null;
+			Rectangle childarea = ClientRectangle;
+			if (!childarea.Contains(p)) return null;
 			p.Offset(-childarea.X, -childarea.Y);
 			return ((List<IFBGControl>)controls).FindLast(delegate(IFBGControl control) { return control.Visible && control.Bounds.Contains(p); });
 		}
@@ -460,26 +461,17 @@ namespace UCIS.FBGUI {
 	}
 	public class FBGGroupBox : FBGDockContainer {
 		private String text = String.Empty;
-		public FBGGroupBox(IFBGContainerControl parent)
-			: base(parent) {
-			ClientRectangle = new Rectangle(1, 15, Bounds.Width - 2, Bounds.Height - 17);
-		}
-		public override Rectangle Bounds {
-			get { return base.Bounds; }
-			set {
-				ClientRectangle = new Rectangle(1, 15, value.Width - 2, value.Height - 17);
-				base.Bounds = value;
-			}
-		}
+		public override Rectangle ClientRectangle { get { return new Rectangle(1, 15, Bounds.Width - 2, Bounds.Height - 17); } }
+		public FBGGroupBox(IFBGContainerControl parent) : base(parent) { }
 		public String Text { get { return text; } set { if (text == value) return; text = value; Invalidate(new Rectangle(0, 0, Bounds.Width, 15)); } }
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
-			g.DrawRectangle(Pens.Gray, 0, 6, Bounds.Width - 1, Bounds.Height - 7);
 			SizeF ss = g.MeasureString(Text, SystemFonts.DefaultFont, new Size(Bounds.Width - 10 - 9, 15));
-			g.FillRectangle(SystemBrushes.Control, 9, 0, ss.Width, ss.Height);
+			g.DrawLines(Pens.Gray, new PointF[] { new PointF(8 + ss.Width + 4, 6), new Point(Bounds.Width - 1, 6), new Point(Bounds.Width - 1, Bounds.Height - 1), new Point(0, Bounds.Height - 1), new Point(0, 6), new Point(8, 6) });
 			g.DrawString(Text, SystemFonts.DefaultFont, Brushes.DarkBlue, new Rectangle(9, 0, Bounds.Width - 10 - 9, 15));
 		}
 	}
+	[System.ComponentModel.DesignerCategory("")]
 	public class WinFormsFBGHost : Control, IFBGContainerControl {
 		private IFBGControl childControl = null;
 		private IFBGControl mouseCaptureControl = null;
@@ -833,19 +825,12 @@ namespace UCIS.FBGUI {
 			ButtonClose = 32,
 			MoveResize = ResizeLeft | ResizeRight | ResizeBottom | ResizeTop | Move,
 		}
+		public override Rectangle ClientRectangle { get { return new Rectangle(4, 22, Bounds.Width - 8, Bounds.Height - 26); } }
 		public FBGForm(IFBGContainerControl parent) : base(parent) {
 			BackColor = SystemColors.Control;
-			ClientRectangle = new Rectangle(4, 22, Bounds.Width - 8, Bounds.Height - 26);
 			Sizable = true;
 			Movable = true;
 			Closable = false;
-		}
-		public override Rectangle Bounds {
-			get { return base.Bounds; }
-			set {
-				ClientRectangle = new Rectangle(4, 22, value.Width - 8, value.Height - 26);
-				base.Bounds = value;
-			}
 		}
 		public String Text { get { return text; } set { if (text == value) return; text = value; Invalidate(new Rectangle(0, 0, Bounds.Width, 20)); RaiseEvent(TextChanged); } }
 		private NonClientOps GetNonClientOperation(Point p) {
@@ -1487,15 +1472,32 @@ namespace UCIS.FBGUI {
 			: base(parent) {
 			BackColor = Color.White;
 		}
-		public void AddItem(Object item) {
-			items.Add(item);
+		public int AddItem(Object item) {
+			int id = ((System.Collections.IList)items).Add(item);
+			Invalidate();
+			return id;
+		}
+		public void RemoveItem(Object item) {
+			items.Remove(item);
+			if (offset >= items.Count) offset = Math.Max(0, items.Count - 1);
 			Invalidate();
 		}
+		public void RemoveItemAt(int index) {
+			if (index < 0) index += items.Count;
+			items.RemoveAt(index);
+			if (offset >= index && offset > 0) offset--;
+			Invalidate();
+		}
+		public void Clear() {
+			items.Clear();
+			offset = 0;
+			Invalidate();
+		}
+		public System.Collections.IList Items { get { return items.AsReadOnly(); } }
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
 			g.DrawRectangle(Pens.DarkBlue, 0, 0, Bounds.Width - 1, Bounds.Height - 1);
 			int lh = (int)Math.Ceiling(SystemFonts.DefaultFont.GetHeight());
-			int th = lh * items.Count;
 			int y = 2;
 			using (Pen dottedpen = new Pen(Brushes.Black)) {
 				dottedpen.DashStyle = DashStyle.Dot;
@@ -1511,14 +1513,14 @@ namespace UCIS.FBGUI {
 					}
 				}
 			}
-			if (y < th) hasScrollBar = true;
+			hasScrollBar = (y < 2 + lh * items.Count) || (offset != 0);
 			if (hasScrollBar) {
 				int xoff = Bounds.Width - 17;
 				using (Brush b = new LinearGradientBrush(new Rectangle(xoff, 0, 17, 1), Color.LightGray, Color.White, LinearGradientMode.Horizontal))
 					g.FillRectangle(b, xoff, 17, 16, Bounds.Height - 17 - 17);
 				ControlPaint.DrawScrollButton(g, xoff, 1, 16, 16, ScrollButton.Up, buttonUpState);
 				ControlPaint.DrawScrollButton(g, xoff, Bounds.Height - 17, 16, 16, ScrollButton.Down, buttonDownState);
-				g.DrawRectangle(Pens.Black, new Rectangle(xoff, 17 + offset * (Bounds.Height - 17 - 17 - 20) / (items.Count - 1), 15, 20));
+				if (items.Count > 1) g.DrawRectangle(Pens.Black, new Rectangle(xoff, 17 + offset * (Bounds.Height - 17 - 17 - 20) / (items.Count - 1), 15, 20));
 			}
 		}
 		protected override void MouseDown(Point position, MouseButtons buttons) {
@@ -1526,17 +1528,17 @@ namespace UCIS.FBGUI {
 				CaptureMouse(true);
 				if (hasScrollBar && position.X > Bounds.Width - 17) {
 					hitScrollBar = true;
+					int off = offset;
 					if (position.Y < 17) {
-						offset--;
+						off--;
 						buttonUpState = ButtonState.Pushed;
 					} else if (position.Y > Bounds.Height - 17) {
-						offset++;
+						off++;
 						buttonDownState = ButtonState.Pushed;
 					} else {
-						offset = (int)Math.Round((position.Y - 17) * (items.Count - 1) / (double)(Bounds.Height - 17 - 17 - 10));
+						off = (int)Math.Round((position.Y - 17) * (items.Count - 1) / (double)(Bounds.Height - 17 - 17 - 10));
 					}
-					if (offset < 0) offset = 0;
-					if (offset >= items.Count) offset = items.Count - 1;
+					offset = Math.Max(0, Math.Min(items.Count - 1, off));
 					Invalidate();
 				} else {
 					MouseHandler(position, buttons);
@@ -1548,9 +1550,7 @@ namespace UCIS.FBGUI {
 				if (position.Y < 17) {
 				} else if (position.Y > Bounds.Height - 17) {
 				} else {
-					offset = (int)Math.Round((position.Y - 17) * (items.Count - 1) / (double)(Bounds.Height - 17 - 17 - 10));
-					if (offset < 0) offset = 0;
-					if (offset >= items.Count) offset = items.Count - 1;
+					offset = Math.Max(0, Math.Min(items.Count - 1,  (int)Math.Round((position.Y - 17) * (items.Count - 1) / (double)(Bounds.Height - 17 - 17 - 10))));
 					Invalidate();
 				}
 				return;
