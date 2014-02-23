@@ -48,7 +48,6 @@
     <Compile Include="Database.cs" />
     <None Include="DBReader.cs" />
     <Compile Include="FBGUI\FBGUI.cs">
-      <SubType>Component</SubType>
     </Compile>
     <Compile Include="NaCl\APIv2.cs">
       <SubType>Code</SubType>

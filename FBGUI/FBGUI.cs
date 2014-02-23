@@ -216,7 +216,7 @@ namespace UCIS.FBGUI {
 		protected List<IFBGControl> controls = new List<IFBGControl>();
 		protected IFBGControl mouseCaptureControl = null;
 		protected IFBGControl keyboardCaptureControl = null;
-		public virtual Rectangle ClientRectangle { get { return Bounds; } }
+		public virtual Rectangle ClientRectangle { get { return new Rectangle(Point.Empty, Bounds.Size); } }
 		public virtual Size ClientSize { get { return ClientRectangle.Size; } set { Bounds = new Rectangle(Bounds.Location, Bounds.Size - ClientRectangle.Size + value); } }
 		public FBGContainerControl(IFBGContainerControl parent) : base(parent) { }
 		void IFBGContainerControl.AddControl(IFBGControl control) { AddControl(control); }
@@ -232,6 +232,7 @@ namespace UCIS.FBGUI {
 				control.Orphaned();
 			}
 		}
+		public IList<IFBGControl> Controls { get { return controls.AsReadOnly(); } }
 		public virtual Point PointToChild(IFBGControl child, Point point) {
 			return point - (Size)child.Bounds.Location - (Size)ClientRectangle.Location;
 		}
@@ -314,7 +315,7 @@ namespace UCIS.FBGUI {
 			else keyboardCaptureControl.HandleEvent(e);
 		}
 		protected virtual void HandleKeyboardCaptureMessage(IFBGControl sender, FBGKeyboardCaptureMessage e) {
-			if (!e.Capture && !(ReferenceEquals(mouseCaptureControl, null) || ReferenceEquals(mouseCaptureControl, sender))) e.Capture = false;
+			if (!e.Capture && !(ReferenceEquals(keyboardCaptureControl, null) || ReferenceEquals(keyboardCaptureControl, sender))) e.Capture = false;
 			else {
 				Parent.HandleMessage(this, e);
 				IFBGControl prev = keyboardCaptureControl;
