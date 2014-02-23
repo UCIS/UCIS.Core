@@ -122,38 +122,45 @@ namespace UCIS.Util {
 			foreach (T v in array) h ^= v.GetHashCode();
 			return h;
 		}
-		public static void Add<T>(ref T[] array, params T[] items) {
+		public static int Add<T>(ref T[] array, params T[] items) {
 			if (array == null) {
 				array = new T[items.Length];
 				items.CopyTo(array, 0);
+				return 0;
 			} else {
 				int index = array.Length;
 				Array.Resize(ref array, index + items.Length);
 				items.CopyTo(array, index);
+				return index;
 			}
 		}
-		public static void Add<T>(ref T[] array, ICollection<T> items) {
+		public static int Add<T>(ref T[] array, ICollection<T> items) {
 			if (array == null) {
 				array = new T[items.Count];
 				items.CopyTo(array, 0);
+				return 0;
 			} else {
 				int index = array.Length;
 				Array.Resize(ref array, index + items.Count);
 				items.CopyTo(array, index);
+				return index;
 			}
 		}
-		public static void Add<T>(ref T[] array, T item) {
+		public static int Add<T>(ref T[] array, T item) {
 			if (array == null) {
 				array = new T[] { item };
+				return 0;
 			} else {
 				int index = array.Length;
 				Array.Resize(ref array, index + 1);
 				array[index] = item;
+				return index;
 			}
 		}
-		public static void AddUnique<T>(ref T[] array, T item) {
-			if (Array.IndexOf(array, item) != -1) return;
-			Add(ref array, item);
+		public static int AddUnique<T>(ref T[] array, T item) {
+			int index = Array.IndexOf(array, item);
+			if (index == -1) index = Add(ref array, item);
+			return index;
 		}
 	}
 }
