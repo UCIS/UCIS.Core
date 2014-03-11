@@ -8,6 +8,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
+using UCIS.Util;
 using UCIS.VNCServer;
 using ThreadingTimer = System.Threading.Timer;
 
@@ -93,7 +94,7 @@ namespace UCIS.FBGUI {
 	}
 	public interface IFBGContainerControl {
 		void AddControl(IFBGControl control);
-		void RemoveControl(IFBGControl control);
+		Boolean RemoveControl(IFBGControl control);
 		void HandleMessage(IFBGControl sender, FBGMessage e);
 		Size ClientSize { get; }
 	}
@@ -212,8 +213,8 @@ namespace UCIS.FBGUI {
 		protected void RaiseEvent(EventHandler eh, EventArgs ea) { if (eh != null) eh(this, ea); }
 		protected void RaiseEvent(EventHandler eh) { if (eh != null) eh(this, new EventArgs()); }
 	}
-	public class FBGContainerControl : FBGControl, IFBGContainerControl {
-		protected List<IFBGControl> controls = new List<IFBGControl>();
+	public class FBGContainerControl : FBGControl, IFBGContainerControl, IList<IFBGControl> {
+		protected IFBGControl[] controls = new IFBGControl[0];
 		protected IFBGControl mouseCaptureControl = null;
 		protected IFBGControl keyboardCaptureControl = null;
 		public virtual Rectangle ClientRectangle { get { return new Rectangle(Point.Empty, Bounds.Size); } }
@@ -221,18 +222,27 @@ namespace UCIS.FBGUI {
 		public FBGContainerControl(IFBGContainerControl parent) : base(parent) { }
 		void IFBGContainerControl.AddControl(IFBGControl control) { AddControl(control); }
 		protected virtual void AddControl(IFBGControl control) {
-			controls.Add(control);
+			ArrayUtil.Add(ref controls, control);
 			if (control.Visible) Invalidate(control);
 		}
-		public virtual void RemoveControl(IFBGControl control) {
-			if (controls.Remove(control)) {
-				if (control.Visible) Invalidate(control);
+		public virtual Boolean RemoveControl(IFBGControl control) {
+			if (!ArrayUtil.Remove(ref controls, control)) return false;
+			if (control.Visible) Invalidate(control);
+			HandleMessage(control, new FBGPointingCaptureMessage(control, false));
+			HandleMessage(control, new FBGKeyboardCaptureMessage(control, false));
+			control.Orphaned();
+			return true;
+		}
+		public virtual void RemoveAllControls() {
+			IFBGControl[] c = Interlocked.Exchange(ref controls, new IFBGControl[0]);
+			foreach (IFBGControl control in c) {
 				HandleMessage(control, new FBGPointingCaptureMessage(control, false));
 				HandleMessage(control, new FBGKeyboardCaptureMessage(control, false));
 				control.Orphaned();
 			}
+			Invalidate();
 		}
-		public IList<IFBGControl> Controls { get { return controls.AsReadOnly(); } }
+		public IList<IFBGControl> Controls { get { return this; } }
 		public virtual Point PointToChild(IFBGControl child, Point point) {
 			return point - (Size)child.Bounds.Location - (Size)ClientRectangle.Location;
 		}
@@ -240,10 +250,11 @@ namespace UCIS.FBGUI {
 			return point + (Size)child.Bounds.Location + (Size)ClientRectangle.Location;
 		}
 		public virtual void BringControlToFront(IFBGControl control) {
-			if (controls.Count == 0) return;
-			if (ReferenceEquals(controls[controls.Count - 1], control)) return;
-			if (!controls.Remove(control)) return;
-			controls.Add(control);
+			if (controls.Length == 0) return;
+			int oldindex = Array.IndexOf(controls, control);
+			if (oldindex == -1 || oldindex == controls.Length - 1) return;
+			for (int i = oldindex; i < controls.Length - 1; i++) controls[i] = controls[i + 1];
+			controls[controls.Length - 1] = control;
 			if (control.Visible) Invalidate(control);
 		}
 		public virtual void Invalidate(IFBGControl control) {
@@ -278,7 +289,7 @@ namespace UCIS.FBGUI {
 			Rectangle childarea = ClientRectangle;
 			if (!childarea.Contains(p)) return null;
 			p.Offset(-childarea.X, -childarea.Y);
-			return ((List<IFBGControl>)controls).FindLast(delegate(IFBGControl control) { return control.Visible && control.Bounds.Contains(p); });
+			return Array.FindLast(controls, delegate(IFBGControl control) { return control.Visible && control.Bounds.Contains(p); });
 		}
 		protected override void HandlePointingEvent(FBGPointingEvent e) {
 			IFBGControl control = mouseCaptureControl != null ? mouseCaptureControl : FindControlAtPosition(e.Position);
@@ -328,13 +339,31 @@ namespace UCIS.FBGUI {
 			base.HandleKeyboardCaptureEvent(e);
 		}
 		protected override void Orphaned() {
-			base.Orphaned();
-			IFBGControl[] c = controls.ToArray();
-			controls.Clear();
+			IFBGControl[] c = Interlocked.Exchange(ref controls, new IFBGControl[0]);
 			foreach (IFBGControl control in c) control.Orphaned();
 			mouseCaptureControl = null;
 			keyboardCaptureControl = null;
+			base.Orphaned();
 		}
+
+		#region IList<IFBGControl> Members
+		int IList<IFBGControl>.IndexOf(IFBGControl item) { return Array.IndexOf(controls, item); }
+		void IList<IFBGControl>.Insert(int index, IFBGControl item) { throw new NotSupportedException(); }
+		void IList<IFBGControl>.RemoveAt(int index) { RemoveControl(controls[index]); }
+		IFBGControl IList<IFBGControl>.this[int index] {
+			get { return controls[index]; }
+			set { throw new NotSupportedException(); }
+		}
+		void ICollection<IFBGControl>.Add(IFBGControl item) { throw new NotSupportedException(); }
+		void ICollection<IFBGControl>.Clear() { RemoveAllControls(); }
+		bool ICollection<IFBGControl>.Contains(IFBGControl item) { return Array.IndexOf(controls, item) != -1; }
+		void ICollection<IFBGControl>.CopyTo(IFBGControl[] array, int arrayIndex) { controls.CopyTo(array, arrayIndex); }
+		int ICollection<IFBGControl>.Count { get { return controls.Length; } }
+		bool ICollection<IFBGControl>.IsReadOnly { get { return false; } }
+		bool ICollection<IFBGControl>.Remove(IFBGControl item) { return RemoveControl(item); }
+		IEnumerator<IFBGControl> IEnumerable<IFBGControl>.GetEnumerator() { return ((IEnumerable<IFBGControl>)controls).GetEnumerator(); }
+		System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return controls.GetEnumerator(); }
+		#endregion
 	}
 	public class FBGDockContainer : FBGContainerControl {
 		private Dictionary<IFBGControl, DockStyle> dockStyles = new Dictionary<IFBGControl, DockStyle>();
@@ -351,9 +380,14 @@ namespace UCIS.FBGUI {
 			base.BringControlToFront(control);
 			if (dockStyles.ContainsKey(control)) DoLayout();
 		}
-		public override void RemoveControl(IFBGControl control) {
-			base.RemoveControl(control);
+		public override Boolean RemoveControl(IFBGControl control) {
+			if (!base.RemoveControl(control)) return false;
 			if (dockStyles.Remove(control)) DoLayout();
+			return true;
+		}
+		public override void RemoveAllControls() {
+			base.RemoveAllControls();
+			dockStyles.Clear();
 		}
 		public override Rectangle Bounds {
 			get { return base.Bounds; }
@@ -384,7 +418,7 @@ namespace UCIS.FBGUI {
 		public void SetDockStyle(IFBGControl control, DockStyle style) {
 			if (style == DockStyle.None) {
 				if (dockStyles.Remove(control)) DoLayout();
-			} else if (controls.Contains(control)) {
+			} else if (Array.IndexOf(controls, control) != -1) {
 				anchorStyles.Remove(control);
 				dockStyles[control] = style;
 				DoLayout();
@@ -398,13 +432,13 @@ namespace UCIS.FBGUI {
 		public void SetAnchorStyle(IFBGControl control, AnchorStyles style) {
 			if (style == (AnchorStyles.Left | AnchorStyles.Top)) {
 				anchorStyles.Remove(control);
-			} else if (controls.Contains(control)) {
+			} else if (Array.IndexOf(controls, control) != -1) {
 				dockStyles.Remove(control);
 				anchorStyles[control] = style;
 			}
 		}
 		public void SetAnchor(IFBGControl control, AnchorStyles style, int value) {
-			if (controls.Contains(control)) {
+			if (Array.IndexOf(controls, control) != -1) {
 				AnchorStyles oldstyle;
 				if (!anchorStyles.TryGetValue(control, out oldstyle)) oldstyle = AnchorStyles.Left | AnchorStyles.Top;
 				Rectangle b = control.Bounds;
@@ -496,13 +530,14 @@ namespace UCIS.FBGUI {
 			control.Bounds = new Rectangle(Point.Empty, ClientSize);
 			Invalidate(control.Bounds);
 		}
-		void IFBGContainerControl.RemoveControl(IFBGControl control) {
-			if (!ReferenceEquals(childControl, control)) return;
+		Boolean IFBGContainerControl.RemoveControl(IFBGControl control) {
+			if (!ReferenceEquals(childControl, control)) return false;
 			childControl = null;
 			Invalidate(control.Bounds);
 			if (mouseCaptureControl == control) mouseCaptureControl = null;
 			if (keyboardCaptureControl == control) control = null;
 			control.Orphaned();
+			return true;
 		}
 		void IFBGContainerControl.HandleMessage(IFBGControl sender, FBGMessage e) {
 			if (e is FBGInvalidateMessage) {
@@ -1039,9 +1074,18 @@ namespace UCIS.FBGUI {
 				}
 			};
 		}
-		public override void RemoveControl(IFBGControl control) {
-			windowcontainer.RemoveControl(control);
+		public override Boolean RemoveControl(IFBGControl control) {
+			if (!windowcontainer.RemoveControl(control)) return false;
+			FBGWindowState ws = windowstates[control];
+			menucontainer.RemoveControl(ws.MenuButton);
 			windowstates.Remove(control);
+			ScaleMenuButtons();
+			return true;
+		}
+		public override void RemoveAllControls() {
+			windowcontainer.RemoveAllControls();
+			menucontainer.RemoveAllControls();
+			windowstates.Clear();
 			ScaleMenuButtons();
 		}
 		private void ScaleMenuButtons() {
