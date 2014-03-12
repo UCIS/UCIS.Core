@@ -29,7 +29,8 @@ namespace UCIS.HWLib.Windows.Devices {
 		}
 		public static DeviceNode GetDevice(String deviceID) {
 			UInt32 node;
-			CR ret = SetupApi.CM_Locate_DevNode(out node, deviceID, 0);
+			CR ret = SetupApi.CM_Locate_DevNode(out node, deviceID, 4);
+			if (ret == CR.NO_SUCH_DEVNODE) return null;
 			CMException.Throw(ret, "CM_Locate_DevNode");
 			return new DeviceNode(node);
 		}
