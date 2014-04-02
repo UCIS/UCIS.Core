@@ -291,14 +291,17 @@ namespace UCIS.HWLib.Windows.Devices {
 			return new DeviceNode(node);
 		}
 
+		public Boolean GetStatus(out UInt32 status, out UInt32 problem) {
+			CR ret = SetupApi.CM_Get_DevNode_Status(out status, out problem, DevInst, 0);
+			if (ret == CR.NO_SUCH_DEVNODE) return false;
+			CMException.Throw(ret, "CM_Get_DevNode_Status");
+			return true;
+		}
+
 		public Boolean Present {
 			get {
 				UInt32 status, problem;
-				CR ret = SetupApi.CM_Get_DevNode_Status(out status, out problem, DevInst, 0);
-				if (ret == CR.NO_SUCH_DEVNODE) return false;
-				CMException.Throw(ret, "CM_Get_DevNode_Status");
-				if (status == 25174016) return false;
-				return true;
+				return GetStatus(out status, out problem) && status != 25174016;
 			}
 		}
 
