@@ -1650,7 +1650,7 @@ namespace UCIS.FBGUI {
 			base.Paint(g);
 			g.DrawRectangle(Pens.DarkBlue, 0, 0, Bounds.Width - 1, Bounds.Height - 1);
 			int lh = (int)Math.Ceiling(SystemFonts.DefaultFont.GetHeight());
-			String text = SelectedText;
+			String text = Text;
 			if (text == null) {
 				g.FillRectangle(Brushes.DarkGray, 2, 2, Bounds.Width - 4 - 16, Bounds.Height - 4);
 			} else {
@@ -1665,7 +1665,7 @@ namespace UCIS.FBGUI {
 			ControlPaint.DrawScrollButton(g, xoff, 1, 16, he, ScrollButton.Up, buttonUpState);
 			ControlPaint.DrawScrollButton(g, xoff, Bounds.Height - he - 1, 16, he, ScrollButton.Down, buttonDownState);
 		}
-		protected abstract String SelectedText { get; }
+		protected abstract String Text { get; }
 		protected override void MouseDown(Point position, MouseButtons buttons) {
 			CaptureKeyboard(true);
 			if ((buttons & MouseButtons.Left) != 0) {
@@ -1742,7 +1742,7 @@ namespace UCIS.FBGUI {
 				}
 			}
 		}
-		protected override string SelectedText {
+		protected override string Text {
 			get {
 				if (selectedIndex == -1) return null;
 				Object item = items[selectedIndex];
@@ -1785,7 +1785,7 @@ namespace UCIS.FBGUI {
 			set { maximum = value; if (this.value > maximum) this.Value = maximum; }
 		}
 		public int Step { get; set; }
-		protected override string SelectedText {
+		protected override string Text {
 			get { return value.ToString(); }
 		}
 		protected override void ButtonPressDown() {
