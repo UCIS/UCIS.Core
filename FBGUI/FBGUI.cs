@@ -658,6 +658,7 @@ namespace UCIS.FBGUI {
 		public static readonly FBGCursor SizeBottomLeft = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipY);
 		public static readonly FBGCursor SizeBottomRight = SizeTopLeft.RotateFlip(RotateFlipType.RotateNoneFlipXY);
 		public static readonly FBGCursor Hand = LoadFromResource("cursor_hand", 5, 0);
+		public static readonly FBGCursor IBeam = LoadFromResource("cursor_ibeam", 3, 7);
 		public static FBGCursor ArrowCursor { get { return Arrow; } }
 	}
 	public class FBGRenderer : FBGContainerControl, IDisposable {
@@ -1149,14 +1150,16 @@ namespace UCIS.FBGUI {
 		public FBGTextBox(IFBGContainerControl parent) : base(parent) { 
 			BackColor = Color.White;
 			Size = new Size(200, 20);
+			Cursor = FBGCursor.IBeam;
 		}
 		private String text = String.Empty;
 		private Char passwordChar = (Char)0;
 		private Font font = new Font(FontFamily.GenericMonospace, 10);
 		private Brush brush = SystemBrushes.ControlText;
 		private Boolean hasKeyboardFocus = false;
-		public String Text { get { return text; } set { text = value; if (CaretPosition > text.Length) CaretPosition = text.Length; Invalidate(); RaiseEvent(TextChanged); } }
-		public Font Font { get { return font; } set { font = value; Invalidate(); } }
+		private float[] characterPositions = null;
+		public String Text { get { return text; } set { text = value; if (CaretPosition > text.Length) CaretPosition = text.Length; characterPositions = null; Invalidate(); RaiseEvent(TextChanged); } }
+		public Font Font { get { return font; } set { font = value; characterPositions = null; Invalidate(); } }
 		public Brush Brush { get { return brush; } set { brush = value; Invalidate(); } }
 		public Color Color { set { Brush = new SolidBrush(value); } }
 		public Int32 CaretPosition { get; private set; }
@@ -1166,6 +1169,10 @@ namespace UCIS.FBGUI {
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
 			g.DrawRectangle(Pens.Gray, 0, 0, Bounds.Width - 1, Bounds.Height - 1);
+			float[] positions = characterPositions;
+			String textbuffer = text;
+			int textlength = textbuffer == null ? 0 : textbuffer.Length;
+			if (positions == null || positions.Length != textlength) characterPositions = positions = new float[text.Length];
 			using (StringFormat sf_nonprinting = new StringFormat(StringFormat.GenericTypographic)) {
 				sf_nonprinting.Trimming = StringTrimming.None;
 				sf_nonprinting.FormatFlags = StringFormatFlags.DisplayFormatControl | StringFormatFlags.MeasureTrailingSpaces;
@@ -1173,43 +1180,28 @@ namespace UCIS.FBGUI {
 
 				float x = 1;
 				float y = 1;
-				float w = Width - 2;
-				if (hasKeyboardFocus && CaretPosition == 0) {
-					g.DrawLine(Pens.Black, x + 2, 2, x + 2, Height - 4);
-				}
+				if (hasKeyboardFocus && CaretPosition == 0) g.DrawLine(Pens.Black, x + 2, 2, x + 2, Height - 4);
 				String c = passwordChar == 0 ? null : new String(passwordChar, 1);
-				for (int i = 0; i < text.Length; i++) {
-					if (passwordChar == 0) c = text.Substring(i, 1);
-					SizeF s = g.MeasureString(c, font, (int)Math.Ceiling(w), sf_nonprinting);
+				for (int i = 0; i < textlength; i++) {
+					if (passwordChar == 0) c = textbuffer.Substring(i, 1);
 					g.DrawString(c, font, brush, x, y);
+					SizeF s = g.MeasureString(c, font, int.MaxValue, sf_nonprinting);
 					x += (float)Math.Ceiling(s.Width);
-					w -= (float)Math.Ceiling(s.Width);
+					if (positions.Length > i) positions[i] = x;
 
-					if (hasKeyboardFocus && i == CaretPosition - 1) {
-						g.DrawLine(Pens.Black, x + 2, 2, x + 2, Height - 4);
-					}
+					if (hasKeyboardFocus && i == CaretPosition - 1) g.DrawLine(Pens.Black, x + 2, 2, x + 2, Height - 4);
 				}
 			}
 		}
+		int GetCharacterIndexAtPosition(float x) {
+			float[] positions = characterPositions;
+			if (positions == null) return -1;
+			for (int i = 0; i < positions.Length; i++) if (x < characterPositions[i]) return i;
+			return characterPositions.Length;
+		}
 		protected override void MouseDown(Point position, MouseButtons buttons) {
 			hasKeyboardFocus = CaptureKeyboard(true);
-			CaretPosition = text.Length;
-			float x = 1;
-			String c = passwordChar == 0 ? null : new String(passwordChar, 1);
-			for (int i = 0; i < text.Length; i++) {
-				if (passwordChar == 0) c = text.Substring(i, 1);
-				Size s;
-				try {
-					s = TextRenderer.MeasureText(c, font, Size.Empty, TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
-				} catch (Exception) {
-					break;
-				}
-				x += s.Width;
-				if (position.X < x) {
-					CaretPosition = i;
-					break;
-				}
-			}
+			CaretPosition = GetCharacterIndexAtPosition(position.X);
 			Invalidate();
 		}
 		protected override void KeyDown(Keys key) {
@@ -1255,6 +1247,7 @@ namespace UCIS.FBGUI {
 		}
 		public void Focus() {
 			hasKeyboardFocus = CaptureKeyboard(true);
+			Invalidate();
 		}
 		protected override void LostKeyboardCapture() {
 			base.LostKeyboardCapture();
