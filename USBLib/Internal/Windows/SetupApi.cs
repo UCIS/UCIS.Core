@@ -94,6 +94,9 @@ namespace UCIS.USBLib.Internal.Windows {
 		[DllImport("setupapi.dll", CharSet = CharSet.Auto)]
 		public static extern CR CM_Reenumerate_DevNode(UInt32 dnDevInst, UInt32 ulFlags);
 
+		[DllImport("newdev.dll", SetLastError = true, CharSet = CharSet.Auto)]
+		public static extern bool DiUninstallDevice(IntPtr hwndParent, SafeDeviceInfoSetHandle DeviceInfoSet, ref SP_DEVINFO_DATA DeviceInfoData, UInt32 Flags, out Boolean NeedReboot);
+
 		//public const int DIGCF_DEFAULT = 0x00000001;  // only valid with DIGCF_DEVICEINTERFACE
 		public const int DIGCF_PRESENT = 0x00000002;
 		public const int DIGCF_ALLCLASSES = 0x00000004;
