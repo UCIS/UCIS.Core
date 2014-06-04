@@ -49,9 +49,20 @@ namespace UCIS.HWLib.Windows.USB {
 		public int VendorID { get { return DeviceDescriptor.VendorID; } }
 		public int ProductID { get { return DeviceDescriptor.ProductID; } }
 
+		private short[] languages = null;
+
 		private String GetStringSafe(Byte id) {
 			if (id == 0) return null;
-			String s = UsbStringDescriptor.GetStringFromDevice(this, id, 0);
+			if (languages == null) {
+				Byte[] buff = new Byte[256];
+				int len = GetDescriptor((Byte)UsbDescriptorType.String, 0, 0, buff, 0, buff.Length);
+				if (len > 1) {
+					languages = new short[len / 2 - 1];
+					for (int i = 0; i < languages.Length; i++) languages[i] = BitConverter.ToInt16(buff, i * 2 + 2);
+				}
+			}
+			short language = (languages == null || languages.Length == 0) ? (short)0 : languages[0];
+			String s = UsbStringDescriptor.GetStringFromDevice(this, id, language);
 			if (s == null) return s;
 			return s.Trim(' ', '\0');
 		}

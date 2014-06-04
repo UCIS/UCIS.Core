@@ -22,9 +22,8 @@ namespace UCIS.HWLib.Windows.USB {
 			if (HasNodeInformation) return;
 			NodeInformation = new USB_NODE_INFORMATION();
 			int nBytes = Marshal.SizeOf(typeof(USB_NODE_INFORMATION));
-			using (SafeFileHandle handle = OpenHandle()) 
-				if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_INFORMATION, ref NodeInformation, nBytes, out NodeInformation, nBytes, out nBytes, IntPtr.Zero))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+			using (SafeFileHandle handle = OpenHandle())
+				HasNodeInformation = Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_INFORMATION, ref NodeInformation, nBytes, out NodeInformation, nBytes, out nBytes, IntPtr.Zero);
 		}
 
 		public bool IsRootHub { get; private set; }
