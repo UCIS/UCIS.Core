@@ -73,12 +73,12 @@ namespace UCIS.Util {
 			while (true) {
 				TWork item;
 				lock (queue) {
-					if (workers >= maxWorkers) {
+					if (workers > maxWorkers) {
 						workers--;
 						break;
 					}
 					if (queue.Count == 0) {
-						if (idleWorkers >= maxIdleWorkers) {
+						if (idleWorkers > maxIdleWorkers) {
 							workers--;
 							queue.TrimExcess();
 							break;
