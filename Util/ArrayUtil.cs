@@ -158,9 +158,24 @@ namespace UCIS.Util {
 			}
 		}
 		public static int AddUnique<T>(ref T[] array, T item) {
+			if (array == null) {
+				array = new T[] { item };
+				return 0;
+			} else {
+				int index = Array.IndexOf(array, item);
+				if (index == -1) index = Add(ref array, item);
+				return index;
+			}
+		}
+		public static Boolean Remove<T>(ref T[] array, T item) {
+			if (array == null) return false;
 			int index = Array.IndexOf(array, item);
-			if (index == -1) index = Add(ref array, item);
-			return index;
+			if (index == -1) return false;
+			T[] newarray = new T[array.Length - 1];
+			if (index > 0) Array.Copy(array, 0, newarray, 0, index);
+			if (index < array.Length - 1) Array.Copy(array, index + 1, newarray, index, array.Length - index - 1);
+			array = newarray;
+			return true;
 		}
 	}
 }

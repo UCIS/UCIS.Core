@@ -156,7 +156,7 @@ namespace UCIS.Net.HTTP {
 				Context.SendHeader("Transfer-Encoding", "chunked");
 				OutputStream = Context.BeginResponseData();
 				Mode = HTTPResponseStreamMode.Chunked;
-				oldbuffer.WriteTo(this);
+				if (oldbuffer != null) oldbuffer.WriteTo(this);
 			}
 
 			public override void Write(byte[] buffer, int offset, int count) {
