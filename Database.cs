@@ -22,7 +22,7 @@ namespace UCIS {
 			return conn;
 		}
 
-		private IDbCommand PrepareQuery(IDbConnection Connection, string Query, params object[] Parameters) {
+		private static IDbCommand PrepareQuery(IDbConnection Connection, string Query, params object[] Parameters) {
 			IDbCommand Command = Connection.CreateCommand();
 			Command.CommandType = CommandType.Text;
 			Command.CommandText = Query;
@@ -118,5 +118,74 @@ namespace UCIS {
 		/*public DBReader GetReader(string QueryString, params object[] Parameters) {
 			return new DBReader(PrepareQuery(QueryString, Parameters));
 		}*/
+
+		public IDataReader ExecuteReader(String QueryString, params Object[] Parameters) {
+			IDbConnection connection = GetConnection();
+			try {
+				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
+					return command.ExecuteReader(CommandBehavior.CloseConnection);
+				}
+			} catch {
+				connection.Dispose();
+				throw;
+			}
+		}
+
+		public IEnumerable<IDataRecord> EnumerateRows(String query, params Object[] parameters) {
+			IDbConnection connection = GetConnection();
+			try {
+				return new DataEnumerator(PrepareQuery(connection, query, parameters));
+			} catch {
+				connection.Dispose();
+				throw;
+			}
+		}
+
+		class DataEnumerator : IEnumerable<IDataRecord>, IEnumerator<IDataRecord> {
+			IDbCommand command = null;
+			IDataReader reader = null;
+			public DataEnumerator(IDbCommand command) {
+				this.command = command;
+				try {
+					this.reader = command.ExecuteReader();
+				} catch {
+					Dispose();
+					throw;
+				}
+			}
+			IEnumerator<IDataRecord> IEnumerable<IDataRecord>.GetEnumerator() {
+				return this;
+			}
+			System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() {
+				return this;
+			}
+			public IDataRecord Current {
+				get { return reader; }
+			}
+			object System.Collections.IEnumerator.Current {
+				get { return reader; }
+			}
+			public bool MoveNext() {
+				return reader.Read();
+			}
+			public void Reset() {
+				throw new NotSupportedException();
+			}
+			public Object[] CurrentRow {
+				get {
+					object[] array = new object[reader.FieldCount];
+					reader.GetValues(array);
+					return array;
+				}
+			}
+			public void Dispose() {
+				if (reader != null) reader.Dispose();
+				if (command != null) {
+					IDbConnection connection = command.Connection;
+					command.Dispose();
+					connection.Dispose();
+				}
+			}
+		}
 	}
 }
