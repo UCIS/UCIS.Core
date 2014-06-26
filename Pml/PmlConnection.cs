@@ -307,7 +307,7 @@ namespace UCIS.Pml {
 					}
 				}
 			} catch (System.Threading.ThreadAbortException ex) {
-				throw ex;
+				throw;
 			} catch (Exception ex) {
 				Console.WriteLine(ex.ToString());
 			} finally {

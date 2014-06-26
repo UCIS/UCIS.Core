@@ -204,7 +204,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 					int transfered = 0;
 					while (length > 0) {
 						int ret;
-						DeviceIoControl(DeviceHandle, cltCode, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), Math.Min(Int16.MaxValue, length), out ret);
+						DeviceIoControl(DeviceHandle, cltCode, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), length, out ret);
 						if (ret <= 0) throw new System.IO.EndOfStreamException();
 						length -= ret;
 						offset += ret;
@@ -214,7 +214,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 				} else {
 					int cltCode = isochronous ? LibUsbIoCtl.ISOCHRONOUS_READ : LibUsbIoCtl.INTERRUPT_OR_BULK_READ;
 					int ret;
-					DeviceIoControl(DeviceHandle, cltCode, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), Math.Min(UInt16.MaxValue, length), out ret);
+					DeviceIoControl(DeviceHandle, cltCode, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), length, out ret);
 					return ret;
 				}
 			}

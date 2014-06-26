@@ -96,7 +96,7 @@ namespace UCIS.Net.HTTP {
 		private PrebufferingStream Reader;
 		private List<HTTPHeader> RequestHeaders;
 		private HTTPConnectionState State = HTTPConnectionState.Starting;
-		private KeyValuePair<String, String>[] QueryParameters = null, PostParameters = null;
+		private KeyValuePair<String, String>[] QueryParameters = null, PostParameters = null, Cookies = null;
 		private HTTPOutputStream ResponseStream = null;
 		private HTTPInputStream RequestStream = null;
 
@@ -539,6 +539,7 @@ namespace UCIS.Net.HTTP {
 			return list.ToArray();
 		}
 		public KeyValuePair<String, String>[] GetQueryParameters() {
+			if (RequestQuery == null) return new KeyValuePair<String, String>[0];
 			if (QueryParameters == null) QueryParameters = DecodeUrlEncodedFields(RequestQuery);
 			return QueryParameters;
 		}
@@ -563,6 +564,51 @@ namespace UCIS.Net.HTTP {
 				}
 			}
 			return PostParameters;
+		}
+
+		public String GetCookie(String name) {
+			foreach (KeyValuePair<String, String> kvp in GetCookies()) if (kvp.Key == name) return kvp.Value;
+			return null;
+		}
+		public String[] GetCookies(String name) {
+			List<String> list = new List<string>();
+			foreach (KeyValuePair<String, String> kvp in GetCookies()) if (kvp.Key == name) list.Add(kvp.Value);
+			return list.ToArray();
+		}
+		public KeyValuePair<String, String>[] GetCookies() {
+			if (Cookies == null) {
+				String cookie = GetRequestHeader("Cookie");
+				List<KeyValuePair<string, string>> list = new List<KeyValuePair<string, string>>();
+				if (cookie != null) {
+					foreach (String part in cookie.Split(';', ',')) {
+						String[] subparts = part.Split('=');
+						String key = subparts[0].Trim(' ', '\t', '"');
+						String value = (subparts.Length < 2) ? null : subparts[1].Trim(' ', '\t', '"');
+						list.Add(new KeyValuePair<string, string>(key, value));
+					}
+				}
+				Cookies = list.ToArray();
+			}
+			return Cookies;
+		}
+
+		public void SetCookie(String name, String value) {
+			SendHeader("Set-Cookie", String.Format("{0}={1}", name, value));
+		}
+		public void SetCookie(String name, String value, DateTime expire) {
+			SendHeader("Set-Cookie", String.Format("{0}={1}; Expires={2:R}", name, value, expire));
+		}
+		public void SetCookie(String name, String value, DateTime? expire, String path, String domain, Boolean secure, Boolean httponly) {
+			StringBuilder sb = new StringBuilder();
+			sb.Append(name);
+			sb.Append("=");
+			sb.Append(value);
+			if (expire != null) sb.AppendFormat("; Expires={0:R}", expire.Value.ToUniversalTime());
+			if (path != null) sb.AppendFormat("; Path={0}", path);
+			if (domain != null) sb.AppendFormat("; Domain={0}", domain);
+			if (secure) sb.Append("; Secure");
+			if (httponly) sb.Append("; HttpOnly");
+			SendHeader("Set-Cookie", sb.ToString());
 		}
 
 		public Stream OpenRequestStream() {
@@ -708,6 +754,9 @@ namespace UCIS.Net.HTTP {
 		}
 		public void AddPrefix(String prefix, IHTTPContentProvider contentProvider) {
 			Prefixes.Add(new KeyValuePair<string, IHTTPContentProvider>(prefix, contentProvider));
+			Prefixes.Sort(delegate(KeyValuePair<String, IHTTPContentProvider> a, KeyValuePair<String, IHTTPContentProvider> b) {
+				return -String.CompareOrdinal(a.Key, b.Key);
+			});
 		}
 		public void DeletePrefix(String prefix) {
 			Prefixes.RemoveAll(delegate(KeyValuePair<string, IHTTPContentProvider> item) { return prefix.Equals(item.Key, PrefixComparison); });

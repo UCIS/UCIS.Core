@@ -29,7 +29,8 @@ namespace UCIS.HWLib.Windows.Devices {
 		}
 		public static DeviceNode GetDevice(String deviceID) {
 			UInt32 node;
-			CR ret = SetupApi.CM_Locate_DevNode(out node, deviceID, 0);
+			CR ret = SetupApi.CM_Locate_DevNode(out node, deviceID, 4);
+			if (ret == CR.NO_SUCH_DEVNODE) return null;
 			CMException.Throw(ret, "CM_Locate_DevNode");
 			return new DeviceNode(node);
 		}
@@ -58,7 +59,6 @@ namespace UCIS.HWLib.Windows.Devices {
 		}
 		public static IList<DeviceNode> GetDevices(String enumerator, Boolean present) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, enumerator, IntPtr.Zero, (present ? DICFG.PRESENT : 0) | DICFG.ALLCLASSES)) {
-			//using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, enumerator, IntPtr.Zero, DICFG.ALLCLASSES | DICFG.DEVICEINTERFACE)) {
 				return GetDevicesInSet(dis);
 			}
 		}
@@ -88,7 +88,6 @@ namespace UCIS.HWLib.Windows.Devices {
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
 					return null;
-				//throw new Win32Exception(Marshal.GetLastWin32Error());
 				RegistryValueKind propertyType;
 				byte[] propBuffer = new byte[256];
 				int requiredSize;
@@ -148,7 +147,6 @@ namespace UCIS.HWLib.Windows.Devices {
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
 					return null;
-					//throw new Win32Exception(Marshal.GetLastWin32Error());
 				RegistryValueKind propertyType;
 				byte[] propBuffer = new byte[256];
 				int requiredSize;
@@ -290,14 +288,17 @@ namespace UCIS.HWLib.Windows.Devices {
 			return new DeviceNode(node);
 		}
 
+		public Boolean GetStatus(out UInt32 status, out UInt32 problem) {
+			CR ret = SetupApi.CM_Get_DevNode_Status(out status, out problem, DevInst, 0);
+			if (ret == CR.NO_SUCH_DEVNODE) return false;
+			CMException.Throw(ret, "CM_Get_DevNode_Status");
+			return true;
+		}
+
 		public Boolean Present {
 			get {
 				UInt32 status, problem;
-				CR ret = SetupApi.CM_Get_DevNode_Status(out status, out problem, DevInst, 0);
-				if (ret == CR.NO_SUCH_DEVNODE) return false;
-				CMException.Throw(ret, "CM_Get_DevNode_Status");
-				if (status == 25174016) return false;
-				return true;
+				return GetStatus(out status, out problem) && status != 25174016;
 			}
 		}
 
@@ -335,6 +336,19 @@ namespace UCIS.HWLib.Windows.Devices {
 					throw new Win32Exception(Marshal.GetLastWin32Error());
 				if (!SetupApi.SetupDiCallClassInstaller(UsbApi.DIF_PROPERTYCHANGE, dis, ref dd))
 					throw new Win32Exception(Marshal.GetLastWin32Error());
+			}
+		}
+
+		public Boolean Uninstall() {
+			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
+				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
+				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
+					throw new Win32Exception(Marshal.GetLastWin32Error());
+				Boolean needsReboot;
+				if (!SetupApi.DiUninstallDevice(IntPtr.Zero, dis, ref dd, 0, out needsReboot))
+					throw new Win32Exception(Marshal.GetLastWin32Error());
+				return needsReboot;
 			}
 		}
 	}
