@@ -48,7 +48,7 @@ namespace UCIS.USBLib.Descriptor {
 			return Encoding.Unicode.GetString(buffer, offset + 2, slen - 2);
 		}
 		public static String GetStringFromDevice(IUsbInterface device, byte index, short langId) {
-			Byte[] buff = new Byte[256];
+			Byte[] buff = new Byte[255];
 			int len = device.GetDescriptor((Byte)UsbDescriptorType.String, index, langId, buff, 0, buff.Length);
 			if (len == 0) return null;
 			return GetString(buff, 0, len);
