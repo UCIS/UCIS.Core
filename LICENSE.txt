@@ -1,0 +1,10 @@
+Copyright 2010 Ivo Smits <Ivo@UCIS.nl>. All rights reserved.
+
+This software may be used for personal use. Distribution of the complete
+unmodified source code is permitted.
+
+Additional permissions may apply for individual components. See the source code
+files or component directories for details, if applicable.
+
+Alternative licensing options are available. Contact Ivo@UCIS.nl for more
+information.
