@@ -3,4 +3,4 @@ bin/*
 obj/*
 *.suo
 *.*proj.user
-UCIS.sln
+UCIS.Core.sln
