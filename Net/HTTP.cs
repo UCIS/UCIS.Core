@@ -721,8 +721,14 @@ namespace UCIS.Net.HTTP {
 		}
 
 		private void SendErrorAndClose(int code) {
-			SendErrorResponse(code);
-			Close();
+			try {
+				SendErrorResponse(code);
+			} catch (IOException) {
+			} catch (SocketException) {
+			} catch (ObjectDisposedException) {
+			} finally {
+				Close();
+			}
 		}
 		private void Close() {
 			if (State == HTTPConnectionState.Closed) return;

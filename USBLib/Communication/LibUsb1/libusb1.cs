@@ -29,7 +29,7 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 	}
 	unsafe static class libusb1 {
 		const CallingConvention LIBUSB1_CC = CallingConvention.Winapi;
-		const String LIBUSB1_DLL = "libusb-1.0.dll";
+		const String LIBUSB1_DLL = "libusb-1.0";
 
 		[StructLayout(LayoutKind.Sequential, Pack = 1)]
 		public struct libusb_device_descriptor {
