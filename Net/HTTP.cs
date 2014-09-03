@@ -6,7 +6,6 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using UCIS.Net;
 using UCIS.Util;
 using HTTPHeader = System.Collections.Generic.KeyValuePair<string, string>;
 
@@ -32,18 +31,16 @@ namespace UCIS.Net.HTTP {
 		}
 
 		private void AcceptCallback(IAsyncResult ar) {
+			Socket socket = null;
 			try {
-				Socket socket = Listener.EndAccept(ar);
-				if (SSLCertificate != null) {
-					SslStream ssl = new SslStream(new NetworkStream(socket, true));
-					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl });
-				} else {
-					new HTTPContext(this, socket);
-				}
-			} catch (Exception) { }
+				socket = Listener.EndAccept(ar);
+				HandleClient(socket);
+			} catch {
+				if (socket != null) socket.Close();
+			}
 			try {
 				Listener.BeginAccept(AcceptCallback, null);
-			} catch (Exception) { }
+			} catch { }
 		}
 
 		private void SslAuthenticationCallback(IAsyncResult ar) {
@@ -53,19 +50,31 @@ namespace UCIS.Net.HTTP {
 			try {
 				ssl.EndAuthenticateAsServer(ar);
 				new HTTPContext(this, ssl, socket);
-			} catch (Exception) { }
+			} catch {
+				socket.Close();
+			}
 		}
 
 		public void Dispose() {
 			if (Listener != null) Listener.Close();
 		}
 
+		public void HandleClient(Socket socket, Stream streamwrapper) {
+			if (streamwrapper == null) streamwrapper = new NetworkStream(socket, true);
+			if (SSLCertificate != null) {
+				SslStream ssl = new SslStream(streamwrapper);
+				ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl });
+			} else {
+				new HTTPContext(this, streamwrapper, socket);
+			}
+		}
+
 		public void HandleClient(Socket client) {
-			new HTTPContext(this, client);
+			HandleClient(client, null);
 		}
 
 		bool TCPServer.IModule.Accept(TCPStream stream) {
-			new HTTPContext(this, stream);
+			HandleClient(stream.Socket, stream);
 			return false;
 		}
 	}
@@ -94,7 +103,7 @@ namespace UCIS.Net.HTTP {
 
 		private StreamWriter Writer;
 		private PrebufferingStream Reader;
-		private List<HTTPHeader> RequestHeaders;
+		private List<HTTPHeader> RequestHeaders = null;
 		private HTTPConnectionState State = HTTPConnectionState.Starting;
 		private KeyValuePair<String, String>[] QueryParameters = null, PostParameters = null, Cookies = null;
 		private HTTPOutputStream ResponseStream = null;
@@ -501,6 +510,7 @@ namespace UCIS.Net.HTTP {
 
 		public String GetRequestHeader(String name) {
 			if (State != HTTPConnectionState.ProcessingRequest && State != HTTPConnectionState.SendingHeaders && State != HTTPConnectionState.SendingContent) throw new InvalidOperationException();
+			if (RequestHeaders == null) return null;
 			foreach (HTTPHeader h in RequestHeaders) {
 				if (name.Equals(h.Key, StringComparison.OrdinalIgnoreCase)) return h.Value;
 			}
@@ -509,6 +519,7 @@ namespace UCIS.Net.HTTP {
 		public String[] GetRequestHeaders(String name) {
 			if (State != HTTPConnectionState.ProcessingRequest && State != HTTPConnectionState.SendingHeaders && State != HTTPConnectionState.SendingContent) throw new InvalidOperationException();
 			String[] items = new String[0];
+			if (RequestHeaders == null) return items;
 			foreach (HTTPHeader h in RequestHeaders) {
 				if (name.Equals(h.Key, StringComparison.OrdinalIgnoreCase)) ArrayUtil.Add(ref items, h.Value);
 			}
