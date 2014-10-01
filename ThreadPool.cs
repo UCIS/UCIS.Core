@@ -112,7 +112,7 @@ namespace UCIS {
 				if (pThreadsMinIdle > value) throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must be greater than or equal to ThreadsMinIdle");
 				if (value < 0) throw new ArgumentOutOfRangeException("ThreadsMaxIdle", "ThreadsMaxIdle must greater than or equal to 0");
 				lock (pIdleThreads) {
-					while (value > pIdleThreads.Count) {
+					while (value < pIdleThreads.Count) {
 						ThreadInfo T = pIdleThreads.Dequeue();
 						T.Abort = true;
 						T.WaitHandle.Set();
