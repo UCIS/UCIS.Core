@@ -140,116 +140,124 @@ Failure:
 			if (packet.Length > count) leftOver = ArrayUtil.Slice(packet, count);
 			return count;
 		}
-		public override byte[] ReadPacket() {
+		private int ReadRawMessage(out Byte[] payloadret) {
 			if (leftOver != null) throw new InvalidOperationException("There is remaining data from a partial read");
 			negotiationEvent.WaitOne();
 			if (closed) throw new ObjectDisposedException("WebSocketPacketStream");
-			try {
-				if (wsProtocol == 13) {
-					Byte[] multipartbuffer = null;
-					int multipartopcode = -1;
-					while (true) {
-						int flags = baseStream.ReadByte();
-						if (flags == -1) throw new EndOfStreamException();
-						UInt64 pllen = (byte)baseStream.ReadByte();
-						Boolean masked = (pllen & 128) != 0;
-						pllen &= 127;
-						if (pllen == 126) {
-							pllen = (uint)baseStream.ReadByte() << 8;
-							pllen |= (uint)baseStream.ReadByte();
-						} else if (pllen == 127) {
-							pllen = (ulong)baseStream.ReadByte() << 56;
-							pllen |= (ulong)baseStream.ReadByte() << 48;
-							pllen |= (ulong)baseStream.ReadByte() << 40;
-							pllen |= (ulong)baseStream.ReadByte() << 32;
-							pllen |= (uint)baseStream.ReadByte() << 24;
-							pllen |= (uint)baseStream.ReadByte() << 16;
-							pllen |= (uint)baseStream.ReadByte() << 8;
-							pllen |= (uint)baseStream.ReadByte();
-						}
-						Byte[] mask = new Byte[4];
-						if (masked) ReadAllBytes(mask, 0, mask.Length);
-						//Console.WriteLine("Read flags={0} masked={1} mask={2} len={3}", flags, masked, mask, pllen);
-						Byte[] payload = new Byte[pllen]; // + (4 - (pllen % 4))];
-						ReadAllBytes(payload, 0, (int)pllen);
-						if (masked) for (int i = 0; i < (int)pllen; i++) payload[i] ^= mask[i % 4];
-						int opcode = flags & 0x0f;
-						Boolean fin = (flags & 0x80) != 0;
-						if (opcode == 0) {
-							//Console.WriteLine("WebSocket received continuation frame type {0}!", multipartopcode);
-							Array.Resize(ref multipartbuffer, multipartbuffer.Length + payload.Length);
-							payload.CopyTo(multipartbuffer, multipartbuffer.Length - payload.Length);
-							opcode = -1;
-							if (fin) {
-								payload = multipartbuffer;
-								opcode = multipartopcode;
-								multipartbuffer = null;
-							}
-						} else if (!fin) {
-							//Console.WriteLine("WebSocket received non-fin frame type {0}!", opcode);
-							multipartbuffer = payload;
-							multipartopcode = opcode;
-							opcode = -1;
-						}
-						if (opcode == -1) {
-						} else if (opcode == 0) {
-							throw new NotSupportedException("WebSocket opcode 0 is not supported");
-						} else if (opcode == 1) {
-							String text = Encoding.UTF8.GetString(payload); //, 0, pllen);
-							return Convert.FromBase64String(text);
-						} else if (opcode == 2) {
-							return payload; // ArrayUtil.Slice(payload, 0, pllen);
-						} else if (opcode == 8) {
-							return null;
-						} else if (opcode == 9) {
-							//Console.WriteLine("WebSocket PING");
-							WriteFrame(10, payload, 0, (int)pllen);
-						} else if (opcode == 10) { //PONG
-						} else {
-							//Console.WriteLine("WebSocket UNKNOWN OPCODE {0}", opcode);
-						}
+			if (wsProtocol == 13) {
+				Byte[] multipartbuffer = null;
+				int multipartopcode = -1;
+				while (true) {
+					int flags = baseStream.ReadByte();
+					if (flags == -1) throw new EndOfStreamException();
+					UInt64 pllen = (byte)baseStream.ReadByte();
+					Boolean masked = (pllen & 128) != 0;
+					pllen &= 127;
+					if (pllen == 126) {
+						pllen = (uint)baseStream.ReadByte() << 8;
+						pllen |= (uint)baseStream.ReadByte();
+					} else if (pllen == 127) {
+						pllen = (ulong)baseStream.ReadByte() << 56;
+						pllen |= (ulong)baseStream.ReadByte() << 48;
+						pllen |= (ulong)baseStream.ReadByte() << 40;
+						pllen |= (ulong)baseStream.ReadByte() << 32;
+						pllen |= (uint)baseStream.ReadByte() << 24;
+						pllen |= (uint)baseStream.ReadByte() << 16;
+						pllen |= (uint)baseStream.ReadByte() << 8;
+						pllen |= (uint)baseStream.ReadByte();
 					}
-				} else if (wsProtocol == 100) {
-					int frameType = baseStream.ReadByte();
-					if (frameType == -1) throw new EndOfStreamException();
-					if ((frameType & 0x80) != 0) {
-						int length = 0;
+					Byte[] mask = new Byte[4];
+					if (masked) ReadAllBytes(mask, 0, mask.Length);
+					//Console.WriteLine("Read flags={0} masked={1} mask={2} len={3}", flags, masked, mask, pllen);
+					Byte[] payload = new Byte[pllen]; // + (4 - (pllen % 4))];
+					ReadAllBytes(payload, 0, (int)pllen);
+					if (masked) for (int i = 0; i < (int)pllen; i++) payload[i] ^= mask[i % 4];
+					int opcode = flags & 0x0f;
+					Boolean fin = (flags & 0x80) != 0;
+					if (opcode == 0) {
+						//Console.WriteLine("WebSocket received continuation frame type {0}!", multipartopcode);
+						Array.Resize(ref multipartbuffer, multipartbuffer.Length + payload.Length);
+						payload.CopyTo(multipartbuffer, multipartbuffer.Length - payload.Length);
+						opcode = -1;
+						if (fin) {
+							payload = multipartbuffer;
+							opcode = multipartopcode;
+							multipartbuffer = null;
+						}
+					} else if (!fin) {
+						//Console.WriteLine("WebSocket received non-fin frame type {0}!", opcode);
+						multipartbuffer = payload;
+						multipartopcode = opcode;
+						opcode = -1;
+					}
+					if (opcode == -1) {
+					} else if (opcode == 0) {
+						throw new NotSupportedException("WebSocket opcode 0 is not supported");
+					} else if (opcode == 1) {
+						payloadret = payload;
+						return 1; //text frame
+					} else if (opcode == 2) {
+						payloadret = payload;
+						return 2; //binary frame
+					} else if (opcode == 8) {
+						payloadret = null;
+						return 0; //end of stream
+					} else if (opcode == 9) {
+						//Console.WriteLine("WebSocket PING");
+						WriteProtocol13Frame(10, payload, 0, (int)pllen);
+					} else if (opcode == 10) { //PONG
+					} else {
+						//Console.WriteLine("WebSocket UNKNOWN OPCODE {0}", opcode);
+					}
+				}
+			} else if (wsProtocol == 100) {
+				int frameType = baseStream.ReadByte();
+				if (frameType == -1) throw new EndOfStreamException();
+				if ((frameType & 0x80) != 0) {
+					int length = 0;
+					while (true) {
+						int b = baseStream.ReadByte();
+						if (b == -1) throw new EndOfStreamException();
+						length = (length << 7) | (b & 0x7f);
+						if ((b & 0x80) == 0) break;
+					}
+					Byte[] buffer = new Byte[length];
+					ReadAllBytes(buffer, 0, length);
+					if (frameType == 0xff && length == 0) {
+						payloadret = null;
+						return 0;
+					} else {
+						throw new InvalidOperationException();
+					}
+				} else {
+					using (MemoryStream ms = new MemoryStream()) {
 						while (true) {
 							int b = baseStream.ReadByte();
 							if (b == -1) throw new EndOfStreamException();
-							length = (length << 7) | (b & 0x7f);
-							if ((b & 0x80) == 0) break;
+							if (b == 0xff) break;
+							ms.WriteByte((Byte)b);
 						}
-						Byte[] buffer = new Byte[length];
-						ReadAllBytes(buffer, 0, length);
-						if (frameType == 0xff && length == 0) {
-							return null;
+						if (frameType == 0x00) {
+							ms.Seek(0, SeekOrigin.Begin);
+							payloadret = ms.ToArray();
+							return 1; //text frame
 						} else {
 							throw new InvalidOperationException();
 						}
-					} else {
-						using (MemoryStream ms = new MemoryStream()) {
-							while (true) {
-								int b = baseStream.ReadByte();
-								if (b == -1) throw new EndOfStreamException();
-								if (b == 0xff) break;
-								ms.WriteByte((Byte)b);
-							}
-							if (frameType == 0x00) {
-								ms.Seek(0, SeekOrigin.Begin);
-								StreamReader reader = new StreamReader(ms, Encoding.UTF8, false);
-								return Convert.FromBase64String(reader.ReadToEnd());
-							} else {
-								throw new InvalidOperationException();
-							}
-						}
 					}
-				} else {
-					throw new InvalidOperationException();
 				}
-			} catch (Exception ex) {
-				Console.WriteLine(ex);
-				throw;
+			} else {
+				throw new InvalidOperationException();
+			}
+		}
+		public override byte[] ReadPacket() {
+			Byte[] payload;
+			int opcode = ReadRawMessage(out payload);
+			switch (opcode) {
+				case 0: return null;
+				case 1: return Convert.FromBase64String(Encoding.UTF8.GetString(payload));
+				case 2: return payload;
+				default: throw new InvalidOperationException("Internal error: unexpected frame type");
 			}
 		}
 		private delegate Byte[] ReadPacketDelegate();
@@ -263,15 +271,19 @@ Failure:
 		}
 		public override void Write(byte[] buffer, int offset, int count) {
 			negotiationEvent.WaitOne();
-			if (closed) throw new ObjectDisposedException("WebSocketPacketStream");
 			if (!binaryProtocol) {
 				String encoded = Convert.ToBase64String(buffer, offset, count, Base64FormattingOptions.None);
 				buffer = Encoding.ASCII.GetBytes(encoded);
 				offset = 0;
 				count = buffer.Length;
 			}
+			WriteRawMessage(buffer, offset, count, binaryProtocol);
+		}
+		private void WriteRawMessage(Byte[] buffer, int offset, int count, Boolean binary) {
+			negotiationEvent.WaitOne();
+			if (closed) throw new ObjectDisposedException("WebSocketPacketStream");
 			if (wsProtocol == 13) {
-				WriteFrame(binaryProtocol ? (Byte)0x2 : (Byte)0x1, buffer, offset, count);
+				WriteProtocol13Frame(binary ? (Byte)0x2 : (Byte)0x1, buffer, offset, count);
 			} else if (wsProtocol == 100) {
 				Byte[] bytes = new Byte[2 + count];
 				bytes[0] = 0x00;
@@ -282,7 +294,7 @@ Failure:
 				throw new InvalidOperationException();
 			}
 		}
-		private void WriteFrame(Byte opcode, Byte[] buffer, int offset, int count) {
+		private void WriteProtocol13Frame(Byte opcode, Byte[] buffer, int offset, int count) {
 			int pllen = count;
 			int hlen = 2;
 			if (pllen > 0xffff) hlen += 8;
@@ -308,6 +320,30 @@ Failure:
 			}
 			Buffer.BlockCopy(buffer, offset, wbuf, hlen, count);
 			baseStream.Write(wbuf, 0, wbuf.Length);
+		}
+
+		public String ReadTextMessage() {
+			Byte[] payload;
+			int opcode = ReadRawMessage(out payload);
+			switch (opcode) {
+				case 0: return null;
+				case 1:
+				case 2: return Encoding.UTF8.GetString(payload);
+				default: throw new InvalidOperationException("Internal error: unexpected frame type");
+			}
+		}
+		private delegate String ReadTextMessageDelegate();
+		ReadTextMessageDelegate readTextMessageDelegate;
+		public IAsyncResult BeginReadTextMessage(AsyncCallback callback, object state) {
+			if (readTextMessageDelegate == null) readTextMessageDelegate = ReadTextMessage;
+			return readTextMessageDelegate.BeginInvoke(callback, state);
+		}
+		public String EndReadTextMessage(IAsyncResult asyncResult) {
+			return readTextMessageDelegate.EndInvoke(asyncResult);
+		}
+		public void WriteTextMessage(String message) {
+			Byte[] packet = Encoding.UTF8.GetBytes(message);
+			WriteRawMessage(packet, 0, packet.Length, false);
 		}
 	}
 }
