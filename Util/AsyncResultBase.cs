@@ -8,6 +8,7 @@ namespace UCIS.Util {
 		static Boolean ThreadInCallback = false;
 		ManualResetEvent WaitEvent = null;
 		AsyncCallback Callback = null;
+		Object MonitorWaitHandle = new Object();
 		public object AsyncState { get; private set; }
 		public bool CompletedSynchronously { get; private set; }
 		public bool IsCompleted { get; private set; }
@@ -36,6 +37,7 @@ namespace UCIS.Util {
 			lock (this) {
 				IsCompleted = true;
 				if (WaitEvent != null) WaitEvent.Set();
+				if (MonitorWaitHandle != null) lock (MonitorWaitHandle) Monitor.Pulse(MonitorWaitHandle);
 			}
 			if (Callback != null) {
 				if (synchronously && !ThreadInCallback) {
@@ -49,6 +51,10 @@ namespace UCIS.Util {
 					SysThreadPool.QueueUserWorkItem(CallCallback);
 				}
 			}
+		}
+
+		public void WaitForCompletion() {
+			lock (this) if (!IsCompleted) lock (MonitorWaitHandle) Monitor.Wait(MonitorWaitHandle);
 		}
 
 		protected void ThrowError() {

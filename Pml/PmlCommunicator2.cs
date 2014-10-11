@@ -7,7 +7,6 @@ namespace UCIS.Pml {
 	public class PmlCommunicator {
 		private class CSyncRequest {
 			internal PmlElement Reply;
-			internal ManualResetEvent ResetEvent = new ManualResetEvent(false);
 		}
 		private interface ISession {
 			void MessageIn(PmlElement message);
@@ -144,9 +143,7 @@ namespace UCIS.Pml {
 				_sessions.Clear();
 			}
 			lock (_invocations) {
-				foreach (CSyncRequest T in _invocations.Values) {
-					T.ResetEvent.Set();
-				}
+				foreach (CSyncRequest T in _invocations.Values) lock (T) Monitor.Pulse(T);
 				_invocations.Clear();
 			}
 			if (Closed != null) Closed(this, new EventArgs());
@@ -192,7 +189,7 @@ namespace UCIS.Pml {
 					}
 					if (SRequest != null) {
 						SRequest.Reply = Message.GetChild("MSG");
-						SRequest.ResetEvent.Set();
+						lock (SRequest) Monitor.Pulse(SRequest);
 					}
 				} else if (Cmd.Equals("REQ") || Cmd.Equals("MSG")) {
 					UCIS.ThreadPool.RunCall(processCall, Message);
@@ -288,9 +285,7 @@ namespace UCIS.Pml {
 		}
 
 		public void Call(PmlElement message) {
-			PmlDictionary Msg = new PmlDictionary();
-			Msg.Add("CMD", new PmlString("MSG"));
-			Msg.Add("MSG", message);
+			PmlDictionary Msg = new PmlDictionary() { { "CMD", "MSG" }, { "MSG", message } };
 			_WriteMessage(Msg);
 		}
 		public PmlElement Invoke(PmlElement message) {
@@ -299,14 +294,16 @@ namespace UCIS.Pml {
 		public PmlElement Invoke(PmlElement message, int timeout) {
 			if (_closed) throw new InvalidOperationException("Sorry, we're closed.");
 			CSyncRequest SyncEvent = new CSyncRequest();
-			UInt32 SID = GetNextSessionId(false);
-			lock (_invocations) _invocations.Add(SID, SyncEvent);
+			UInt32 SID;
+			lock (_invocations) {
+				SID = GetNextSessionId(ref pNextSyncRequest, _invocations);
+				_invocations.Add(SID, SyncEvent);
+			}
 			try {
 				WriteSyncMessage(SID, false, message);
-				if (!SyncEvent.ResetEvent.WaitOne(timeout, false)) {
-					if (!_closed) lock (_invocations) _invocations.Remove(SID);
-					throw new TimeoutException("The SyncRequest timed out (SID=" + SID.ToString() + ")");
-				}
+				Boolean success;
+				lock (SyncEvent) success = Monitor.Wait(SyncEvent, timeout);
+				if (!success) throw new TimeoutException("The SyncRequest timed out (SID=" + SID.ToString() + ")");
 			} finally {
 				lock (_invocations) _invocations.Remove(SID);
 			}
@@ -314,7 +311,7 @@ namespace UCIS.Pml {
 		}
 
 		public IPmlChannel CreateChannel(PmlElement data) {
-			UInt32 sid = GetNextSessionId(true);
+			UInt32 sid = GetNextSessionId(ref pNextSession, _sessions);
 			PmlSubChannel ch = new PmlSubChannel(this, sid, true);
 			WriteSessionMessage(sid, 0, data);
 			if (!ch.IsOpen) return null;
@@ -333,41 +330,32 @@ namespace UCIS.Pml {
 			RemoveSession(session.ID);
 		}
 
-		private UInt32 GetNextSessionId(bool IsSession) {
-			if (IsSession) {
-				lock (_sessions) {
-					do {
-						unchecked { pNextSession++; }
-					} while (_sessions.ContainsKey(pNextSession));
-					return pNextSession;
-				}
-			} else {
-				lock (_invocations) {
-					do {
-						unchecked { pNextSyncRequest++; }
-					} while (_invocations.ContainsKey(pNextSyncRequest));
-					return pNextSyncRequest;
-				}
+		private static UInt32 GetNextSessionId<T>(ref UInt32 id, IDictionary<UInt32, T> dictionary) {
+			lock (dictionary) {
+				do {
+					id++;
+				} while (dictionary.ContainsKey(id));
+				return id;
 			}
 		}
 
 		protected void WriteSyncMessage(UInt32 SID, bool RPL, PmlElement MSG) {
-			PmlDictionary Msg2 = new PmlDictionary();
-			Msg2.Add("CMD", new PmlString(RPL ? "RPL" : "REQ"));
-			Msg2.Add("SID", new PmlInteger(SID));
-			Msg2.Add("MSG", MSG);
+			PmlDictionary Msg2 = new PmlDictionary() {
+				{ "CMD", RPL ? "RPL" : "REQ" },
+				{ "SID", SID },
+				{ "MSG", MSG },
+			};
 			_WriteMessage(Msg2);
 		}
 		protected void WriteSessionMessage(UInt32 SID, byte CMD, PmlElement MSG) {
-			PmlDictionary Msg2 = new PmlDictionary();
-			Msg2.Add("CMD", new PmlString("SES"));
-			Msg2.Add("SID", new PmlInteger(SID));
-			Msg2.Add("SCMD", new PmlInteger(CMD));
+			PmlDictionary Msg2 = new PmlDictionary() {
+				{ "CMD", "SES" },
+				{ "SID", SID },
+				{ "SCMD", CMD },
+			};
 			if (MSG != null) Msg2.Add("MSG", MSG);
 			_WriteMessage(Msg2);
 		}
-
-
 
 		/* LegacyPmlCommunicator compatibility */
 		public PmlElement SyncRequest(PmlElement Request) {
