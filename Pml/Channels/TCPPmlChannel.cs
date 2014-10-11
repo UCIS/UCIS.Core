@@ -15,7 +15,6 @@ namespace UCIS.Pml {
 			_socket = socket;
 			_rw = new PmlBinaryRW(_socket);
 			_open = true;
-			//ThreadPool.RunTask(worker, null);
 		}
 
 		public override void WriteMessage(PmlElement message) {
@@ -33,17 +32,5 @@ namespace UCIS.Pml {
 		public override PmlElement ReadMessage() {
 			return _rw.ReadMessage();
 		}
-
-		/*private void worker(Object state) {
-			try {
-				while (_open) {
-					base.PushReceivedMessage(_rw.ReadMessage());
-				}
-			} catch (Exception ex) {
-				Console.WriteLine(ex.ToString());
-			} finally {
-				Close();
-			}
-		}*/
 	}
 }

@@ -117,15 +117,12 @@
     <Compile Include="Pml\Channels\IPmlChannel.cs" />
     <Compile Include="Pml\IPmlCommunicator.cs" />
     <Compile Include="Pml\IPmlRpc.cs" />
-    <None Include="Pml\LegacyPmlCommunicator.cs" />
     <Compile Include="Pml\PmlBuilder.cs" />
-    <None Include="Pml\PmlCommunicator.cs" />
     <Compile Include="Pml\PmlCommunicator2.cs" />
     <Compile Include="Pml\RW\PmlAmfRW.cs" />
     <Compile Include="Pml\RW\PmlPHPRW.cs" />
     <Compile Include="Pml\RW\PmlBinaryRW.cs" />
     <Compile Include="Pml\RW\IPmlRW.cs" />
-    <Compile Include="Pml\PmlConnection.cs" />
     <Compile Include="Pml\RW\PmlTextRW.cs" />
     <Compile Include="Pml\RW\PmlXmlRW.cs" />
     <Compile Include="Pml\Channels\TCPPmlChannel.cs" />
