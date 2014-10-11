@@ -88,7 +88,6 @@ namespace UCIS.Net {
 
 			_Listener = new Socket(af, SocketType.Stream, ProtocolType.Tcp);
 
-			_Listener.Blocking = false;
 			_Listener.Bind(new IPEndPoint(af == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, Port));
 			_Listener.Listen(25);
 			_ThrottleCounter = _ThrottleBurst;
@@ -184,7 +183,6 @@ namespace UCIS.Net {
 
 			internal Client(Socket Socket, TCPServer Server) : base(Socket) {
 				_Server = Server;
-				Socket.Blocking = true;
 				base.Closed += _Stream_Closed;
 				this.Tag = Server;
 			}
@@ -197,11 +195,8 @@ namespace UCIS.Net {
 				bool CloseSocket = true;
 				try {
 					try {
-						base.Blocking = true;
 						//base.NoDelay = true;
 						base.ReadTimeout = 5000;
-						base.WriteBufferSize = 1024 * 10;
-						base.ReadBufferSize = 1024 * 10;
 						//Console.WriteLine("TCPServer: Accepted connection from " + base.Socket.RemoteEndPoint.ToString());
 						_MagicNumber = (byte)base.PeekByte();
 					} catch (TimeoutException ex) {

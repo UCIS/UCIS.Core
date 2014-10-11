@@ -19,7 +19,6 @@ namespace UCIS.Net {
 		private ulong _BytesWritten;
 		private ulong _BytesRead;
 		private DateTime _StartTime;
-		private bool _Blocking;
 
 		public event EventHandler Closed;
 
@@ -27,7 +26,6 @@ namespace UCIS.Net {
 			_Socket = Socket;
 			_HasPeekByte = false;
 			_StartTime = DateTime.Now;
-			_Blocking = _Socket.Blocking;
 		}
 
 		public Socket Socket {
@@ -39,11 +37,8 @@ namespace UCIS.Net {
 		}
 
 		public bool Blocking {
-			get { return _Blocking; }
-			set {
-				Socket.Blocking = value;
-				_Blocking = value;
-			}
+			get { return _Socket.Blocking; }
+			set { Socket.Blocking = value; }
 		}
 
 		public bool NoDelay {
@@ -91,7 +86,6 @@ namespace UCIS.Net {
 			} catch (SocketException ex) {
 				switch (ex.SocketErrorCode) {
 					case SocketError.WouldBlock:
-						_Socket.Blocking = _Blocking;
 						throw new TimeoutException("The receive operation would block", ex);
 					case SocketError.TimedOut:
 						throw new TimeoutException("The receive operation timed out", ex);
@@ -212,7 +206,6 @@ namespace UCIS.Net {
 			} catch (SocketException ex) {
 				switch (ex.SocketErrorCode) {
 					case SocketError.WouldBlock:
-						_Socket.Blocking = _Blocking;
 						throw new TimeoutException("The send operation would block", ex);
 					case SocketError.TimedOut:
 						throw new TimeoutException("The send operation timed out", ex);
