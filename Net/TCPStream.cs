@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using UCIS.Util;
-using SysThreadPool = System.Threading.ThreadPool;
 
 namespace UCIS.Net {
 	public class TCPStream : Stream, INetworkConnection {

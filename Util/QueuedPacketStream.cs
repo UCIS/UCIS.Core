@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using SysThreadPool = System.Threading.ThreadPool;
 
 namespace UCIS.Util {
 	public abstract class QueuedPacketStream : PacketStream {

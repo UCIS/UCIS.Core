@@ -67,7 +67,7 @@ namespace UCIS.Net {
 			}
 		}
 		public INetworkConnection this[int index] {
-			get { return _list[index]; }
+			get { lock (_list) return _list[index]; }
 			set { throw new NotSupportedException(); }
 		}
 		public int IndexOf(INetworkConnection item) {

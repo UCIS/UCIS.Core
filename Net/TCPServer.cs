@@ -30,10 +30,6 @@ namespace UCIS.Net {
 		private NetworkConnectionList _Clients = new NetworkConnectionList();
 		private ModuleCollection _Modules = new ModuleCollection();
 		private IModule _CatchAllModule = null;
-		private Int32 _ThrottleCounter;
-		private Int32 _ThrottleBurst = 10;
-		private Int32 _ThrottleRate = 0;
-		private Timer _ThrottleTimer = null;
 
 		public TCPServer() {
 			_ThreadPool = UCIS.ThreadPool.DefaultPool;
@@ -56,28 +52,6 @@ namespace UCIS.Net {
 			}
 		}
 
-		public Int32 ThrottleRate {
-			get { return _ThrottleRate; }
-			set {
-				if (value < 0) throw new ArgumentOutOfRangeException("value");
-				_ThrottleRate = value;
-				if (_Listener == null) return;
-				if (value == 0 && _ThrottleTimer != null) {
-					_ThrottleTimer.Dispose();
-					_ThrottleTimer = null;
-				} else if (value > 0 && _ThrottleTimer == null) {
-					_ThrottleTimer = new Timer(ThrottleCallback, null, 1000, 1000);
-				}
-			}
-		}
-		public Int32 ThrottleBurst {
-			get { return _ThrottleBurst; }
-			set {
-				if (value < 1) throw new ArgumentOutOfRangeException("value");
-				_ThrottleBurst = value;
-			}
-		}
-
 		public EndPoint LocalEndPoint { get { return _Listener.LocalEndPoint; } }
 
 		public void Listen(int Port) {
@@ -85,21 +59,13 @@ namespace UCIS.Net {
 		}
 		public void Listen(AddressFamily af, int Port) {
 			Stop();
-
 			_Listener = new Socket(af, SocketType.Stream, ProtocolType.Tcp);
-
 			_Listener.Bind(new IPEndPoint(af == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, Port));
 			_Listener.Listen(25);
-			_ThrottleCounter = _ThrottleBurst;
 			_Listener.BeginAccept(AcceptCallback, null);
-
-			if (_ThrottleRate > 0) {
-				_ThrottleTimer = new Timer(ThrottleCallback, null, 1000, 1000);
-			}
 		}
 
 		public void Stop() {
-			if (_ThrottleTimer != null) _ThrottleTimer.Dispose();
 			if (_Listener != null && _Listener.IsBound) _Listener.Close();
 			_Listener = null;
 		}
@@ -117,10 +83,9 @@ namespace UCIS.Net {
 			}
 		}
 
-		private void AcceptCallback(System.IAsyncResult ar) {
-			Client Client = null;
-			Socket Socket = null;
+		private void AcceptCallback(IAsyncResult ar) {
 			if (_Listener == null) return;
+			Socket Socket = null;
 			try {
 				Socket = _Listener.EndAccept(ar);
 			} catch (ObjectDisposedException) {
@@ -132,7 +97,7 @@ namespace UCIS.Net {
 			}
 			if (Socket != null) {
 				try {
-					Client = new Client(Socket, this);
+					Client Client = new Client(Socket, this);
 					_Clients.Add(Client);
 					if (ClientAccepted != null) ClientAccepted(this, new ClientAcceptedEventArgs(Client));
 					Client.Start(_ThreadPool);
@@ -140,20 +105,7 @@ namespace UCIS.Net {
 					Console.WriteLine(ex.ToString());
 				}
 			}
-			if (_ThrottleCounter > 0 || _ThrottleRate == 0) {
-				_ThrottleCounter--;
-				_Listener.BeginAccept(AcceptCallback, null);
-			}
-		}
-
-		private void ThrottleCallback(Object state) {
-			if (_Listener == null) return;
-			if (_ThrottleRate == 0) return;
-			if (_ThrottleCounter >= _ThrottleBurst) return;
-			if (_ThrottleCounter <= 0) {
-				_Listener.BeginAccept(AcceptCallback, null);
-			}
-			_ThrottleRate += _ThrottleRate;
+			_Listener.BeginAccept(AcceptCallback, null);
 		}
 
 		public interface IModule {
@@ -163,7 +115,6 @@ namespace UCIS.Net {
 
 		private class Client : TCPStream {
 			private TCPServer _Server;
-			private UCIS.ThreadPool.WorkItem _WorkItem;
 			private IModule _Module;
 			private byte _MagicNumber;
 
@@ -175,7 +126,6 @@ namespace UCIS.Net {
 			}
 
 			private void _Stream_Closed(object sender, EventArgs e) {
-				_WorkItem = null;
 				_Module = null;
 				_Server = null;
 				base.Closed -= _Stream_Closed;
@@ -188,7 +138,7 @@ namespace UCIS.Net {
 			}
 
 			internal void Start(UCIS.ThreadPool Pool) {
-				_WorkItem = Pool.QueueWorkItem(WorkerProc, null);
+				Pool.QueueWorkItem(WorkerProc, null);
 			}
 
 			private void WorkerProc(object state) {
