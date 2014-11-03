@@ -58,18 +58,16 @@ namespace UCIS.Xml {
 			return Buffer;
 		}
 		public virtual XmlDocument ReadDocument() {
-				MemoryStream Buffer = ReadRawDocument();
-				try {
-					XmlDocument Doc = new XmlDocument();
-					XmlReader XMLReader = XmlReader.Create(Buffer, pXMLReaderSettings);
-					Doc.Load(XMLReader);
-					XMLReader.Close();
-					return Doc;
-				} catch (Exception ex) {
-					Buffer.Seek(0, SeekOrigin.Begin);
-					throw new IOException("Could not parse XML document: \"" + Encoding.UTF8.GetString(Buffer.ToArray()) + "\"", ex);
-				}
+			MemoryStream Buffer = ReadRawDocument();
+			XmlDocument Doc = new XmlDocument();
+			try {
+				using (XmlReader XMLReader = XmlReader.Create(Buffer, pXMLReaderSettings)) Doc.Load(XMLReader);
+			} catch (Exception ex) {
+				Buffer.Seek(0, SeekOrigin.Begin);
+				throw new IOException("Could not parse XML document: \"" + Encoding.UTF8.GetString(Buffer.ToArray()) + "\"", ex);
 			}
+			return Doc;
+		}
 
 		protected virtual void CreateWriter() {
 			pWriter = XmlWriter.Create(pStream, WriterSettings);

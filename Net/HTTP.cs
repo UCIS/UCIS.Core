@@ -99,7 +99,7 @@ namespace UCIS.Net.HTTP {
 
 		public Socket Socket { get; private set; }
 		public Boolean SuppressStandardHeaders { get; set; }
-		public TCPStream TCPStream { get; private set; }
+		public TCPStream TCPStream { get { return Reader.BaseStream as TCPStream; } }
 
 		private StreamWriter Writer;
 		private PrebufferingStream Reader;
@@ -411,14 +411,10 @@ namespace UCIS.Net.HTTP {
 				if (socket.ProtocolType == ProtocolType.Tcp) socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 				if (stream == null) stream = new NetworkStream(socket, true);
 			}
-			Init(stream);
-		}
-
-		private void Init(Stream Stream) {
-			Writer = new StreamWriter(Stream, Encoding.ASCII);
+			Writer = new StreamWriter(stream, Encoding.ASCII);
 			Writer.NewLine = "\r\n";
 			Writer.AutoFlush = true;
-			Reader = new PrebufferingStream(Stream);
+			Reader = new PrebufferingStream(stream);
 			Reader.BeginPrebuffering(PrebufferCallback, null);
 		}
 
