@@ -28,6 +28,9 @@ namespace UCIS.Windows {
 		static extern unsafe bool ConnectNamedPipe(SafeFileHandle hNamedPipe, NativeOverlapped* lpOverlapped);
 		[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 		static extern unsafe bool GetNamedPipeInfo(SafeFileHandle hNamedPipe, out UInt32 lpFlags, IntPtr lpOutBufferSize, IntPtr lpInBufferSize, IntPtr lpMaxInstances);
+		[DllImport("kernel32.dll")]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		static extern bool CancelIo(SafeFileHandle hFile);
 
 		const UInt32 PIPE_ACCESS_DUPLEX = 0x00000003;
 		const UInt32 FILE_FLAG_OVERLAPPED = 0x40000000;
@@ -60,6 +63,9 @@ namespace UCIS.Windows {
 		}
 
 		public unsafe void WaitForClient() {
+			WaitForClient(-1);
+		}
+		public unsafe void WaitForClient(int millisecondsTimeout) {
 			uint nread;
 			using (ManualResetEvent evt = new ManualResetEvent(false)) {
 				NativeOverlapped overlapped = new NativeOverlapped();
@@ -67,7 +73,10 @@ namespace UCIS.Windows {
 				if (!ConnectNamedPipe(PipeHandle, &overlapped)) {
 					int err = Marshal.GetLastWin32Error();
 					if (err != 997) throw new Win32Exception(err);
-					evt.WaitOne();
+					if (!evt.WaitOne(millisecondsTimeout)) {
+						CancelIo(PipeHandle);
+						throw new TimeoutException("The operation timed out");
+					}
 					if (!GetOverlappedResult(PipeHandle, &overlapped, out nread, false)) throw new Win32Exception(Marshal.GetLastWin32Error());
 				}
 			}
