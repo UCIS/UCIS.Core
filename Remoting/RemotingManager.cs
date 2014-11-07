@@ -17,7 +17,7 @@ namespace UCIS.Remoting {
 	public class RemotingManager {
 		Dictionary<UInt32, PendingRemoteCall> pendingCalls = new Dictionary<uint, PendingRemoteCall>();
 		Dictionary<Thread, UInt32> waitingCallThreads = new Dictionary<Thread, UInt32>();
-		Boolean Closed = false;
+		public Boolean Closed { get; private set; }
 
 		IDictionary<String, Object> incomingCallContext = new Dictionary<String, Object>();
 		[ThreadStatic]
@@ -25,6 +25,7 @@ namespace UCIS.Remoting {
 
 		public event Action<String> OnDebugLog;
 		public event Action<Exception> OnErrorLog;
+		public event Action<RemotingManager> OnClosed;
 
 		private void DebugLog(String text, params Object[] args) {
 			if (OnDebugLog != null) OnDebugLog(String.Format(text, args));
@@ -42,6 +43,7 @@ namespace UCIS.Remoting {
 		public RemotingManager(PacketStream stream, Object localRoot) {
 			this.stream = stream;
 			this.LocalRoot = localRoot;
+			this.Closed = false;
 			stream.BeginReadPacketFast(ReceiveCallback, null);
 		}
 
@@ -135,6 +137,7 @@ namespace UCIS.Remoting {
 					streamChannels.Clear();
 				}
 				ErrorLog(ex);
+				if (OnClosed != null) OnClosed(this);
 			}
 		}
 		private void SendObject(Object obj) {
