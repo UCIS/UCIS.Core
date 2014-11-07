@@ -15,7 +15,7 @@ namespace UCIS.Util {
 		public Exception Error { get; private set; }
 		public WaitHandle AsyncWaitHandle {
 			get {
-				lock (this) {
+				lock (MonitorWaitHandle) {
 					if (WaitEvent == null) WaitEvent = new ManualResetEvent(IsCompleted);
 					return WaitEvent;
 				}
@@ -34,10 +34,10 @@ namespace UCIS.Util {
 		protected void SetCompleted(Boolean synchronously, Exception error) {
 			this.CompletedSynchronously = synchronously;
 			this.Error = error;
-			lock (this) {
+			lock (MonitorWaitHandle) {
 				IsCompleted = true;
 				if (WaitEvent != null) WaitEvent.Set();
-				if (MonitorWaitHandle != null) lock (MonitorWaitHandle) Monitor.Pulse(MonitorWaitHandle);
+				Monitor.PulseAll(MonitorWaitHandle);
 			}
 			if (Callback != null) {
 				if (synchronously && !ThreadInCallback) {
@@ -54,7 +54,11 @@ namespace UCIS.Util {
 		}
 
 		public void WaitForCompletion() {
-			lock (this) if (!IsCompleted) lock (MonitorWaitHandle) Monitor.Wait(MonitorWaitHandle);
+			lock (MonitorWaitHandle) if (!IsCompleted) Monitor.Wait(MonitorWaitHandle);
+		}
+		public Boolean WaitForCompletion(int millisecondsTimeout) {
+			lock (MonitorWaitHandle) if (!IsCompleted) Monitor.Wait(MonitorWaitHandle, millisecondsTimeout);
+			return IsCompleted;
 		}
 
 		protected void ThrowError() {
