@@ -5,15 +5,14 @@ using System.Xml;
 
 namespace UCIS.Xml {
 	public class XmlSocket : XmlWriter {
-		protected Stream pStream;
+		Stream pStream;
 		protected XmlWriter pWriter;
-		protected XmlReaderSettings pXMLReaderSettings;// = new XmlReaderSettings();
 
 		public Stream BaseStream { get { return pStream; } }
 
 		public override XmlWriterSettings Settings { get { return WriterSettings; } }
 		public XmlWriterSettings WriterSettings { get; private set; }
-		public XmlReaderSettings ReaderSettings { get { return pXMLReaderSettings; } }
+		public XmlReaderSettings ReaderSettings { get; private set; }
 
 		public XmlSocket(Stream Stream, Encoding Encoding) {
 			WriterSettings = new XmlWriterSettings();
@@ -24,15 +23,15 @@ namespace UCIS.Xml {
 			WriterSettings.Encoding = Encoding;
 			WriterSettings.CloseOutput = false;
 
-			pXMLReaderSettings = new XmlReaderSettings();
-			pXMLReaderSettings.ConformanceLevel = ConformanceLevel.Document;
-			pXMLReaderSettings.CloseInput = true;
-			pXMLReaderSettings.IgnoreComments = true;
-			pXMLReaderSettings.IgnoreProcessingInstructions = true;
-			pXMLReaderSettings.IgnoreWhitespace = true;
-			pXMLReaderSettings.ValidationType = ValidationType.None;
-			pXMLReaderSettings.ValidationFlags = System.Xml.Schema.XmlSchemaValidationFlags.None;
-			pXMLReaderSettings.CheckCharacters = false;
+			ReaderSettings = new XmlReaderSettings();
+			ReaderSettings.ConformanceLevel = ConformanceLevel.Document;
+			ReaderSettings.CloseInput = true;
+			ReaderSettings.IgnoreComments = true;
+			ReaderSettings.IgnoreProcessingInstructions = true;
+			ReaderSettings.IgnoreWhitespace = true;
+			ReaderSettings.ValidationType = ValidationType.None;
+			ReaderSettings.ValidationFlags = System.Xml.Schema.XmlSchemaValidationFlags.None;
+			ReaderSettings.CheckCharacters = false;
 
 			pStream = Stream;
 		}
@@ -61,7 +60,7 @@ namespace UCIS.Xml {
 			MemoryStream Buffer = ReadRawDocument();
 			XmlDocument Doc = new XmlDocument();
 			try {
-				using (XmlReader XMLReader = XmlReader.Create(Buffer, pXMLReaderSettings)) Doc.Load(XMLReader);
+				using (XmlReader XMLReader = XmlReader.Create(Buffer, ReaderSettings)) Doc.Load(XMLReader);
 			} catch (Exception ex) {
 				Buffer.Seek(0, SeekOrigin.Begin);
 				throw new IOException("Could not parse XML document: \"" + Encoding.UTF8.GetString(Buffer.ToArray()) + "\"", ex);

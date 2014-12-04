@@ -1,8 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using System.Collections.Generic;
 
 namespace UCIS.Net {
 	public class TCPServer {
@@ -25,7 +25,7 @@ namespace UCIS.Net {
 
 		public event EventHandler<ClientAcceptedEventArgs> ClientAccepted;
 
-		private Socket _Listener;
+		private List<Socket> listeners = new List<Socket>();
 		private UCIS.ThreadPool _ThreadPool;
 		private NetworkConnectionList _Clients = new NetworkConnectionList();
 		private ModuleCollection _Modules = new ModuleCollection();
@@ -52,22 +52,24 @@ namespace UCIS.Net {
 			}
 		}
 
-		public EndPoint LocalEndPoint { get { return _Listener.LocalEndPoint; } }
-
 		public void Listen(int Port) {
 			Listen(AddressFamily.InterNetwork, Port);
 		}
 		public void Listen(AddressFamily af, int Port) {
-			Stop();
-			_Listener = new Socket(af, SocketType.Stream, ProtocolType.Tcp);
-			_Listener.Bind(new IPEndPoint(af == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, Port));
-			_Listener.Listen(25);
-			_Listener.BeginAccept(AcceptCallback, null);
+			Socket listener = new Socket(af, SocketType.Stream, ProtocolType.Tcp);
+			try {
+				listener.Bind(new IPEndPoint(af == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, Port));
+				listener.Listen(25);
+			} catch {
+				listener.Close();
+				throw;
+			}
+			lock (listeners) listeners.Add(listener);
+			listener.BeginAccept(AcceptCallback, listener);
 		}
 
 		public void Stop() {
-			if (_Listener != null && _Listener.IsBound) _Listener.Close();
-			_Listener = null;
+			lock (listeners) foreach (Socket listener in listeners) listener.Close();
 		}
 
 		public void Close() {
@@ -84,12 +86,12 @@ namespace UCIS.Net {
 		}
 
 		private void AcceptCallback(IAsyncResult ar) {
-			if (_Listener == null) return;
+			Socket listener = (Socket)ar.AsyncState;
 			Socket Socket = null;
 			try {
-				Socket = _Listener.EndAccept(ar);
+				Socket = listener.EndAccept(ar);
 			} catch (ObjectDisposedException) {
-				Console.WriteLine("TCPServer.AcceptCallback Listener object has been disposed. Aborting.");
+				lock (listeners) listeners.Remove(listener);
 				return;
 			} catch (SocketException ex) {
 				Console.WriteLine("TCPServer.AcceptCallback SocketException: " + ex.Message);
@@ -105,7 +107,11 @@ namespace UCIS.Net {
 					Console.WriteLine(ex.ToString());
 				}
 			}
-			_Listener.BeginAccept(AcceptCallback, null);
+			try {
+				listener.BeginAccept(AcceptCallback, listener);
+			} catch (ObjectDisposedException) {
+				lock (listeners) listeners.Remove(listener);
+			}
 		}
 
 		public interface IModule {
