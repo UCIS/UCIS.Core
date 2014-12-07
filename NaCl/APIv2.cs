@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.IO;
 using UCIS.Util;
 using curve25519xsalsa20poly1305impl = UCIS.NaCl.crypto_box.curve25519xsalsa20poly1305;
 using ed25519impl = UCIS.NaCl.crypto_sign.ed25519;
@@ -244,6 +245,15 @@ namespace UCIS.NaCl.v2 {
 			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
 			fixed (Byte* p = buffer) state.process(p + offset, count);
 		}
+		public unsafe void ProcessStream(Stream stream) {
+			Byte[] buffer = new Byte[1024];
+			while (true) {
+				int read = stream.Read(buffer, 0, buffer.Length);
+				if (read == 0) break;
+				if (read < 0) throw new EndOfStreamException();
+				Process(buffer, 0, read);
+			}
+		}
 		public unsafe void GetHash(Byte[] hash, int offset) {
 			if (offset < 0 || offset + 64 > hash.Length) throw new ArgumentException("hash");
 			fixed (Byte* p = hash) state.finish(p + offset);
@@ -254,17 +264,25 @@ namespace UCIS.NaCl.v2 {
 			return hash;
 		}
 		public static unsafe void GetHash(Byte[] buffer, int offset, int count, Byte[] hash, int hashoffset) {
-			if (offset < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
-			if (offset < 0 || offset + 64 > hash.Length) throw new ArgumentException("hash");
-			sha512impl.sha512state state = new sha512impl.sha512state();
-			state.init();
-			fixed (Byte* p = buffer) state.process(p + offset, count);
-			fixed (Byte* p = hash) state.finish(p + offset);
+			sha512 sha = new sha512();
+			sha.Process(buffer, offset, count);
+			sha.GetHash(hash, hashoffset);
 		}
 		public static unsafe Byte[] GetHash(Byte[] buffer, int offset, int count) {
-			Byte[] hash = new Byte[64];
-			GetHash(buffer,offset,count,hash,0);
-			return hash;
+			sha512 sha = new sha512();
+			sha.Process(buffer, offset, count);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer) {
+			return GetHash(buffer, 0, buffer.Length);
+		}
+		public static unsafe Byte[] HashStream(Stream stream) {
+			sha512 sha = new sha512();
+			sha.ProcessStream(stream);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] HashFile(String filename) {
+			using (FileStream stream = File.OpenRead(filename)) return HashStream(stream);
 		}
 	}
 	public class ed25519keypair {
@@ -277,12 +295,12 @@ namespace UCIS.NaCl.v2 {
 		public ed25519keypair(Byte[] key) {
 			if (key.Length == 64) {
 				this.key = ArrayUtil.ToArray(key);
-			}else {
-			Byte[] pk;
+			} else {
+				Byte[] pk;
 				ed25519impl.crypto_sign_seed_keypair(out pk, out this.key, key);
-				}
+			}
 		}
-		public ed25519keypair(String key) : this(curve25519keypair.DecodeHexString(key, key.Length)) { }
+		public ed25519keypair(String key) : this(curve25519keypair.DecodeHexString(key, key.Length / 2)) { }
 		public Byte[] PublicKey { get { return ArrayUtil.Slice(key, 32, 32); } }
 		public Byte[] SecretKey { get { return ArrayUtil.Slice(key, 0, 32); } }
 		public Byte[] ExpandedKey { get { return ArrayUtil.ToArray(key); } }
