@@ -24,8 +24,8 @@ namespace UCIS.Net.HTTP {
 				String SecWebSocketKey2 = context.GetRequestHeader("Sec-WebSocket-Key2");
 				String SecWebSocketProtocol = context.GetRequestHeader("Sec-WebSocket-Protocol");
 				String[] SecWebSocketProtocols = SecWebSocketProtocol == null ? null : SecWebSocketProtocol.Split(new String[] { ", " }, StringSplitOptions.None);
-				if (!ConnectionUpgrade || !UpgradeWebsocket || SecWebSocketProtocols == null || SecWebSocketProtocols.Length == 0) goto Failure;
-				binaryProtocol = SecWebSocketProtocol != null && Array.IndexOf(SecWebSocketProtocols, "binary") != -1;
+				if (!ConnectionUpgrade || !UpgradeWebsocket) throw new InvalidOperationException("The HTTP context does not contain a WebSocket request");
+				binaryProtocol = SecWebSocketProtocols != null && Array.IndexOf(SecWebSocketProtocols, "binary") != -1;
 				if (SecWebSocketKey != null) {
 					wsProtocol = 13;
 					String hashedKey;
@@ -39,7 +39,7 @@ namespace UCIS.Net.HTTP {
 					context.SendHeader("Connection", "Upgrade");
 					context.SendHeader("Upgrade", "websocket");
 					context.SendHeader("Sec-WebSocket-Accept", hashedKey);
-					context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
+					if (SecWebSocketProtocols != null) context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					baseStream = context.GetDirectStream();
 				} else if (SecWebSocketKey1 != null && SecWebSocketKey2 != null) {
 					wsProtocol = 100;
@@ -50,7 +50,7 @@ namespace UCIS.Net.HTTP {
 					context.SendStatus(101);
 					context.SendHeader("Connection", "Upgrade");
 					context.SendHeader("Upgrade", "websocket");
-					context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
+					if (SecWebSocketProtocols != null) context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					context.SendHeader("Sec-WebSocket-Origin", context.GetRequestHeader("Origin"));
 					context.SendHeader("Sec-WebSocket-Location", "ws://" + context.GetRequestHeader("Host") + context.RequestPath);
 					baseStream = context.GetDirectStream();
@@ -58,21 +58,16 @@ namespace UCIS.Net.HTTP {
 					using (MD5 md5 = new MD5CryptoServiceProvider()) key = md5.ComputeHash(key);
 					baseStream.Write(key, 0, key.Length);
 				} else {
-					goto Failure;
+					throw new InvalidOperationException("Unsupported WebSocket request");
 				}
-				if (closed) baseStream.Close();
 			} catch (Exception) {
 				closed = true;
 				if (baseStream != null) baseStream.Close();
+				throw;
 			} finally {
 				negotiationDone = true;
 				negotiationEvent.Set();
 			}
-			return;
-Failure:
-			closed = true;
-			context.SendErrorResponse(400);
-			return;
 		}
 
 		private void CalculateHybi00MagicNumber(String s, Byte[] obuf, int opos) {
