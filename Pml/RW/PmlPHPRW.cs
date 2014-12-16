@@ -5,233 +5,225 @@ using System.IO;
 
 namespace UCIS.Pml {
 	public class PmlPHPWriter : IPmlWriter {
-		private TextWriter pWriter;
+		private Stream stream;
+		private Encoding encoding;
 
-		public static string GetMessageString(PmlElement Message) {
-			StringWriter Buffer = new StringWriter();
-			WriteMessageTo(Message, Buffer);
-			return Buffer.ToString();
-		}
-
-		public PmlPHPWriter(TextWriter Writer) {
-			pWriter = Writer;
-		}
-		public PmlPHPWriter(Stream Writer, Encoding Encoding) {
-			pWriter = new StreamWriter(Writer, Encoding);
-		}
-		public PmlPHPWriter(StringBuilder StringBuilder) {
-			pWriter = new StringWriter(StringBuilder);
-		}
-
-		public TextWriter BaseWriter {
-			get { return pWriter; }
-			set { pWriter = value; }
-		}
-
-		public void WriteMessage(PmlElement Message) {
-			WriteMessageTo(Message, pWriter);
-		}
-
-		public static void WriteMessageTo(PmlElement Message, TextWriter Writer) {
-			lock (Writer) {
-				WriteElementTo(Message, Writer);
-				Writer.Flush();
+		public static Byte[] EncodeMessage(PmlElement message) {
+			using (MemoryStream stream = new MemoryStream()) {
+				WriteMessageTo(message, stream, Encoding.UTF8);
+				return stream.ToArray();
 			}
 		}
 
-		private static void WriteElementTo(PmlElement Element, TextWriter Writer) {
-			string Str;
-			if (Element == null) {
-				Writer.Write("N;");
+		public PmlPHPWriter(Stream stream) {
+			this.stream = stream;
+			this.encoding = Encoding.UTF8;
+		}
+		public PmlPHPWriter(Stream stream, Encoding encoding) {
+			this.stream = stream;
+			this.encoding = encoding;
+		}
+
+		public Stream Stream { get { return stream; } }
+
+		public void WriteMessage(PmlElement message) {
+			WriteMessageTo(message, stream, encoding);
+		}
+
+		public static void WriteMessageTo(PmlElement message, Stream stream, Encoding encoding) {
+			lock (stream) {
+				WriteElementTo(message, stream, encoding);
+				stream.Flush();
+			}
+		}
+
+		private static void WriteString(Stream stream, Encoding encoding, String str) {
+			Byte[] bytes = encoding.GetBytes(str);
+			stream.Write(bytes, 0, bytes.Length);
+		}
+
+		private static void WriteElementTo(PmlElement element, Stream stream, Encoding encoding) {
+			if (element == null) {
+				WriteString(stream, encoding, "N;");
 				return;
 			}
-			switch (Element.Type) {
+			switch (element.Type) {
 				case PmlType.Null:
-					Writer.Write("N;");
+					WriteString(stream, encoding, "N;");
 					break;
 				case PmlType.String:
+					Byte[] bytes = encoding.GetBytes(element.ToString());
+					WriteString(stream, encoding, "s:");
+					WriteString(stream, encoding, bytes.Length.ToString());
+					WriteString(stream, encoding, ":\"");
+					stream.Write(bytes, 0, bytes.Length);
+					WriteString(stream, encoding, "\";");
+					break;
 				case PmlType.Binary:
-					Str = Element.ToString();
-					Writer.Write("s:");
-					Writer.Write(Encoding.UTF8.GetByteCount(Str).ToString());
-					Writer.Write(":\"");
-					Writer.Write(Str);
-					Writer.Write("\";");
+					bytes = element.ToByteArray();
+					WriteString(stream, encoding, "s:");
+					WriteString(stream, encoding, bytes.Length.ToString());
+					WriteString(stream, encoding, ":\"");
+					stream.Write(bytes, 0, bytes.Length);
+					WriteString(stream, encoding, "\";");
 					break;
 				case PmlType.Integer:
-					Writer.Write("i:");
-					Writer.Write(Element.ToString());
-					Writer.Write(";");
+					WriteString(stream, encoding, "i:");
+					WriteString(stream, encoding, element.ToString());
+					WriteString(stream, encoding, ";");
 					break;
 				case PmlType.Dictionary:
-					Writer.Write("a:");
-					Writer.Write(((IDictionary<string, PmlElement>)Element).Count.ToString());
-					Writer.Write(":{");
-					foreach (KeyValuePair<string, PmlElement> Child in (IDictionary<string, PmlElement>)Element) {
-						Str = Child.Key;
-						Writer.Write("s:");
-						Writer.Write(Encoding.UTF8.GetByteCount(Str).ToString());
-						Writer.Write(":\"");
-						Writer.Write(Str);
-						Writer.Write("\";");
-						WriteElementTo(Child.Value, Writer);
+					IDictionary<String, PmlElement> dict = (IDictionary<String, PmlElement>)element;
+					WriteString(stream, encoding, "a:");
+					WriteString(stream, encoding, dict.Count.ToString());
+					WriteString(stream, encoding, ":{");
+					foreach (KeyValuePair<String, PmlElement> item in dict) {
+						bytes = encoding.GetBytes(item.Key);
+						WriteString(stream, encoding, "s:");
+						WriteString(stream, encoding, bytes.Length.ToString());
+						WriteString(stream, encoding, ":\"");
+						stream.Write(bytes, 0, bytes.Length);
+						WriteString(stream, encoding, "\";");
+						WriteElementTo(item.Value, stream, encoding);
 					}
-
-					Writer.Write("}");
+					WriteString(stream, encoding, "}");
 					break;
 				case PmlType.Collection:
-					int I = 0;
-					Writer.Write("a:");
-					Writer.Write(((ICollection<PmlElement>)Element).Count.ToString());
-					Writer.Write(":{");
-					foreach (PmlElement Child in (ICollection<PmlElement>)Element) {
-						Writer.Write("i:");
-						Writer.Write(I.ToString());
-						Writer.Write(";");
-						WriteElementTo(Child, Writer);
-						I += 1;
+					ICollection<PmlElement> col = (ICollection<PmlElement>)element;
+					WriteString(stream, encoding, "a:");
+					WriteString(stream, encoding, col.Count.ToString());
+					WriteString(stream, encoding, ":{");
+					int i = 0;
+					foreach (PmlElement item in col) {
+						WriteString(stream, encoding, "i:");
+						WriteString(stream, encoding, i.ToString());
+						WriteString(stream, encoding, ";");
+						WriteElementTo(item, stream, encoding);
+						i += 1;
 					}
-
-					Writer.Write("}");
+					WriteString(stream, encoding, "}");
 					break;
 				default:
-					Writer.Write("N;");
+					WriteString(stream, encoding, "N;");
 					break;
 			}
 		}
 	}
 	public class PmlPHPReader : IPmlReader {
-		private TextReader pReader;
+		private Stream stream;
+		private Encoding encoding;
 
-		public static PmlElement GetMessageFromString(string Data) {
-			StringReader Buffer = new StringReader(Data);
-			return ReadMessageFrom(Buffer);
-		}
-
-		public PmlPHPReader(TextReader Reader) {
-			pReader = Reader;
-		}
-		public PmlPHPReader(Stream Reader, Encoding Encoding) {
-			pReader = new StreamReader(Reader, Encoding);
-		}
-		public PmlPHPReader(string Data) {
-			pReader = new StringReader(Data);
+		public static PmlElement DecodeMessage(Byte[] buffer) {
+			using (MemoryStream ms = new MemoryStream(buffer, false)) return ReadMessageFrom(ms, Encoding.UTF8);
 		}
 
-		public TextReader BaseReader {
-			get { return pReader; }
-			set { pReader = value; }
+		public PmlPHPReader(Stream stream) {
+			this.stream = stream;
+			this.encoding = Encoding.UTF8;
 		}
+		public PmlPHPReader(Stream stream, Encoding encoding) {
+			this.stream = stream;
+			this.encoding = encoding;
+		}
+
+		public Stream Stream { get { return stream; } }
 
 		public PmlElement ReadMessage() {
-			return ReadMessageFrom(pReader);
+			return ReadMessageFrom(stream, encoding);
 		}
 
-		public static PmlElement ReadMessageFrom(TextReader Reader) {
-			lock (Reader) {
-				return ReadElementFrom(Reader);
-			}
+		public static PmlElement ReadMessageFrom(Stream stream, Encoding encoding) {
+			lock (stream) return ReadElementFrom(stream, encoding);
 		}
 
 		public class PhpSerializerException : Exception {
+			public PhpSerializerException(int Position, char Read, char Expected) : base("At position " + Position.ToString() + " expected " + Expected + " but got " + Read) { }
+		}
 
-			public PhpSerializerException(int Position, char Read, char Expected)
-				: base("At position " + Position.ToString() + " expected " + Expected + " but got " + Read) {
+		private static Char ReadChar(Stream stream) {
+			int value = stream.ReadByte();
+			if (value < 0) throw new EndOfStreamException();
+			return (Char)value;
+		}
+		private static string ReadNumber(Stream stream, Char terminatedBy) {
+			String str = "";
+			while (true) {
+				Char c = ReadChar(stream);
+				if (c == terminatedBy) break;
+				if (c < '0' && c > '9' && c != '.' && c != ',' && c != '-' && c != 'e') throw new PhpSerializerException(0, c, terminatedBy);
+				str += c;
 			}
+			return str;
 		}
-
-		private static char ReadChar(TextReader Reader) {
-			char[] Buffer = new char[1];
-			if (Reader.Read(Buffer, 0, 1) != 1) throw new EndOfStreamException();
-			return Buffer[0];
+		private static void ReadExpect(Stream stream, Char expect) {
+			Char c = ReadChar(stream);
+			if (c != expect) throw new PhpSerializerException(0, c, expect);
 		}
-
-		private static string ReadNumber(TextReader Reader, char TerminatedBy) {
-			char Buffer = '\0';
-			string S = "";
-			do {
-				Buffer = ReadChar(Reader);
-				if (Buffer == TerminatedBy) break;
-				if (Buffer < '0' && Buffer > '9' && Buffer != '.' && Buffer != ',' && Buffer != '-' && Buffer != 'e')
-					throw new PhpSerializerException(0, Buffer, TerminatedBy);
-				S += Buffer;
+		private static String ReadString(Stream stream, Encoding encoding, int length) {
+			Byte[] bytes = new Byte[length];
+			while (length > 0) {
+				int read = stream.Read(bytes, bytes.Length - length, length);
+				if (read <= 0) throw new EndOfStreamException();
+				length -= read;
 			}
-			while (true);
-			return S;
+			return encoding.GetString(bytes);
 		}
 
-		private static void ReadExpect(TextReader Reader, char Expect) {
-			char Read = '\0';
-			Read = ReadChar(Reader);
-			if (Read != Expect) throw new PhpSerializerException(0, Read, Expect);
-		}
-
-		private static PmlElement ReadElementFrom(TextReader Reader) {
-			char Type = '\0';
-			char Read = '\0';
-			int KL;
-			Type = ReadChar(Reader);
-			switch (Type) {
+		private static PmlElement ReadElementFrom(Stream stream, Encoding encoding) {
+			Char type = ReadChar(stream);
+			switch (type) {
 				case 'N':
-					ReadExpect(Reader, ';');
+					ReadExpect(stream, ';');
 					return new PmlNull();
 				case 'i':
-					ReadExpect(Reader, ':');
-					return new PmlInteger(ReadNumber(Reader, ';'));
+					ReadExpect(stream, ':');
+					return new PmlInteger(ReadNumber(stream, ';'));
 				case 'd':
-					ReadExpect(Reader, ':');
-					return new PmlString(ReadNumber(Reader, ';'));
-				//Return New PML.PMLNumber(ReadNumber(Reader, ";"c))
+					ReadExpect(stream, ':');
+					//Return New PML.PMLNumber(ReadNumber(Reader, ";"c))
+					return new PmlString(ReadNumber(stream, ';'));
 				case 's':
-					KL = 0;
-					char[] Buffer = null;
-					ReadExpect(Reader, ':');
-					KL = int.Parse(ReadNumber(Reader, ':'));
-					Buffer = new Char[KL];
-					ReadExpect(Reader, '"');
-					Reader.ReadBlock(Buffer, 0, KL);
-					ReadExpect(Reader, '"');
-					ReadExpect(Reader, ';');
-					return new PmlString(new String(Buffer));
+					ReadExpect(stream, ':');
+					int strlen = int.Parse(ReadNumber(stream, ':'));
+					ReadExpect(stream, '"');
+					String str = ReadString(stream, encoding, strlen);
+					ReadExpect(stream, '"');
+					ReadExpect(stream, ';');
+					return new PmlString(str);
 				case 'a':
-					PmlDictionary D = new PmlDictionary();
-					int I = 0;
-					int L = 0;
-					KL = 0;
-					char[] K = null;
-					ReadExpect(Reader, ':');
-					L = int.Parse(ReadNumber(Reader, ':'));
-					ReadExpect(Reader, '{');
-					for (I = 1; I <= L; I++) {
-						Read = ReadChar(Reader);
-						switch (Read) {
+					PmlDictionary dict = new PmlDictionary();
+					ReadExpect(stream, ':');
+					int count = int.Parse(ReadNumber(stream, ':'));
+					ReadExpect(stream, '{');
+					for (int i = 0; i < count; i++) {
+						Char read = ReadChar(stream);
+						String key;
+						switch (read) {
 							case 'i':
-								ReadExpect(Reader, ':');
-								K = ReadNumber(Reader, ';').ToCharArray();
+								ReadExpect(stream, ':');
+								key = ReadNumber(stream, ';');
 								break;
 							case 's':
-								ReadExpect(Reader, ':');
-								KL = int.Parse(ReadNumber(Reader, ':'));
-								K = new char[KL];
-								ReadExpect(Reader, '"');
-								Reader.ReadBlock(K, 0, KL);
-								ReadExpect(Reader, '"');
-								ReadExpect(Reader, ';');
+								ReadExpect(stream, ':');
+								strlen = int.Parse(ReadNumber(stream, ':'));
+								ReadExpect(stream, '"');
+								key = ReadString(stream, encoding, strlen);
+								ReadExpect(stream, '"');
+								ReadExpect(stream, ';');
 								break;
 							case 'd':
-								ReadExpect(Reader, ':');
-								K = ReadNumber(Reader, ';').ToCharArray();
+								ReadExpect(stream, ':');
+								key = ReadNumber(stream, ';');
 								break;
 							default:
-								throw new NotSupportedException("Only integer and string keys are supported, got: " + Read);
+								throw new NotSupportedException("Only integer and string keys are supported, got: " + read);
 						}
-						D.Add(new String(K), ReadElementFrom(Reader));
+						dict.Add(key, ReadElementFrom(stream, encoding));
 					}
-
-					ReadExpect(Reader, '}');
-					return D;
+					ReadExpect(stream, '}');
+					return dict;
 				default:
-					throw new NotSupportedException("Unknown type: " + Type);
+					throw new NotSupportedException("Unknown type: " + type);
 			}
 		}
 	}
