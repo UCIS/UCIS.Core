@@ -130,11 +130,15 @@ namespace UCIS.Net {
 			}
 		}
 		public override int EndRead(IAsyncResult asyncResult) {
+			int read;
 			if (asyncResult is AsyncResult) {
-				return ((AsyncResult)asyncResult).Count;
+				read = ((AsyncResult)asyncResult).Count;
 			} else {
-				return Socket.EndReceive(asyncResult);
+				read = Socket.EndReceive(asyncResult);
 			}
+			_BytesRead += (ulong)read;
+			Interlocked.Add(ref _totalBytesRead, read);
+			return read;
 		}
 
 		public int PeekByte() {
@@ -224,18 +228,24 @@ namespace UCIS.Net {
 			Interlocked.Add(ref _totalBytesWritten, (long)size);
 		}
 
+		public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			IAsyncResult ar = base.BeginWrite(buffer, offset, count, callback, state);
+			_BytesWritten += (ulong)count;
+			Interlocked.Add(ref _totalBytesWritten, count);
+			return ar;
+		}
+		public override void EndWrite(IAsyncResult asyncResult) {
+			base.EndWrite(asyncResult);
+		}
+
 		public override void Close() {
 			Socket s = Interlocked.Exchange(ref _Socket, null);
 			try {
-				if (s != null) {
-					try {
-						if (s.Connected) s.Shutdown(SocketShutdown.Both);
-					} catch { }
-					s.Close();
-				}
+				if (s != null) s.Close();
 			} finally {
 				base.Close();
-				if (Closed != null) Closed(this, new EventArgs());
+				EventHandler eh = Closed;
+				if (eh != null) eh(this, new EventArgs());
 			}
 		}
 
