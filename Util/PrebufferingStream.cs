@@ -20,9 +20,7 @@ namespace UCIS.Util {
 				base.SetCompleted(synchronously, error);
 			}
 			public int WaitForCompletion() {
-				WaitHandle wh = null;
-				lock (this) if (!IsCompleted) wh = AsyncWaitHandle;
-				if (wh != null) wh.WaitOne();
+				base.WaitForCompletion();
 				ThrowError();
 				return Count;
 			}
@@ -147,7 +145,7 @@ namespace UCIS.Util {
 		}
 
 		public override int Read(byte[] buffer, int offset, int count) {
-			if (prebuffercount > 0 || count < 16) {
+			if (prebuffercount > 0 || (count < 16 && defaultbuffersize > 0)) {
 				if (prebuffercount == 0) if (Prebuffer() < 1) return 0;
 				if (count > prebuffercount) count = prebuffercount;
 				Buffer.BlockCopy(prebuffer, prebufferoffset, buffer, offset, count);

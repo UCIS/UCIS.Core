@@ -7,10 +7,8 @@ using UCIS.Util;
 
 namespace UCIS.Net.HTTP {
 	public class WebSocketPacketStream : PacketStream {
-		Stream baseStream;
-		Boolean negotiationDone = false;
+		PrebufferingStream baseStream;
 		Boolean closed = false;
-		ManualResetEvent negotiationEvent = new ManualResetEvent(false);
 		Boolean binaryProtocol = false;
 		int wsProtocol = -1;
 
@@ -29,7 +27,7 @@ namespace UCIS.Net.HTTP {
 				if (SecWebSocketKey != null) {
 					wsProtocol = 13;
 					String hashedKey;
-					using (SHA1 sha1 = new SHA1Managed()) {
+					using (SHA1 sha1 = SHA1Managed.Create()) {
 						Byte[] hashable = Encoding.ASCII.GetBytes(SecWebSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 						Byte[] hash = sha1.ComputeHash(hashable);
 						hashedKey = Convert.ToBase64String(hash, Base64FormattingOptions.None);
@@ -40,7 +38,8 @@ namespace UCIS.Net.HTTP {
 					context.SendHeader("Upgrade", "websocket");
 					context.SendHeader("Sec-WebSocket-Accept", hashedKey);
 					if (SecWebSocketProtocols != null) context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
-					baseStream = context.GetDirectStream();
+					Stream rawstream = context.GetDirectStream();
+					baseStream = rawstream as PrebufferingStream ?? new PrebufferingStream(rawstream);
 				} else if (SecWebSocketKey1 != null && SecWebSocketKey2 != null) {
 					wsProtocol = 100;
 					Byte[] key = new Byte[4 + 4 + 8];
@@ -53,9 +52,10 @@ namespace UCIS.Net.HTTP {
 					if (SecWebSocketProtocols != null) context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					context.SendHeader("Sec-WebSocket-Origin", context.GetRequestHeader("Origin"));
 					context.SendHeader("Sec-WebSocket-Location", "ws://" + context.GetRequestHeader("Host") + context.RequestPath);
-					baseStream = context.GetDirectStream();
-					ReadAllBytes(key, 8, 8);
-					using (MD5 md5 = new MD5CryptoServiceProvider()) key = md5.ComputeHash(key);
+					Stream rawstream = context.GetDirectStream();
+					baseStream = rawstream as PrebufferingStream ?? new PrebufferingStream(rawstream);
+					baseStream.ReadAll(key, 8, 8);
+					using (MD5 md5 = MD5.Create()) key = md5.ComputeHash(key);
 					baseStream.Write(key, 0, key.Length);
 				} else {
 					throw new InvalidOperationException("Unsupported WebSocket request");
@@ -64,9 +64,6 @@ namespace UCIS.Net.HTTP {
 				closed = true;
 				if (baseStream != null) baseStream.Close();
 				throw;
-			} finally {
-				negotiationDone = true;
-				negotiationEvent.Set();
 			}
 		}
 
@@ -87,9 +84,9 @@ namespace UCIS.Net.HTTP {
 			obuf[opos++] = (Byte)(number >> 0);
 		}
 
-		public override bool CanRead { get { return negotiationDone && !closed; } }
+		public override bool CanRead { get { return !closed && baseStream.CanRead; } }
 		public override bool CanSeek { get { return false; } }
-		public override bool CanWrite { get { return negotiationDone && !closed; } }
+		public override bool CanWrite { get { return !closed && baseStream.CanWrite; } }
 		public override void Flush() { }
 
 		public override void Close() {
@@ -115,15 +112,6 @@ namespace UCIS.Net.HTTP {
 			set { throw new NotSupportedException(); }
 		}
 
-		private void ReadAllBytes(Byte[] buffer, int offset, int count) {
-			while (count > 0) {
-				int l = baseStream.Read(buffer, offset, count);
-				if (l <= 0) throw new EndOfStreamException();
-				offset += l;
-				count -= l;
-			}
-		}
-
 		Byte[] leftOver = null;
 		public override int Read(byte[] buffer, int offset, int count) {
 			Byte[] packet = leftOver;
@@ -136,8 +124,6 @@ namespace UCIS.Net.HTTP {
 			return count;
 		}
 		private int ReadRawMessage(out Byte[] payloadret) {
-			if (leftOver != null) throw new InvalidOperationException("There is remaining data from a partial read");
-			negotiationEvent.WaitOne();
 			if (closed) throw new ObjectDisposedException("WebSocketPacketStream");
 			if (wsProtocol == 13) {
 				Byte[] multipartbuffer = null;
@@ -162,10 +148,10 @@ namespace UCIS.Net.HTTP {
 						pllen |= (uint)baseStream.ReadByte();
 					}
 					Byte[] mask = new Byte[4];
-					if (masked) ReadAllBytes(mask, 0, mask.Length);
+					if (masked) baseStream.ReadAll(mask, 0, mask.Length);
 					//Console.WriteLine("Read flags={0} masked={1} mask={2} len={3}", flags, masked, mask, pllen);
 					Byte[] payload = new Byte[pllen]; // + (4 - (pllen % 4))];
-					ReadAllBytes(payload, 0, (int)pllen);
+					baseStream.ReadAll(payload, 0, (int)pllen);
 					if (masked) for (int i = 0; i < (int)pllen; i++) payload[i] ^= mask[i % 4];
 					int opcode = flags & 0x0f;
 					Boolean fin = (flags & 0x80) != 0;
@@ -217,7 +203,7 @@ namespace UCIS.Net.HTTP {
 						if ((b & 0x80) == 0) break;
 					}
 					Byte[] buffer = new Byte[length];
-					ReadAllBytes(buffer, 0, length);
+					baseStream.ReadAll(buffer, 0, length);
 					if (frameType == 0xff && length == 0) {
 						payloadret = null;
 						return 0;
@@ -246,6 +232,7 @@ namespace UCIS.Net.HTTP {
 			}
 		}
 		public override byte[] ReadPacket() {
+			if (leftOver != null) throw new InvalidOperationException("There is remaining data from a partial read");
 			Byte[] payload;
 			int opcode = ReadRawMessage(out payload);
 			switch (opcode) {
@@ -255,17 +242,7 @@ namespace UCIS.Net.HTTP {
 				default: throw new InvalidOperationException("Internal error: unexpected frame type");
 			}
 		}
-		private delegate Byte[] ReadPacketDelegate();
-		ReadPacketDelegate readPacketDelegate;
-		public override IAsyncResult BeginReadPacket(AsyncCallback callback, object state) {
-			if (readPacketDelegate == null) readPacketDelegate = ReadPacket;
-			return readPacketDelegate.BeginInvoke(callback, state);
-		}
-		public override byte[] EndReadPacket(IAsyncResult asyncResult) {
-			return readPacketDelegate.EndInvoke(asyncResult);
-		}
 		public override void Write(byte[] buffer, int offset, int count) {
-			negotiationEvent.WaitOne();
 			if (!binaryProtocol) {
 				String encoded = Convert.ToBase64String(buffer, offset, count, Base64FormattingOptions.None);
 				buffer = Encoding.ASCII.GetBytes(encoded);
@@ -275,7 +252,6 @@ namespace UCIS.Net.HTTP {
 			WriteRawMessage(buffer, offset, count, binaryProtocol);
 		}
 		private void WriteRawMessage(Byte[] buffer, int offset, int count, Boolean binary) {
-			negotiationEvent.WaitOne();
 			if (closed) throw new ObjectDisposedException("WebSocketPacketStream");
 			if (wsProtocol == 13) {
 				WriteProtocol13Frame(binary ? (Byte)0x2 : (Byte)0x1, buffer, offset, count);
@@ -318,6 +294,7 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public String ReadTextMessage() {
+			if (leftOver != null) throw new InvalidOperationException("There is remaining data from a partial read");
 			Byte[] payload;
 			int opcode = ReadRawMessage(out payload);
 			switch (opcode) {
@@ -327,18 +304,62 @@ namespace UCIS.Net.HTTP {
 				default: throw new InvalidOperationException("Internal error: unexpected frame type");
 			}
 		}
-		private delegate String ReadTextMessageDelegate();
-		ReadTextMessageDelegate readTextMessageDelegate;
-		public IAsyncResult BeginReadTextMessage(AsyncCallback callback, object state) {
-			if (readTextMessageDelegate == null) readTextMessageDelegate = ReadTextMessage;
-			return readTextMessageDelegate.BeginInvoke(callback, state);
-		}
-		public String EndReadTextMessage(IAsyncResult asyncResult) {
-			return readTextMessageDelegate.EndInvoke(asyncResult);
-		}
 		public void WriteTextMessage(String message) {
 			Byte[] packet = Encoding.UTF8.GetBytes(message);
 			WriteRawMessage(packet, 0, packet.Length, false);
+		}
+
+		class AsyncResult : AsyncResultBase {
+			public Byte[] Buffer { get; private set; }
+			public int Opcode { get; private set; }
+			public AsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
+			public new void SetCompleted(Boolean synchronously, Byte[] buffer, int opcode, Exception error) {
+				this.Buffer = buffer;
+				this.Opcode = opcode;
+				base.SetCompleted(synchronously, error);
+			}
+			public void WaitForCompletion() {
+				base.WaitForCompletion();
+				ThrowError();
+			}
+		}
+		private void AsyncReadReady(IAsyncResult ar) {
+			AsyncResult myar = (AsyncResult)ar.AsyncState;
+			try {
+				baseStream.EndPrebuffering(ar);
+				Byte[] payload;
+				int opcode = ReadRawMessage(out payload);
+				myar.SetCompleted(ar.CompletedSynchronously, payload, opcode, null);
+			} catch (Exception ex) {
+				myar.SetCompleted(ar.CompletedSynchronously, null, 0, ex);
+			}
+		}
+		public override IAsyncResult BeginReadPacket(AsyncCallback callback, object state) {
+			if (leftOver != null) throw new InvalidOperationException("There is remaining data from a partial read");
+			AsyncResult ar = new AsyncResult(callback, state);
+			baseStream.BeginPrebuffering(AsyncReadReady, ar);
+			return ar;
+		}
+		public override byte[] EndReadPacket(IAsyncResult asyncResult) {
+			AsyncResult ar = (AsyncResult)asyncResult;
+			switch (ar.Opcode) {
+				case 0: return null;
+				case 1: return Convert.FromBase64String(Encoding.UTF8.GetString(ar.Buffer));
+				case 2: return ar.Buffer;
+				default: throw new InvalidOperationException("Internal error: unexpected frame type");
+			}
+		}
+		public IAsyncResult BeginReadTextMessage(AsyncCallback callback, object state) {
+			return BeginReadPacket(callback, state);
+		}
+		public String EndReadTextMessage(IAsyncResult asyncResult) {
+			AsyncResult ar = (AsyncResult)asyncResult;
+			switch (ar.Opcode) {
+				case 0: return null;
+				case 1:
+				case 2: return Encoding.UTF8.GetString(ar.Buffer);
+				default: throw new InvalidOperationException("Internal error: unexpected frame type");
+			}
 		}
 	}
 }

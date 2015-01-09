@@ -7,6 +7,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using UCIS.Util;
 using HTTPHeader = System.Collections.Generic.KeyValuePair<string, string>;
 
@@ -16,6 +17,7 @@ namespace UCIS.Net.HTTP {
 		public Boolean ServeFlashPolicyFile { get; set; }
 		public X509Certificate SSLCertificate { get; set; }
 		public Boolean AllowGzipCompression { get; set; }
+		public int RequestTimeout { get; set; }
 		public IList<KeyValuePair<String, String>> DefaultHeaders { get; private set; }
 		public ErrorEventHandler OnError;
 		private Socket Listener = null;
@@ -25,6 +27,7 @@ namespace UCIS.Net.HTTP {
 				new KeyValuePair<String, String>("Server", "UCIS Embedded Webserver"),
 			};
 			AllowGzipCompression = true;
+			RequestTimeout = 5;
 		}
 
 		public void Listen(int port) {
@@ -61,7 +64,7 @@ namespace UCIS.Net.HTTP {
 			SslStream ssl = (SslStream)args[1];
 			try {
 				ssl.EndAuthenticateAsServer(ar);
-				new HTTPContext(this, ssl, socket);
+				new HTTPContext(this, ssl, socket, -1);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
 				socket.Close();
@@ -78,7 +81,7 @@ namespace UCIS.Net.HTTP {
 				SslStream ssl = new SslStream(streamwrapper);
 				ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl });
 			} else {
-				new HTTPContext(this, streamwrapper, socket);
+				new HTTPContext(this, streamwrapper, socket, -1);
 			}
 		}
 
@@ -147,6 +150,8 @@ namespace UCIS.Net.HTTP {
 		private Stream ResponseStream = null;
 		private Stream RequestStream = null;
 		private Boolean AcceptGzipCompression = false;
+		private int KeepAliveMaxRequests = 20;
+		private Timer TimeoutTimer = null;
 		public Boolean AllowGzipCompression { get; set; }
 
 		private enum HTTPConnectionState {
@@ -435,13 +440,14 @@ namespace UCIS.Net.HTTP {
 			public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
 		}
 
-		public HTTPContext(HTTPServer server, TCPStream stream) : this(server, stream, stream.Socket) { }
-		public HTTPContext(HTTPServer server, Socket socket) : this(server, null, socket) { }
-		public HTTPContext(HTTPServer server, Stream stream, Socket socket) {
+		public HTTPContext(HTTPServer server, TCPStream stream) : this(server, stream, stream.Socket, -1) { }
+		public HTTPContext(HTTPServer server, Socket socket) : this(server, null, socket, -1) { }
+		public HTTPContext(HTTPServer server, Stream stream, Socket socket, int maxrequests) {
 			if (ReferenceEquals(server, null)) throw new ArgumentNullException("server");
 			if (ReferenceEquals(socket, null) && ReferenceEquals(stream, null)) throw new ArgumentNullException("stream");
 			this.Server = server;
 			this.Socket = socket;
+			if (maxrequests != -1) this.KeepAliveMaxRequests = maxrequests;
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
 				this.RemoteEndPoint = socket.RemoteEndPoint;
@@ -451,8 +457,8 @@ namespace UCIS.Net.HTTP {
 			Writer = new StreamWriter(stream, Encoding.ASCII);
 			Writer.NewLine = "\r\n";
 			Writer.AutoFlush = true;
-			Reader = stream as PrebufferingStream;
-			if (Reader == null) Reader = new PrebufferingStream(stream);
+			Reader = stream as PrebufferingStream ?? new PrebufferingStream(stream);
+			if (server.RequestTimeout > 0) TimeoutTimer = new Timer(TimeoutCallback, null, server.RequestTimeout * 1000, Timeout.Infinite);
 			Reader.BeginPrebuffering(PrebufferCallback, null);
 		}
 
@@ -474,6 +480,10 @@ namespace UCIS.Net.HTTP {
 		}
 		private String ReadLine() {
 			return ReadLine(Reader);
+		}
+
+		private void TimeoutCallback(Object state) {
+			if (State == HTTPConnectionState.Starting || State == HTTPConnectionState.ReceivingRequest) Close();
 		}
 
 		private void PrebufferCallback(IAsyncResult ar) {
@@ -531,6 +541,7 @@ namespace UCIS.Net.HTTP {
 					String[] acceptEncodings = acceptEncodingHeader.Split(',');
 					foreach (String encoding in acceptEncodings) if (encoding.Trim().Equals("gzip", StringComparison.InvariantCultureIgnoreCase)) AcceptGzipCompression = true;
 				}
+				if (TimeoutTimer != null) TimeoutTimer.Dispose();
 				State = HTTPConnectionState.ProcessingRequest;
 				IHTTPContentProvider content = Server.ContentProvider;
 				if (content == null) {
@@ -727,7 +738,14 @@ namespace UCIS.Net.HTTP {
 			if (!SuppressStandardHeaders) {
 				foreach (KeyValuePair<String, String> header in Server.DefaultHeaders) SendHeader(header.Key, header.Value);
 				SendHeader("Date", DateTime.UtcNow.ToString("R"));
-				if (KeepAlive) SendHeader("Connection", "Keep-Alive");
+				if (KeepAlive) {
+					if (KeepAliveMaxRequests > 1) {
+						SendHeader("Connection", "Keep-Alive");
+						if (Server.RequestTimeout > 0) SendHeader("Keep-Alive", String.Format("timeout={0}, max={1}", Server.RequestTimeout, KeepAliveMaxRequests));
+					} else {
+						SendHeader("Connection", "Close");
+					}
+				}
 			}
 		}
 		public void SendHeader(String name, String value) {
@@ -797,9 +815,9 @@ namespace UCIS.Net.HTTP {
 				}
 			}
 			State = HTTPConnectionState.Completed;
-			if (KeepAlive) {
+			if (KeepAlive && KeepAliveMaxRequests > 1) {
 				State = HTTPConnectionState.Closed;
-				new HTTPContext(Server, Reader, Socket);
+				new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1);
 			} else {
 				Close();
 			}
@@ -810,7 +828,7 @@ namespace UCIS.Net.HTTP {
 			KeepAlive = false;
 			BeginResponseData();
 			State = HTTPConnectionState.Closed;
-			return Reader;
+			return Reader.Buffered > 0 ? Reader : Reader.BaseStream;
 		}
 
 		private void SendErrorAndClose(int code) {
