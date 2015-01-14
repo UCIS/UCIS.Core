@@ -32,12 +32,11 @@ namespace UCIS.Net.HTTP {
 						Byte[] hash = sha1.ComputeHash(hashable);
 						hashedKey = Convert.ToBase64String(hash, Base64FormattingOptions.None);
 					}
-					context.SuppressStandardHeaders = true;
 					context.SendStatus(101);
-					context.SendHeader("Connection", "Upgrade");
-					context.SendHeader("Upgrade", "websocket");
-					context.SendHeader("Sec-WebSocket-Accept", hashedKey);
-					if (SecWebSocketProtocols != null) context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
+					context.SetResponseHeader("Connection", "Upgrade");
+					context.SetResponseHeader("Upgrade", "websocket");
+					context.SetResponseHeader("Sec-WebSocket-Accept", hashedKey);
+					if (SecWebSocketProtocols != null) context.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					Stream rawstream = context.GetDirectStream();
 					baseStream = rawstream as PrebufferingStream ?? new PrebufferingStream(rawstream);
 				} else if (SecWebSocketKey1 != null && SecWebSocketKey2 != null) {
@@ -45,11 +44,10 @@ namespace UCIS.Net.HTTP {
 					Byte[] key = new Byte[4 + 4 + 8];
 					CalculateHybi00MagicNumber(SecWebSocketKey1, key, 0);
 					CalculateHybi00MagicNumber(SecWebSocketKey2, key, 4);
-					context.SuppressStandardHeaders = true;
 					context.SendStatus(101);
-					context.SendHeader("Connection", "Upgrade");
-					context.SendHeader("Upgrade", "websocket");
-					if (SecWebSocketProtocols != null) context.SendHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
+					context.SetResponseHeader("Connection", "Upgrade");
+					context.SetResponseHeader("Upgrade", "websocket");
+					if (SecWebSocketProtocols != null) context.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					context.SendHeader("Sec-WebSocket-Origin", context.GetRequestHeader("Origin"));
 					context.SendHeader("Sec-WebSocket-Location", "ws://" + context.GetRequestHeader("Host") + context.RequestPath);
 					Stream rawstream = context.GetDirectStream();
@@ -313,12 +311,12 @@ namespace UCIS.Net.HTTP {
 			public Byte[] Buffer { get; private set; }
 			public int Opcode { get; private set; }
 			public AsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
-			public new void SetCompleted(Boolean synchronously, Byte[] buffer, int opcode, Exception error) {
+			public void SetCompleted(Boolean synchronously, Byte[] buffer, int opcode, Exception error) {
 				this.Buffer = buffer;
 				this.Opcode = opcode;
 				base.SetCompleted(synchronously, error);
 			}
-			public void WaitForCompletion() {
+			public new void WaitForCompletion() {
 				base.WaitForCompletion();
 				ThrowError();
 			}
