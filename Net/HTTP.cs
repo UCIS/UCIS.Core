@@ -136,15 +136,12 @@ namespace UCIS.Net.HTTP {
 		public int HTTPVersion { get; set; }
 
 		public Socket Socket { get; private set; }
-		public Boolean SuppressStandardHeaders { get; set; }
 		public Boolean AsynchronousCompletion { get; set; }
 		public Boolean KeepAlive { get; set; }
 		public TCPStream TCPStream { get { return Reader.BaseStream as TCPStream; } }
-		public int Status { get; private set; }
 
-		private StreamWriter Writer;
 		private PrebufferingStream Reader;
-		private List<HTTPHeader> RequestHeaders = null;
+		private List<HTTPHeader> RequestHeaders = null, ResponseHeaders = null;
 		private HTTPConnectionState State = HTTPConnectionState.Starting;
 		private KeyValuePair<String, String>[] QueryParameters = null, PostParameters = null, Cookies = null;
 		private Stream ResponseStream = null;
@@ -153,6 +150,8 @@ namespace UCIS.Net.HTTP {
 		private int KeepAliveMaxRequests = 20;
 		private Timer TimeoutTimer = null;
 		public Boolean AllowGzipCompression { get; set; }
+		private int ResponseStatusCode;
+		private String ResponseStatusInfo;
 
 		private enum HTTPConnectionState {
 			Starting = 0,
@@ -188,7 +187,7 @@ namespace UCIS.Net.HTTP {
 						break;
 					case HTTPResponseStreamMode.Buffered:
 					case HTTPResponseStreamMode.Hybrid:
-						if (Context.State != HTTPConnectionState.ProcessingRequest && Context.State != HTTPConnectionState.SendingHeaders) throw new InvalidOperationException("The response stream can not be created in the current state");
+						if (Context.State != HTTPConnectionState.ProcessingRequest) throw new InvalidOperationException("The response stream can not be created in the current state");
 						break;
 					default: throw new InvalidOperationException("Response stream mode is not supported");
 				}
@@ -454,11 +453,8 @@ namespace UCIS.Net.HTTP {
 				if (socket.ProtocolType == ProtocolType.Tcp) socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 				if (stream == null) stream = new NetworkStream(socket, true);
 			}
-			Writer = new StreamWriter(stream, Encoding.ASCII);
-			Writer.NewLine = "\r\n";
-			Writer.AutoFlush = true;
 			Reader = stream as PrebufferingStream ?? new PrebufferingStream(stream);
-			if (server.RequestTimeout > 0) TimeoutTimer = new Timer(TimeoutCallback, null, server.RequestTimeout * 1000, Timeout.Infinite);
+			if (server.RequestTimeout > 0) TimeoutTimer = new Timer(TimeoutCallback, null, server.RequestTimeout * 1000 + 1000, Timeout.Infinite);
 			Reader.BeginPrebuffering(PrebufferCallback, null);
 		}
 
@@ -496,7 +492,9 @@ namespace UCIS.Net.HTTP {
 					return;
 				}
 				if (Server.ServeFlashPolicyFile && line[0] == '<') { //<policy-file-request/>
-					Writer.WriteLine("<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>");
+					StreamWriter writer = new StreamWriter(Reader, Encoding.ASCII) { NewLine = "\r\n", AutoFlush = false };
+					writer.WriteLine("<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>");
+					writer.Flush();
 					Reader.WriteByte(0);
 					Close();
 					return;
@@ -522,14 +520,14 @@ namespace UCIS.Net.HTTP {
 					if (line[0] == ' ' || line[0] == '\t') {
 						headerValue += line;
 					} else {
-						if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).TrimStart()));
+						if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
 						request = line.Split(new Char[] { ':' }, 2, StringSplitOptions.None);
 						if (request.Length != 2) goto SendError400AndClose;
 						headerName = request[0];
 						headerValue = request[1];
 					}
 				}
-				if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).TrimStart()));
+				if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
 				String connectionHeader = GetRequestHeader("Connection");
 				if (HTTPVersion == 10) {
 					KeepAlive = "Keep-Alive".Equals(connectionHeader, StringComparison.InvariantCultureIgnoreCase);
@@ -542,7 +540,16 @@ namespace UCIS.Net.HTTP {
 					foreach (String encoding in acceptEncodings) if (encoding.Trim().Equals("gzip", StringComparison.InvariantCultureIgnoreCase)) AcceptGzipCompression = true;
 				}
 				if (TimeoutTimer != null) TimeoutTimer.Dispose();
+				ResponseHeaders = new List<HTTPHeader>(Server.DefaultHeaders);
 				State = HTTPConnectionState.ProcessingRequest;
+				SendStatus(200);
+				SendHeader("Date", DateTime.UtcNow.ToString("R"));
+				if (KeepAlive && KeepAliveMaxRequests > 1) {
+					SendHeader("Connection", "Keep-Alive");
+					if (Server.RequestTimeout > 0) SendHeader("Keep-Alive", String.Format("timeout={0}, max={1}", Server.RequestTimeout, KeepAliveMaxRequests));
+				} else {
+					SendHeader("Connection", "Close");
+				}
 				IHTTPContentProvider content = Server.ContentProvider;
 				if (content == null) {
 					SendErrorResponse(404);
@@ -562,28 +569,25 @@ namespace UCIS.Net.HTTP {
 			return;
 
 		SendError400AndClose:
-			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(400);
 			return;
 		SendError500AndClose:
-			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(500);
 			return;
 		SendError505AndClose:
-			State = HTTPConnectionState.ProcessingRequest;
 			SendErrorAndClose(400);
 			return;
 		}
 
 		public String GetRequestHeader(String name) {
-			if (RequestHeaders == null) throw new InvalidOperationException();
+			if (RequestHeaders == null) return null;
 			foreach (HTTPHeader h in RequestHeaders) {
 				if (name.Equals(h.Key, StringComparison.OrdinalIgnoreCase)) return h.Value;
 			}
 			return null;
 		}
 		public String[] GetRequestHeaders(String name) {
-			if (RequestHeaders == null) throw new InvalidOperationException();
+			if (RequestHeaders == null) return null;
 			String[] items = new String[0];
 			foreach (HTTPHeader h in RequestHeaders) {
 				if (name.Equals(h.Key, StringComparison.OrdinalIgnoreCase)) ArrayUtil.Add(ref items, h.Value);
@@ -591,7 +595,7 @@ namespace UCIS.Net.HTTP {
 			return items;
 		}
 		public IEnumerable<KeyValuePair<String, String>> GetRequestHeaders() {
-			if (RequestHeaders == null) throw new InvalidOperationException();
+			if (RequestHeaders == null) return null;
 			return RequestHeaders;
 		}
 
@@ -721,37 +725,17 @@ namespace UCIS.Net.HTTP {
 		}
 		public void SendStatus(int code, String message) {
 			if (State != HTTPConnectionState.ProcessingRequest) throw new InvalidOperationException();
-			StringBuilder sb = new StringBuilder();
-			sb.Append("HTTP/");
-			switch (HTTPVersion) {
-				case 10: sb.Append("1.0"); break;
-				case 11: sb.Append("1.1"); break;
-				default: sb.Append("1.0"); break;
-			}
-			sb.Append(" ");
-			sb.Append(code);
-			sb.Append(" ");
-			sb.Append(message);
-			Status = code;
-			Writer.WriteLine(sb.ToString());
-			State = HTTPConnectionState.SendingHeaders;
-			if (!SuppressStandardHeaders) {
-				foreach (KeyValuePair<String, String> header in Server.DefaultHeaders) SendHeader(header.Key, header.Value);
-				SendHeader("Date", DateTime.UtcNow.ToString("R"));
-				if (KeepAlive) {
-					if (KeepAliveMaxRequests > 1) {
-						SendHeader("Connection", "Keep-Alive");
-						if (Server.RequestTimeout > 0) SendHeader("Keep-Alive", String.Format("timeout={0}, max={1}", Server.RequestTimeout, KeepAliveMaxRequests));
-					} else {
-						SendHeader("Connection", "Close");
-					}
-				}
-			}
+			ResponseStatusCode = code;
+			ResponseStatusInfo = message;
 		}
 		public void SendHeader(String name, String value) {
-			if (State == HTTPConnectionState.ProcessingRequest) SendStatus(200);
-			if (State != HTTPConnectionState.SendingHeaders) throw new InvalidOperationException();
-			Writer.WriteLine(name + ": " + value);
+			if (State != HTTPConnectionState.ProcessingRequest) throw new InvalidOperationException();
+			ResponseHeaders.Add(new HTTPHeader(name, value));
+		}
+		public void SetResponseHeader(String name, String value) {
+			if (State != HTTPConnectionState.ProcessingRequest) throw new InvalidOperationException();
+			ResponseHeaders.RemoveAll(delegate(HTTPHeader header) { return header.Key.Equals(name, StringComparison.OrdinalIgnoreCase); });
+			if (value != null) ResponseHeaders.Add(new HTTPHeader(name, value));
 		}
 		public void SendErrorResponse(int state) {
 			String message = GetMessageForStatus(state);
@@ -796,9 +780,13 @@ namespace UCIS.Net.HTTP {
 			output.Close();
 		}
 		private Stream BeginResponseData() {
-			if (State == HTTPConnectionState.ProcessingRequest) SendStatus(200);
-			if (State == HTTPConnectionState.SendingHeaders) {
-				Writer.WriteLine();
+			if (State == HTTPConnectionState.ProcessingRequest) {
+				State = HTTPConnectionState.SendingHeaders;
+				StreamWriter writer = new StreamWriter(Reader, Encoding.ASCII) { AutoFlush = false, NewLine = "\r\n" };
+				writer.WriteLine("HTTP/{0}.{1} {2} {3}", HTTPVersion / 10, HTTPVersion % 10, ResponseStatusCode, ResponseStatusInfo);
+				foreach (HTTPHeader header in ResponseHeaders) writer.WriteLine(header.Key + ": " + header.Value);
+				writer.WriteLine();
+				writer.Flush();
 				State = HTTPConnectionState.SendingContent;
 			}
 			if (State != HTTPConnectionState.SendingContent) throw new InvalidOperationException("The response stream can not be opened in the current state");
@@ -808,7 +796,7 @@ namespace UCIS.Net.HTTP {
 			if (State == HTTPConnectionState.Completed || State == HTTPConnectionState.Closed) return;
 			OpenRequestStream().Close();
 			if (State != HTTPConnectionState.SendingContent) {
-				if ((Status >= 100 && Status <= 199) || Status == 204 || Status == 304) {
+				if ((ResponseStatusCode >= 100 && ResponseStatusCode <= 199) || ResponseStatusCode == 204 || ResponseStatusCode == 304) {
 					BeginResponseData();
 				} else {
 					WriteResponseData(new Byte[0]);
@@ -833,7 +821,8 @@ namespace UCIS.Net.HTTP {
 
 		private void SendErrorAndClose(int code) {
 			try {
-				SendErrorResponse(code);
+				if (State == HTTPConnectionState.Starting || State == HTTPConnectionState.ReceivingRequest) State = HTTPConnectionState.ProcessingRequest;
+				if (State == HTTPConnectionState.ProcessingRequest) SendErrorResponse(code);
 			} catch (IOException) {
 			} catch (SocketException) {
 			} catch (ObjectDisposedException) {
@@ -845,8 +834,8 @@ namespace UCIS.Net.HTTP {
 		}
 		private void Close() {
 			if (State == HTTPConnectionState.Closed) return;
-			Reader.Close();
 			State = HTTPConnectionState.Closed;
+			Reader.Close();
 		}
 
 		public static long CopyStream(Stream input, Stream output, long length, int buffersize) {
