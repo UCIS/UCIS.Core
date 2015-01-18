@@ -62,12 +62,14 @@ namespace UCIS.Net.HTTP {
 			Object[] args = (Object[])ar.AsyncState;
 			Socket socket = (Socket)args[0];
 			SslStream ssl = (SslStream)args[1];
+			Stream streamwrapper = (Stream)args[2];
 			try {
 				ssl.EndAuthenticateAsServer(ar);
 				new HTTPContext(this, ssl, socket, -1);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
-				socket.Close();
+				streamwrapper.Close();
+				if (socket != null) socket.Close();
 			}
 		}
 
@@ -77,11 +79,16 @@ namespace UCIS.Net.HTTP {
 
 		public void HandleClient(Socket socket, Stream streamwrapper) {
 			if (streamwrapper == null) streamwrapper = new NetworkStream(socket, true);
-			if (SSLCertificate != null) {
-				SslStream ssl = new SslStream(streamwrapper);
-				ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl });
-			} else {
-				new HTTPContext(this, streamwrapper, socket, -1);
+			try {
+				if (SSLCertificate != null) {
+					SslStream ssl = new SslStream(streamwrapper);
+					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl, streamwrapper });
+				} else {
+					new HTTPContext(this, streamwrapper, socket, -1);
+				}
+			} catch {
+				streamwrapper.Close();
+				throw;
 			}
 		}
 
@@ -450,7 +457,6 @@ namespace UCIS.Net.HTTP {
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
 				this.RemoteEndPoint = socket.RemoteEndPoint;
-				if (socket.ProtocolType == ProtocolType.Tcp) socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 				if (stream == null) stream = new NetworkStream(socket, true);
 			}
 			Reader = stream as PrebufferingStream ?? new PrebufferingStream(stream);
