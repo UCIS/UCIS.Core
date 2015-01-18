@@ -20,16 +20,6 @@ namespace UCIS.Net {
 				return sum;
 			}
 		}
-		public NetworkConnectionList FindByHandler(Object Handler) {
-			NetworkConnectionList l = new NetworkConnectionList();
-			lock (_list) foreach (INetworkConnection c in _list) if (c.Handler == Handler) l.Add(c);
-			return l;
-		}
-		public NetworkConnectionList FindByHandlerType(Type HandlerType) {
-			NetworkConnectionList l = new NetworkConnectionList();
-			lock (_list) foreach (INetworkConnection c in _list) if (c.Handler.GetType() == HandlerType) l.Add(c);
-			return l;
-		}
 		public void CloseAll() {
 			foreach (INetworkConnection c in ToArray()) c.Close();
 		}
@@ -52,7 +42,7 @@ namespace UCIS.Net {
 			lock (_list) {
 				INetworkConnection item = _list[index];
 				item.Closed -= _ConnectionClosed;
-				_list.Remove(item);
+				_list.RemoveAt(index);
 			}
 		}
 		public int Count { get { lock (_list) return _list.Count; } }

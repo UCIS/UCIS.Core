@@ -13,17 +13,17 @@ namespace UCIS.Net {
 		public static ulong TotalBytesRead { get { return (ulong)_totalBytesRead; } set { _totalBytesRead = (long)value; } }
 
 		private Socket _Socket;
-		private byte _PeekByte;
-		private bool _HasPeekByte;
+		private int _PeekByte;
 		private ulong _BytesWritten;
 		private ulong _BytesRead;
 		private DateTime _StartTime;
+		private Boolean disposed = false;
 
 		public event EventHandler Closed;
 
 		public TCPStream(Socket Socket) {
 			_Socket = Socket;
-			_HasPeekByte = false;
+			_PeekByte = -1;
 			_StartTime = DateTime.Now;
 		}
 
@@ -60,22 +60,21 @@ namespace UCIS.Net {
 		}
 
 		public override int ReadByte() {
-			if (_HasPeekByte) {
-				_HasPeekByte = false;
-				return _PeekByte;
+			if (_PeekByte != -1) {
+				Byte b = (Byte)_PeekByte;
+				_PeekByte = -1;
+				return b;
 			} else {
-				byte[] Buffer = new byte[1];
-				if (Read(Buffer, 0, 1) != 1) return -1;
-				return Buffer[0];
+				return base.ReadByte();
 			}
 		}
 
 		public override int Read(byte[] buffer, int offset, int size) {
 			if (size < 1) return 0;
 			int Count = 0;
-			if (_HasPeekByte) {
-				buffer[offset] = _PeekByte;
-				_HasPeekByte = false;
+			if (_PeekByte != -1) {
+				buffer[offset] = (Byte)_PeekByte;
+				_PeekByte = -1;
 				Count = 1;
 				offset += 1;
 				size = 0;
@@ -119,9 +118,9 @@ namespace UCIS.Net {
 				AsyncResult ar = new AsyncResult(callback, state);
 				ar.SetCompleted(true, 0);
 				return ar;
-			} else if (_HasPeekByte) {
-				buffer[offset] = _PeekByte;
-				_HasPeekByte = false;
+			} else if (_PeekByte != -1) {
+				buffer[offset] = (Byte)_PeekByte;
+				_PeekByte = -1;
 				AsyncResult ar = new AsyncResult(callback, state);
 				ar.SetCompleted(true, 1);
 				return ar;
@@ -142,16 +141,8 @@ namespace UCIS.Net {
 		}
 
 		public int PeekByte() {
-			if (_HasPeekByte) {
-				return _PeekByte;
-			} else {
-				int Result = ReadByte();
-				if (Result >= 0 && Result <= 255) {
-					_PeekByte = (byte)Result;
-					_HasPeekByte = true;
-				}
-				return Result;
-			}
+			if (_PeekByte == -1) _PeekByte = ReadByte();
+			return _PeekByte;
 		}
 
 		public int WriteBufferSize {
@@ -165,7 +156,7 @@ namespace UCIS.Net {
 		}
 
 		public override bool CanRead {
-			get { return Socket.Connected && (Blocking || (Socket.Available > 0)); }
+			get { return !disposed && Socket.Connected && (_PeekByte != -1 || Blocking || Socket.Available > 0); }
 		}
 
 		public override bool CanSeek {
@@ -173,11 +164,10 @@ namespace UCIS.Net {
 		}
 
 		public override bool CanWrite {
-			get { return Socket.Connected; }
+			get { return !disposed && Socket.Connected; }
 		}
 
 		public override void Flush() {
-			//Do nothing
 			//_Socket.NoDelay = true;
 		}
 
@@ -199,7 +189,6 @@ namespace UCIS.Net {
 
 		public override void Write(byte[] buffer, int offset, int size) {
 			int left = size;
-			if (_Socket == null) throw new ObjectDisposedException("socket");
 			try {
 				while (left > 0) {
 					int sent = _Socket.Send(buffer, offset, left, 0);
@@ -219,9 +208,9 @@ namespace UCIS.Net {
 					case SocketError.NetworkUnreachable:
 					case SocketError.NotConnected:
 						Close();
-						throw new SocketException((int)ex.SocketErrorCode);
+						throw;
 					default:
-						throw new SocketException((int)ex.SocketErrorCode);
+						throw;
 				}
 			}
 			_BytesWritten += (ulong)size;
@@ -229,19 +218,19 @@ namespace UCIS.Net {
 		}
 
 		public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
-			IAsyncResult ar = base.BeginWrite(buffer, offset, count, callback, state);
+			IAsyncResult ar = _Socket.BeginSend(buffer, offset, count, SocketFlags.None, callback, state);
 			_BytesWritten += (ulong)count;
 			Interlocked.Add(ref _totalBytesWritten, count);
 			return ar;
 		}
 		public override void EndWrite(IAsyncResult asyncResult) {
-			base.EndWrite(asyncResult);
+			_Socket.EndSend(asyncResult);
 		}
 
 		public override void Close() {
-			Socket s = Interlocked.Exchange(ref _Socket, null);
+			disposed = true;
 			try {
-				if (s != null) s.Close();
+				_Socket.Close();
 			} finally {
 				base.Close();
 				EventHandler eh = Closed;
@@ -251,7 +240,7 @@ namespace UCIS.Net {
 
 		public bool Connected {
 			get {
-				if (Socket == null) return false;
+				if (disposed) return false;
 				if (Socket.Connected) return true;
 				Close();
 				return false;
@@ -265,7 +254,7 @@ namespace UCIS.Net {
 		public TimeSpan Age { get { return DateTime.Now.Subtract(_StartTime); } }
 		public EndPoint RemoteEndPoint {
 			get {
-				if (_Socket == null || !_Socket.Connected) return null;
+				if (disposed) return null;
 				try {
 					return _Socket.RemoteEndPoint;
 				} catch (SocketException) {
@@ -273,7 +262,6 @@ namespace UCIS.Net {
 				}
 			}
 		}
-		//public Object Proxy { get { return null; } }
 		Object INetworkConnection.Handler { get { return Tag; } }
 	}
 }

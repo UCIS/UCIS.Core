@@ -10,7 +10,6 @@ namespace UCIS.Net {
 		ulong BytesRead { get; }
 		TimeSpan Age { get; }
 		EndPoint RemoteEndPoint { get; }
-		//Object Proxy { get; }
 		Object Handler { get; }
 	}
 }

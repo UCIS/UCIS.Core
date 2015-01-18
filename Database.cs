@@ -1,128 +1,137 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Reflection;
+using System.Data.Common;
 
 namespace UCIS {
 	public class Database {
-		private delegate object ConstructorDelegate();
-		private ConstructorInfo _ConnectionConstructor;
+		public delegate IDbConnection ConnectionConstructorDelegate();
 
-		public Database(Type DBConnectionType, string connectionString) {
+		private ConnectionConstructorDelegate ConnectionConstructor;
+		public string ConnectionString { get; private set; }
+
+		public Database(Type connectionType, String connectionString) {
 			this.ConnectionString = connectionString;
-			_ConnectionConstructor = DBConnectionType.GetConstructor(new Type[] { });
+			this.ConnectionConstructor = delegate() { return (IDbConnection)Activator.CreateInstance(connectionType); };
+		}
+		public Database(DbProviderFactory factory, String connectionString) {
+			this.ConnectionString = connectionString;
+			this.ConnectionConstructor = factory.CreateConnection;
+		}
+		public Database(ConnectionConstructorDelegate constructor, String connectionString) {
+			this.ConnectionString = connectionString;
+			this.ConnectionConstructor = constructor;
 		}
 
-		public string ConnectionString { get; set; }
-
 		public virtual IDbConnection GetConnection() {
-			IDbConnection conn = (IDbConnection)_ConnectionConstructor.Invoke(null);
+			IDbConnection conn = ConnectionConstructor();
 			conn.ConnectionString = ConnectionString;
 			conn.Open();
 			return conn;
 		}
 
-		private static IDbCommand PrepareQuery(IDbConnection Connection, string Query, params object[] Parameters) {
-			IDbCommand Command = Connection.CreateCommand();
-			Command.CommandType = CommandType.Text;
-			Command.CommandText = Query;
-			Command.Parameters.Clear();
-			int ParameterI = 0;
-			foreach (object Parameter in Parameters) {
-				IDbDataParameter DBParameter = Command.CreateParameter();
-				DBParameter.Direction = ParameterDirection.Input;
-				DBParameter.ParameterName = "?" + ParameterI.ToString();
-				DBParameter.Value = Parameter;
-				Command.Parameters.Add(DBParameter);
-				ParameterI++;
+		private static IDbCommand PrepareQuery(IDbConnection connection, String query, params Object[] parameters) {
+			IDbCommand command = connection.CreateCommand();
+			try {
+				command.CommandType = CommandType.Text;
+				command.CommandText = query;
+				command.Parameters.Clear();
+				int index = 0;
+				foreach (Object parameter in parameters) {
+					IDbDataParameter dbparameter = command.CreateParameter();
+					dbparameter.Direction = ParameterDirection.Input;
+					dbparameter.ParameterName = "?" + index.ToString();
+					dbparameter.Value = parameter;
+					command.Parameters.Add(dbparameter);
+					index++;
+				}
+				if (index > 0) command.Prepare();
+			} catch {
+				command.Dispose();
+				throw;
 			}
-			if (ParameterI > 0) Command.Prepare();
-			return Command;
+			return command;
 		}
 
-		public IDbCommand PrepareQuery(string Query, params object[] Parameters) {
-			IDbConnection Connection = GetConnection();
+		public IDbCommand PrepareQuery(String query, params Object[] parameters) {
+			IDbConnection connection = GetConnection();
 			try {
-				return PrepareQuery(Connection, Query, Parameters);
-			} catch (Exception) {
-				Connection.Close();
+				return PrepareQuery(connection, query, parameters);
+			} catch {
+				connection.Close();
 				throw;
 			}
 		}
 
-		public int NonQuery(string QueryString, params object[] Parameters) {
+		public int NonQuery(String query, params Object[] parameters) {
 			using (IDbConnection connection = GetConnection()) {
-				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
+				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
 					return command.ExecuteNonQuery();
 				}
 			}
 		}
 
-		public object FetchField(string QueryString, params object[] Parameters) {
+		public Object FetchField(String query, params Object[] parameters) {
 			using (IDbConnection connection = GetConnection()) {
-				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
+				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
 					return command.ExecuteScalar();
 				}
 			}
 		}
-		public object[] FetchRow(string QueryString, params object[] Parameters) {
-			using (IDbConnection connection = GetConnection()) {
-				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
-					using (IDataReader Reader = command.ExecuteReader()) {
-						if (!Reader.Read()) return null;
-						object[] Result = new object[Reader.FieldCount];
-						Reader.GetValues(Result);
-						return Result;
-					}
-				}
-			}
-		}
-		public object[][] FetchRows(string QueryString, params object[] Parameters) {
-			using (IDbConnection connection = GetConnection()) {
-				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
-					using (IDataReader Reader = command.ExecuteReader()) {
-						List<object[]> Result = new List<object[]>();
-						while (Reader.Read()) {
-							object[] ResultArray = new object[Reader.FieldCount];
-							Reader.GetValues(ResultArray);
-							Result.Add(ResultArray);
-						}
-						return Result.ToArray();
-					}
-				}
-			}
-		}
-		public void ForEachRow(Action<Object[]> f, string QueryString, params object[] Parameters) {
-			using (IDbConnection connection = GetConnection()) {
-				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
-					using (IDataReader Reader = command.ExecuteReader()) {
-						while (Reader.Read()) {
-							object[] ResultArray = new object[Reader.FieldCount];
-							Reader.GetValues(ResultArray);
-							f(ResultArray);
-						}
-					}
-				}
-			}
-		}
-		public void ForEachRow(Action<IDataRecord> callback, string query, params object[] parameters) {
+		public Object[] FetchRow(String query, params Object[] parameters) {
 			using (IDbConnection connection = GetConnection()) {
 				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
-					using (IDataReader Reader = command.ExecuteReader()) {
-						while (Reader.Read()) callback(Reader);
+					using (IDataReader reader = command.ExecuteReader()) {
+						if (!reader.Read()) return null;
+						Object[] result = new Object[reader.FieldCount];
+						reader.GetValues(result);
+						return result;
+					}
+				}
+			}
+		}
+		public Object[][] FetchRows(String query, params Object[] parameters) {
+			using (IDbConnection connection = GetConnection()) {
+				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
+					using (IDataReader reader = command.ExecuteReader()) {
+						List<Object[]> result = new List<Object[]>();
+						while (reader.Read()) {
+							Object[] resultarray = new Object[reader.FieldCount];
+							reader.GetValues(resultarray);
+							result.Add(resultarray);
+						}
+						return result.ToArray();
+					}
+				}
+			}
+		}
+		public void ForEachRow(Action<Object[]> f, String query, params Object[] parameters) {
+			using (IDbConnection connection = GetConnection()) {
+				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
+					using (IDataReader reader = command.ExecuteReader()) {
+						while (reader.Read()) {
+							Object[] resultarray = new Object[reader.FieldCount];
+							reader.GetValues(resultarray);
+							f(resultarray);
+						}
+					}
+				}
+			}
+		}
+		public void ForEachRow(Action<IDataRecord> callback, String query, params Object[] parameters) {
+			using (IDbConnection connection = GetConnection()) {
+				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
+					using (IDataReader reader = command.ExecuteReader()) {
+						while (reader.Read()) callback(reader);
 					}
 				}
 			}
 		}
 
-		/*public DBReader GetReader(string QueryString, params object[] Parameters) {
-			return new DBReader(PrepareQuery(QueryString, Parameters));
-		}*/
-
-		public IDataReader ExecuteReader(String QueryString, params Object[] Parameters) {
+		public IDataReader ExecuteReader(String query, params Object[] parameters) {
 			IDbConnection connection = GetConnection();
 			try {
-				using (IDbCommand command = PrepareQuery(connection, QueryString, Parameters)) {
+				using (IDbCommand command = PrepareQuery(connection, query, parameters)) {
 					return command.ExecuteReader(CommandBehavior.CloseConnection);
 				}
 			} catch {

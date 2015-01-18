@@ -44,7 +44,6 @@
     <Compile Include="Cache.cs" />
     <Compile Include="Cci\CciCommand.cs" />
     <Compile Include="Database.cs" />
-    <None Include="DBReader.cs" />
     <Compile Include="FBGUI\FBGUI.cs">
     </Compile>
     <Compile Include="NaCl\APIv2.cs">

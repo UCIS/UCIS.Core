@@ -3,14 +3,10 @@ using System.Collections.Generic;
 
 namespace UCIS {
 	public class Cache<TKey, TValue> {
-		private Dictionary<TKey, WeakReference> _items;
-
-		public Cache() {
-			_items = new Dictionary<TKey, WeakReference>();
-		}
+		private Dictionary<TKey, WeakReference> _items = new Dictionary<TKey, WeakReference>();
 
 		public int Count { get { return _items.Count; } }
-		public int getCount(bool checkAlive) {
+		public int GetLiveCount() {
 			Purge();
 			return _items.Count;
 		}
@@ -66,7 +62,7 @@ namespace UCIS {
 		}
 
 		public void Clear() {
-			_items.Clear();
+			lock (_items) _items.Clear();
 		}
 	}
 }
