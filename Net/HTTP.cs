@@ -65,7 +65,7 @@ namespace UCIS.Net.HTTP {
 			Stream streamwrapper = (Stream)args[2];
 			try {
 				ssl.EndAuthenticateAsServer(ar);
-				new HTTPContext(this, ssl, socket, -1);
+				new HTTPContext(this, ssl, socket, -1, true);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
 				streamwrapper.Close();
@@ -84,7 +84,7 @@ namespace UCIS.Net.HTTP {
 					SslStream ssl = new SslStream(streamwrapper);
 					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl, streamwrapper });
 				} else {
-					new HTTPContext(this, streamwrapper, socket, -1);
+					new HTTPContext(this, streamwrapper, socket, -1, false);
 				}
 			} catch {
 				streamwrapper.Close();
@@ -146,6 +146,7 @@ namespace UCIS.Net.HTTP {
 		public Boolean AsynchronousCompletion { get; set; }
 		public Boolean KeepAlive { get; set; }
 		public TCPStream TCPStream { get { return Reader.BaseStream as TCPStream; } }
+		public Boolean IsSecure { get; private set; }
 
 		private PrebufferingStream Reader;
 		private List<HTTPHeader> RequestHeaders = null, ResponseHeaders = null;
@@ -446,13 +447,12 @@ namespace UCIS.Net.HTTP {
 			public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
 		}
 
-		public HTTPContext(HTTPServer server, TCPStream stream) : this(server, stream, stream.Socket, -1) { }
-		public HTTPContext(HTTPServer server, Socket socket) : this(server, null, socket, -1) { }
-		public HTTPContext(HTTPServer server, Stream stream, Socket socket, int maxrequests) {
+		internal HTTPContext(HTTPServer server, Stream stream, Socket socket, int maxrequests, Boolean issecure) {
 			if (ReferenceEquals(server, null)) throw new ArgumentNullException("server");
 			if (ReferenceEquals(socket, null) && ReferenceEquals(stream, null)) throw new ArgumentNullException("stream");
 			this.Server = server;
 			this.Socket = socket;
+			this.IsSecure = issecure;
 			if (maxrequests != -1) this.KeepAliveMaxRequests = maxrequests;
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
@@ -811,7 +811,7 @@ namespace UCIS.Net.HTTP {
 			State = HTTPConnectionState.Completed;
 			if (KeepAlive && KeepAliveMaxRequests > 1) {
 				State = HTTPConnectionState.Closed;
-				new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1);
+				new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1, IsSecure);
 			} else {
 				Close();
 			}

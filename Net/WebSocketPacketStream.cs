@@ -49,7 +49,7 @@ namespace UCIS.Net.HTTP {
 					context.SetResponseHeader("Upgrade", "websocket");
 					if (SecWebSocketProtocols != null) context.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					context.SendHeader("Sec-WebSocket-Origin", context.GetRequestHeader("Origin"));
-					context.SendHeader("Sec-WebSocket-Location", "ws://" + context.GetRequestHeader("Host") + context.RequestPath);
+					context.SendHeader("Sec-WebSocket-Location", (context.IsSecure ? "wss://" : "ws://") + context.GetRequestHeader("Host") + context.RequestPath);
 					Stream rawstream = context.GetDirectStream();
 					baseStream = rawstream as PrebufferingStream ?? new PrebufferingStream(rawstream);
 					baseStream.ReadAll(key, 8, 8);
