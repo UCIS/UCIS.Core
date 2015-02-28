@@ -128,10 +128,10 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			}
 		}
 
-		public override void Close() {
+		protected override void Dispose(Boolean disposing) {
 			foreach (SafeWinUsbInterfaceHandle ih in InterfaceHandles) if (ih != null) ih.Close();
 			InterfaceHandles = new SafeWinUsbInterfaceHandle[0];
-			if (DeviceHandle != null) DeviceHandle.Close();
+			if (disposing && DeviceHandle != null) DeviceHandle.Close();
 		}
 
 		public override Byte Configuration {

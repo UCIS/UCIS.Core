@@ -99,7 +99,8 @@ namespace UCIS.USBLib.Communication.USBIO {
 			if (handle.IsInvalid || handle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open device");
 			return handle;
 		}
-		public override void Close() {
+		protected override void Dispose(Boolean disposing) {
+			if (!disposing) return;
 			if (PipeHandlesIn != null) for (int i = 0; i < PipeHandlesIn.Length; i++) if (PipeHandlesIn[i] != null) PipeHandlesIn[i].Close();
 			if (PipeHandlesOut != null) for (int i = 0; i < PipeHandlesOut.Length; i++) if (PipeHandlesOut[i] != null) PipeHandlesOut[i].Close();
 			if (DeviceHandle != null) DeviceHandle.Close();

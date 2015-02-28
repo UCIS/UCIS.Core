@@ -13,8 +13,8 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 			if (ret != 0) throw new Exception("libusb_open returned " + ret.ToString());
 		}
 
-		public override void Close() {
-			if (Handle != null) Handle.Close();
+		protected override void Dispose(Boolean disposing) {
+			if (disposing && Handle != null) Handle.Close();
 		}
 
 		public override void PipeReset(byte endpoint) {

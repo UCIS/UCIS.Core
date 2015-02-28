@@ -419,7 +419,8 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 				throw;
 			}
 		}
-		public unsafe override void Close() {
+		protected unsafe override void Dispose(Boolean disposing) {
+			if (!disposing) return;
 			if (!hDev.IsInvalid && !hDev.IsClosed) {
 				USBSUP_CLAIMDEV release = new USBSUP_CLAIMDEV() { bInterfaceNumber = bInterfaceNumber };
 				SyncIoControl(hDev, SUPUSB_IOCTL_USB_RELEASE_DEVICE, &release, sizeof(USBSUP_CLAIMDEV), null, 0, false);

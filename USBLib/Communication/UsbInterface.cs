@@ -28,7 +28,6 @@ namespace UCIS.USBLib.Communication {
 			return ControlTransfer(requestType, request, value, index, null, 0, 0);
 		}
 
-		public abstract void Close();
 
 		public abstract int PipeTransfer(Byte endpoint, Byte[] buffer, int offset, int length);
 		public virtual void PipeReset(Byte endpoint) { throw new NotImplementedException(); }
@@ -39,12 +38,17 @@ namespace UCIS.USBLib.Communication {
 			return new UsbPipeStream(this, endpoint);
 		}
 
-		public void Dispose() {
-			Close();
+		protected abstract void Dispose(Boolean disposing);
+
+		public void Close() {
+			Dispose(true);
 			GC.SuppressFinalize(this);
 		}
-		~UsbInterface() {
+		public void Dispose() {
 			Close();
+		}
+		~UsbInterface() {
+			Dispose(false);
 		}
 	}
 }

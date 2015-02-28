@@ -23,8 +23,8 @@ namespace UCIS.USBLib.Communication.LibUsb {
 						   IntPtr.Zero);
 			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open device");
 		}
-		public override void Close() {
-			if (DeviceHandle != null) DeviceHandle.Close();
+		protected override void Dispose(Boolean disposing) {
+			if (disposing && DeviceHandle != null) DeviceHandle.Close();
 		}
 
 		public override Byte Configuration {
