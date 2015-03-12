@@ -615,9 +615,12 @@ namespace UCIS.Remoting {
 		}
 		private Object Deserialize(Stream stream) {
 			BinaryReader reader = new BinaryReader(stream);
-			return Deserialize(reader);
+			List<IDeserializationCallback> callbackobjects = new List<IDeserializationCallback>();
+			Object obj = Deserialize(reader, callbackobjects);
+			foreach (IDeserializationCallback cb in callbackobjects) cb.OnDeserialization(this);
+			return obj;
 		}
-		private Object Deserialize(BinaryReader reader) {
+		private Object Deserialize(BinaryReader reader, List<IDeserializationCallback> callbackobjects) {
 			Byte t = reader.ReadByte();
 			if (t == 0) return null;
 			if (t == 1) return reader.ReadBoolean();
@@ -644,7 +647,7 @@ namespace UCIS.Remoting {
 					SerializationInfo si = new SerializationInfo(type, new FormatterConverter());
 					for (int i = 0; i < cnt; i++) {
 						String name = reader.ReadString();
-						Object value = Deserialize(reader);
+						Object value = Deserialize(reader, callbackobjects);
 						si.AddValue(name, value);
 					}
 					inst = Activator.CreateInstance(type, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Object[] { si, sc }, null);
@@ -654,7 +657,7 @@ namespace UCIS.Remoting {
 					List<Object> values = new List<object>();
 					for (int i = 0; i < cnt; i++) {
 						String mname = reader.ReadString();
-						Object value = Deserialize(reader);
+						Object value = Deserialize(reader, callbackobjects);
 						MemberInfo[] mms = type.GetMember(mname, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 						if (mms.Length != 1) throw new InvalidOperationException();
 						members.Add(mms[0]);
@@ -666,6 +669,8 @@ namespace UCIS.Remoting {
 				}
 				IObjectReference objref = inst as IObjectReference;
 				if (objref != null) inst = objref.GetRealObject(sc);
+				IDeserializationCallback deserializationcallback = inst as IDeserializationCallback;
+				if (deserializationcallback != null) callbackobjects.Add(deserializationcallback);
 				return inst;
 			}
 			if (t == 129 || t == 130 || t == 131) {
@@ -674,7 +679,7 @@ namespace UCIS.Remoting {
 			if (t == 164) {
 				int len = reader.ReadInt32();
 				Type type = DeserializeType(reader); Array arr = Array.CreateInstance(type, len);
-				for (int i = 0; i < len; i++) arr.SetValue(Deserialize(reader), i);
+				for (int i = 0; i < len; i++) arr.SetValue(Deserialize(reader, callbackobjects), i);
 				return arr;
 			}
 			if (t == 165) {

@@ -18,13 +18,15 @@ namespace UCIS.FBGUI {
 	public enum FBGPointingEventType {
 		Move,
 		ButtonDown,
-		ButtonUp
+		ButtonUp,
+		VerticalScroll,
 	}
 	public class FBGPointingEvent : FBGEvent {
 		private Point position;
 		public Point Position { get { return position; } set { position = value; } }
 		public int X { get { return position.X; } set { position.X = value; } }
 		public int Y { get { return position.Y; } set { position.Y = value; } }
+		public int Delta { get; set; }
 		public MouseButtons Buttons { get; private set; }
 		public FBGPointingEventType Type { get; private set; }
 		public FBGCursor Cursor { get; set; }
@@ -834,14 +836,15 @@ namespace UCIS.FBGUI {
 		public void UnlockBitmapBuffer() {
 			Monitor.Exit(RenderLock);
 		}
-		void DispatchPointingEvent(Point position, MouseButtons buttons, FBGPointingEventType type) {
-			FBGPointingEvent e = new FBGPointingEvent(position, buttons, type);
+		void DispatchPointingEvent(Point position, MouseButtons buttons, FBGPointingEventType type, int delta) {
+			FBGPointingEvent e = new FBGPointingEvent(position, buttons, type) { Delta = delta };
 			HandleEvent(e);
 			UpdateCursor(cursorposition, e.Cursor);
 		}
-		public new void MouseMove(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.Move); }
-		public new void MouseDown(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.ButtonDown); }
-		public new void MouseUp(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.ButtonUp); }
+		public new void MouseMove(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.Move, 0); }
+		public new void MouseDown(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.ButtonDown, 0); }
+		public new void MouseUp(Point position, MouseButtons buttons) { DispatchPointingEvent(position, buttons, FBGPointingEventType.ButtonUp, 0); }
+		public new void MouseWheel(Point position, MouseButtons buttons, int delta) { DispatchPointingEvent(position, buttons, FBGPointingEventType.VerticalScroll, delta); }
 		public new void KeyDown(Keys key) { KeyDown(key, Char.MinValue); }
 		public new void KeyPress(Char key) { KeyDown(Keys.None, key); }
 		public new void KeyUp(Keys key) { KeyUp(key, Char.MinValue); }
