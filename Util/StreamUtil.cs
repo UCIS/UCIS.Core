@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
 
 namespace UCIS.Util {
@@ -17,6 +15,12 @@ namespace UCIS.Util {
 			Byte[] buffer = new Byte[count];
 			ReadAll(stream, buffer, 0, count);
 			return buffer;
+		}
+		public static void ReadAll(Stream stream, Byte[] buffer) {
+			ReadAll(stream, buffer, 0, buffer.Length);
+		}
+		public static void WriteAll(Stream stream, Byte[] buffer) {
+			stream.Write(buffer, 0, buffer.Length);
 		}
 	}
 }
