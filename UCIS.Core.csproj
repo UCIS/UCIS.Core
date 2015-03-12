@@ -167,6 +167,7 @@
     <Compile Include="Util\PipeStream.cs" />
     <Compile Include="Util\PrebufferingStream.cs" />
     <Compile Include="Util\QueuedPacketStream.cs" />
+    <Compile Include="Util\StreamUtil.cs" />
     <Compile Include="Util\TapeArchive.cs" />
     <Compile Include="Util\InteropUtil.cs" />
     <Compile Include="Util\WorkQueue.cs" />

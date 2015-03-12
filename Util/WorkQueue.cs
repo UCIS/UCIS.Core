@@ -28,6 +28,13 @@ namespace UCIS.Util {
 			lock (queue) Monitor.PulseAll(queue);
 		}
 
+		public int MinIdleWorkers {
+			set {
+				if (value <= idleWorkers) return;
+				int diff = value - idleWorkers;
+				for (int i = 0; i < diff; i++) StartWorker();
+			}
+		}
 		public int MaxIdleWorkers {
 			get { return maxIdleWorkers; }
 			set {
@@ -70,27 +77,34 @@ namespace UCIS.Util {
 			if (callback != null) callback(this);
 		}
 		private void Worker(Object state) {
-			while (true) {
-				TWork item;
-				lock (queue) {
-					if (workers > maxWorkers) {
-						workers--;
-						break;
-					}
-					if (queue.Count == 0) {
-						if (idleWorkers > maxIdleWorkers) {
-							workers--;
-							queue.TrimExcess();
-							break;
+			try {
+				Thread currentThread = Thread.CurrentThread;
+				Boolean wasBackgroundThread = currentThread.IsBackground;
+				while (true) {
+					TWork item;
+					lock (queue) {
+						if (workers > maxWorkers) break;
+						if (queue.Count == 0) {
+							if (idleWorkers > maxIdleWorkers) {
+								queue.TrimExcess();
+								break;
+							}
+							currentThread.IsBackground = true;
+							idleWorkers++;
+							try {
+								Monitor.Wait(queue);
+							} finally {
+								currentThread.IsBackground = wasBackgroundThread;
+								idleWorkers--;
+							}
+							if (queue.Count == 0) continue;
 						}
-						idleWorkers++;
-						Monitor.Wait(queue);
-						idleWorkers--;
-						if (queue.Count == 0) continue;
+						item = queue.Dequeue();
 					}
-					item = queue.Dequeue();
+					callback(item);
 				}
-				callback(item);
+			} finally {
+				lock (queue) workers--;
 			}
 		}
 	}

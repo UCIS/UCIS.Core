@@ -454,6 +454,7 @@ namespace UCIS.Net.HTTP {
 			this.Socket = socket;
 			this.IsSecure = issecure;
 			if (maxrequests != -1) this.KeepAliveMaxRequests = maxrequests;
+			this.AllowGzipCompression = true;
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
 				this.RemoteEndPoint = socket.RemoteEndPoint;
@@ -764,7 +765,7 @@ namespace UCIS.Net.HTTP {
 		public Stream OpenResponseStream(long length) {
 			if (ResponseStream != null) throw new InvalidOperationException("The response stream has already been opened");
 			if (length < 0) throw new ArgumentException("Response length can not be negative", "length");
-			if (AcceptGzipCompression && AllowGzipCompression && length > 100 && length < 1024 * 5) return OpenResponseStream(HTTPResponseStreamMode.Buffered);
+			if (AcceptGzipCompression && AllowGzipCompression && length > 100 && length < 1024 * 256) return OpenResponseStream(HTTPResponseStreamMode.Buffered);
 			return ResponseStream = new HTTPOutputStream(this, HTTPResponseStreamMode.Direct, length);
 		}
 		public void WriteResponseData(Byte[] buffer) {

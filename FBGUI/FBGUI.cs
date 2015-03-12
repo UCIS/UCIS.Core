@@ -1275,8 +1275,6 @@ namespace UCIS.FBGUI {
 			if (BackColor == SystemColors.ButtonFace) {
 				ControlPaint.DrawButton(g, new Rectangle(0, 0, Bounds.Width, Bounds.Height), enabled ? (pressed ? ButtonState.Pushed : ButtonState.Normal) : ButtonState.Inactive);
 			} else {
-				//Hackish and not completely right...
-				//Todo: borrowed from mono... possible licencing issues!?
 				g.DrawLine(new Pen(ControlPaint.LightLight(BackColor)), 0, 0, Bounds.Width, 0);
 				g.DrawLine(new Pen(ControlPaint.LightLight(BackColor)), 0, 0, 0, Bounds.Height);
 				g.DrawLine(new Pen(ControlPaint.Dark(BackColor)), 1, Bounds.Height - 2, Bounds.Width - 1, Bounds.Height - 2);
@@ -1289,7 +1287,6 @@ namespace UCIS.FBGUI {
 				Color ColorControlLight = ControlPaint.Light(ColorControl);
 				ButtonState state = pressed ? ButtonState.Pushed : ButtonState.Normal;
 				using (Pen NormalPen = new Pen(BackColor), LightPen = new Pen(ControlPaint.Light(BackColor)), DarkPen = new Pen(ControlPaint.Dark(BackColor))) {
-					// sadly enough, the rectangle gets always filled with a hatchbrush
 					using (HatchBrush hb = new HatchBrush(HatchStyle.Percent50, Color.FromArgb(Math.Min(255, ColorControl.R + 3), ColorControl.G, ColorControl.B), ColorControl)) {
 						dc.FillRectangle(hb, rectangle.X + 1, rectangle.Y + 1, rectangle.Width - 2, rectangle.Height - 2);
 					}

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Management;
-using System.IO;
 
 namespace UCIS.Windows {
 	public class ServiceManager {
