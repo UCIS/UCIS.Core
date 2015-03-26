@@ -96,7 +96,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 						   NativeFileMode.OPEN_EXISTING,
 						   NativeFileFlag.FILE_ATTRIBUTE_NORMAL,
 						   IntPtr.Zero);
-			if (handle.IsInvalid || handle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open device");
+			if (handle.IsInvalid || handle.IsClosed) throw new Win32Exception();
 			return handle;
 		}
 		protected override void Dispose(Boolean disposing) {
@@ -228,7 +228,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 					success = ReadFile(handle, b + offset, (uint)length, out ret, IntPtr.Zero);
 				else
 					success = WriteFile(handle, b + offset, (uint)length, out ret, IntPtr.Zero);
-				if (!success) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (!success) throw new Win32Exception();
 			}
 			return (int)ret;
 		}
@@ -245,7 +245,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 			int pBytesReturned;
 			if (Kernel32.DeviceIoControl(hDevice, IoControlCode, InBuffer, nInBufferSize, OutBuffer, nOutBufferSize, out pBytesReturned, null))
 				return pBytesReturned;
-			throw new Win32Exception(Marshal.GetLastWin32Error());
+			throw new Win32Exception();
 		}
 
 		public override UsbPipeStream GetPipeStream(byte endpoint) {
@@ -262,7 +262,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 				if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 				uint ret;
 				fixed (Byte* b = buffer) {
-					if (!WriteFile(Handle, b + offset, (uint)length, out ret, IntPtr.Zero)) throw new Win32Exception(Marshal.GetLastWin32Error());
+					if (!WriteFile(Handle, b + offset, (uint)length, out ret, IntPtr.Zero)) throw new Win32Exception();
 				}
 				if (ret <= 0) throw new EndOfStreamException("Could not write all data");
 			}
@@ -271,7 +271,7 @@ namespace UCIS.USBLib.Communication.USBIO {
 				if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 				uint ret;
 				fixed (Byte* b = buffer) {
-					if (!WriteFile(Handle, b + offset, (uint)length, out ret, IntPtr.Zero)) throw new Win32Exception(Marshal.GetLastWin32Error());
+					if (!WriteFile(Handle, b + offset, (uint)length, out ret, IntPtr.Zero)) throw new Win32Exception();
 				}
 				return (int)ret;
 			}

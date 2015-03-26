@@ -14,7 +14,7 @@ namespace UCIS.HWLib.Windows.USB {
 			USB_NODE_CONNECTION_INFORMATION_EX nodeConnection = new USB_NODE_CONNECTION_INFORMATION_EX();
 			nodeConnection.ConnectionIndex = port;
 			if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX, ref nodeConnection, nBytes, out nodeConnection, nBytes, out nBytes, IntPtr.Zero))
-				throw new Win32Exception(Marshal.GetLastWin32Error());
+				throw new Win32Exception();
 			return nodeConnection;
 		}
 

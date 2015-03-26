@@ -21,7 +21,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 						   NativeFileMode.OPEN_EXISTING,
 						   NativeFileFlag.FILE_FLAG_OVERLAPPED,
 						   IntPtr.Zero);
-			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open device");
+			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception();
 		}
 		protected override void Dispose(Boolean disposing) {
 			if (disposing && DeviceHandle != null) DeviceHandle.Close();
@@ -261,7 +261,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 				if (err != 997) throw new Win32Exception(err);
 				evt.WaitOne();
 				if (!Kernel32.GetOverlappedResult(hDevice, &overlapped, out pBytesReturned, false))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 			}
 		}
 	}

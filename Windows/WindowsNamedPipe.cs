@@ -49,16 +49,16 @@ namespace UCIS.Windows {
 			SafeFileHandle handle = CreateNamedPipe(name, PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED, 
 				messageMode ? (PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE) : (PIPE_TYPE_BYTE | PIPE_READMODE_BYTE),
 				maxClients, writeBuffer, readBuffer, defaultTimeout, IntPtr.Zero);
-			if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (handle.IsInvalid) throw new Win32Exception();
 			return new WindowsNamedPipe(handle);
 		}
 		public static WindowsNamedPipe Connect(String name) {
 			SafeFileHandle handle = CreateFile(name, 0x40000000 | 0x80000000, FileShare.None, IntPtr.Zero, FileMode.Open, 0x40000000, IntPtr.Zero);
-			if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (handle.IsInvalid) throw new Win32Exception();
 			UInt32 flags;
-			if (!GetNamedPipeInfo(handle, out flags, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero)) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (!GetNamedPipeInfo(handle, out flags, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero)) throw new Win32Exception();
 			UInt32 lpMode = (flags & PIPE_TYPE_MESSAGE) != 0 ? PIPE_READMODE_MESSAGE : PIPE_READMODE_BYTE;
-			if (!SetNamedPipeHandleState(handle, ref lpMode, IntPtr.Zero, IntPtr.Zero)) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (!SetNamedPipeHandleState(handle, ref lpMode, IntPtr.Zero, IntPtr.Zero)) throw new Win32Exception();
 			return new WindowsNamedPipe(handle);
 		}
 
@@ -77,7 +77,7 @@ namespace UCIS.Windows {
 						CancelIo(PipeHandle);
 						throw new TimeoutException("The operation timed out");
 					}
-					if (!GetOverlappedResult(PipeHandle, &overlapped, out nread, false)) throw new Win32Exception(Marshal.GetLastWin32Error());
+					if (!GetOverlappedResult(PipeHandle, &overlapped, out nread, false)) throw new Win32Exception();
 				}
 			}
 		}
@@ -124,7 +124,7 @@ namespace UCIS.Windows {
 						int err = Marshal.GetLastWin32Error();
 						if (err != 997) throw new Win32Exception(err);
 						evt.WaitOne();
-						if (!GetOverlappedResult(PipeHandle, &overlapped, out nread, false)) throw new Win32Exception(Marshal.GetLastWin32Error());
+						if (!GetOverlappedResult(PipeHandle, &overlapped, out nread, false)) throw new Win32Exception();
 					}
 				}
 			}

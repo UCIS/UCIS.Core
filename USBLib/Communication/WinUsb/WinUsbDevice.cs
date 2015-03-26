@@ -75,10 +75,10 @@ namespace UCIS.USBLib.Communication.WinUsb {
 				NativeFileMode.OPEN_EXISTING,
 				NativeFileFlag.FILE_ATTRIBUTE_NORMAL | NativeFileFlag.FILE_FLAG_OVERLAPPED,
 				IntPtr.Zero);
-			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open device");
+			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception();
 			SafeWinUsbInterfaceHandle InterfaceHandle;
-			if (!WinUsb_Initialize(DeviceHandle, out InterfaceHandle)) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not initialize WinUsb");
-			if (InterfaceHandle.IsInvalid || InterfaceHandle.IsClosed) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open interface");
+			if (!WinUsb_Initialize(DeviceHandle, out InterfaceHandle)) throw new Win32Exception();
+			if (InterfaceHandle.IsInvalid || InterfaceHandle.IsClosed) throw new Win32Exception();
 			InterfaceHandles = new SafeWinUsbInterfaceHandle[1] { InterfaceHandle };
 			foreach (UsbInterfaceInfo ifinfo in UsbDeviceInfo.FromDevice(this).FindConfiguration(Configuration).Interfaces) {
 				foreach (UsbEndpointDescriptor epinfo in ifinfo.Endpoints) {
@@ -112,7 +112,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			if (InterfaceHandles.Length > interfaceID && InterfaceHandles[interfaceID] != null) return InterfaceHandles[interfaceID];
 			SafeWinUsbInterfaceHandle ih;
 			if (!WinUsb_GetAssociatedInterface(InterfaceHandles[0], (Byte)(interfaceID - 1), out ih) || ih.IsInvalid || ih.IsClosed)
-				throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open interface");
+				throw new Win32Exception();
 			if (InterfaceHandles.Length <= interfaceID) Array.Resize(ref InterfaceHandles, interfaceID + 1);
 			InterfaceHandles[interfaceID] = ih;
 			return ih;
@@ -130,7 +130,6 @@ namespace UCIS.USBLib.Communication.WinUsb {
 
 		protected override void Dispose(Boolean disposing) {
 			foreach (SafeWinUsbInterfaceHandle ih in InterfaceHandles) if (ih != null) ih.Close();
-			InterfaceHandles = new SafeWinUsbInterfaceHandle[0];
 			if (disposing && DeviceHandle != null) DeviceHandle.Close();
 		}
 
@@ -155,7 +154,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 				if (!WinUsb_ControlTransfer(ih,
 					new UsbSetupPacket((byte)requestType, request, value, index, (short)length),
 					(IntPtr)(b + offset), length, out length, IntPtr.Zero))
-					throw new Win32Exception(Marshal.GetLastWin32Error(), "Control transfer failed");
+					throw new Win32Exception();
 				return length;
 			}
 		}
@@ -164,7 +163,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			if (length > short.MaxValue || offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length");
 			fixed (Byte* b = buffer) {
 				if (!WinUsb_GetDescriptor(InterfaceHandles[0], descriptorType, index, (ushort)langId, (IntPtr)(b + offset), length, out length))
-					throw new Win32Exception(Marshal.GetLastWin32Error(), "Descriptor transfer failed");
+					throw new Win32Exception();
 			}
 			return length;
 		}
@@ -178,7 +177,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 					success = WinUsb_WritePipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero);
 				else
 					success = WinUsb_ReadPipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero);
-				if (!success) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (!success) throw new Win32Exception();
 			}
 			return length;
 		}

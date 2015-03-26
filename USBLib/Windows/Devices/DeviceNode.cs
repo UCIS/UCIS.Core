@@ -36,7 +36,7 @@ namespace UCIS.HWLib.Windows.Devices {
 		}
 		private static IList<DeviceNode> GetDevicesInSet(SafeDeviceInfoSetHandle dis) {
 			List<DeviceNode> list = new List<DeviceNode>();
-			if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (dis.IsInvalid) throw new Win32Exception();
 			SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 			for (int index = 0; ; index++) {
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, index, ref dd)) break;
@@ -84,7 +84,7 @@ namespace UCIS.HWLib.Windows.Devices {
 		}
 		public Byte[] GetProperty(SPDRP property) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
 					return null;
@@ -96,7 +96,7 @@ namespace UCIS.HWLib.Windows.Devices {
 				if (requiredSize > propBuffer.Length) {
 					propBuffer = new Byte[requiredSize];
 					if (!SetupApi.SetupDiGetDeviceRegistryProperty(dis, ref dd, property, out propertyType, propBuffer, propBuffer.Length, out requiredSize))
-						throw new Win32Exception(Marshal.GetLastWin32Error());
+						throw new Win32Exception();
 				}
 				if (requiredSize < propBuffer.Length) Array.Resize(ref propBuffer, requiredSize);
 				return propBuffer;
@@ -132,18 +132,18 @@ namespace UCIS.HWLib.Windows.Devices {
 
 		public void SetProperty(SPDRP property, Byte[] value) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 				if (!SetupApi.SetupDiSetDeviceRegistryProperty(dis, ref dd, property, value, (uint)value.Length))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 			}
 		}
 
 		public Byte[] GetCustomProperty(String name) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
 					return null;
@@ -155,7 +155,7 @@ namespace UCIS.HWLib.Windows.Devices {
 				if (requiredSize > propBuffer.Length) {
 					propBuffer = new Byte[requiredSize];
 					if (!SetupApi.SetupDiGetCustomDeviceProperty(dis, ref dd, name, DICUSTOMDEVPROP.NONE, out propertyType, propBuffer, propBuffer.Length, out requiredSize))
-						throw new Win32Exception(Marshal.GetLastWin32Error());
+						throw new Win32Exception();
 				}
 				if (requiredSize < propBuffer.Length) Array.Resize(ref propBuffer, requiredSize);
 				return propBuffer;
@@ -174,7 +174,7 @@ namespace UCIS.HWLib.Windows.Devices {
 
 		public RegistryKey OpenRegistryKey(UInt32 scope, UInt32 hwProfile, UInt32 keyType, UInt32 samDesired) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
 					return null;
@@ -199,7 +199,7 @@ namespace UCIS.HWLib.Windows.Devices {
 
 		public Byte[] GetDeviceProperty(Guid fmtid, UInt32 pid) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
 					return null;
@@ -212,7 +212,7 @@ namespace UCIS.HWLib.Windows.Devices {
 				if (requiredSize > propBuffer.Length) {
 					propBuffer = new Byte[requiredSize];
 					if (!SetupApi.SetupDiGetDeviceProperty(dis, ref dd, ref propertyKey, out propertyType, propBuffer, (uint)propBuffer.Length, out requiredSize, 0))
-						throw new Win32Exception(Marshal.GetLastWin32Error());
+						throw new Win32Exception();
 				}
 				if (requiredSize < propBuffer.Length) Array.Resize(ref propBuffer, (int)requiredSize);
 				return propBuffer;
@@ -322,10 +322,10 @@ namespace UCIS.HWLib.Windows.Devices {
 
 		public void SetEnabled(Boolean enabled) {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 				SP_PROPCHANGE_PARAMS PropChangeParams = new SP_PROPCHANGE_PARAMS();
 				PropChangeParams.ClassInstallHeader.cbSize = Marshal.SizeOf(PropChangeParams.ClassInstallHeader);
 				PropChangeParams.ClassInstallHeader.InstallFunction = UsbApi.DIF_PROPERTYCHANGE;
@@ -333,21 +333,21 @@ namespace UCIS.HWLib.Windows.Devices {
 				PropChangeParams.HwProfile = 0; //Current hardware profile
 				PropChangeParams.StateChange = enabled ? UsbApi.DICS_ENABLE : UsbApi.DICS_DISABLE;
 				if (!SetupApi.SetupDiSetClassInstallParams(dis, ref dd, ref PropChangeParams.ClassInstallHeader, Marshal.SizeOf(PropChangeParams)))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 				if (!SetupApi.SetupDiCallClassInstaller(UsbApi.DIF_PROPERTYCHANGE, dis, ref dd))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 			}
 		}
 
 		public Boolean Uninstall() {
 			using (SafeDeviceInfoSetHandle dis = SetupApi.SetupDiGetClassDevsA(IntPtr.Zero, DeviceID, IntPtr.Zero, DICFG.DEVICEINTERFACE | DICFG.ALLCLASSES)) {
-				if (dis.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+				if (dis.IsInvalid) throw new Win32Exception();
 				SP_DEVINFO_DATA dd = new SP_DEVINFO_DATA(true);
 				if (!SetupApi.SetupDiEnumDeviceInfo(dis, 0, ref dd))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 				Boolean needsReboot;
 				if (!SetupApi.DiUninstallDevice(IntPtr.Zero, dis, ref dd, 0, out needsReboot))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 				return needsReboot;
 			}
 		}

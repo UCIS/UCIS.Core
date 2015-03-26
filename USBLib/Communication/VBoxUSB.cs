@@ -332,7 +332,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		unsafe static void InitMonitor() {
 			if (hMonitor != null && !hMonitor.IsClosed && !hMonitor.IsInvalid) return;
 			hMonitor = Kernel32.CreateFile(USBMON_DEVICE_NAME, Kernel32.GENERIC_READ | Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_READ | Kernel32.FILE_SHARE_WRITE, IntPtr.Zero, Kernel32.OPEN_EXISTING, Kernel32.FILE_ATTRIBUTE_SYSTEM, IntPtr.Zero);
-			if (hMonitor.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (hMonitor.IsInvalid) throw new Win32Exception();
 			try {
 				USBSUP_VERSION Version = new USBSUP_VERSION();
 				SyncIoControl(hMonitor, SUPUSBFLT_IOCTL_GET_VERSION, null, 0, &Version, sizeof(USBSUP_VERSION));
@@ -406,7 +406,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 		internal unsafe VBoxUSB(USBRegistry devreg) {
 			this.Registry = devreg;
 			hDev = Kernel32.CreateFile(devreg.DevicePath, Kernel32.GENERIC_READ | Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_WRITE | Kernel32.FILE_SHARE_READ, IntPtr.Zero, Kernel32.OPEN_EXISTING, Kernel32.FILE_ATTRIBUTE_SYSTEM | Kernel32.FILE_FLAG_OVERLAPPED, IntPtr.Zero);
-			if (hDev.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (hDev.IsInvalid) throw new Win32Exception();
 			try {
 				USBSUP_VERSION version = new USBSUP_VERSION();
 				SyncIoControl(hDev, SUPUSB_IOCTL_GET_VERSION, null, 0, &version, sizeof(USBSUP_VERSION));
@@ -460,7 +460,7 @@ namespace UCIS.USBLib.Communication.VBoxUSB {
 				if (err != 997) throw new Win32Exception(err);
 				evt.WaitOne();
 				if (!Kernel32.GetOverlappedResult(hDev, &overlapped, out size, false))
-					throw new Win32Exception(Marshal.GetLastWin32Error());
+					throw new Win32Exception();
 			}
 		}
 

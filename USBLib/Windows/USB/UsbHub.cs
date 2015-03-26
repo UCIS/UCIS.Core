@@ -11,7 +11,7 @@ namespace UCIS.HWLib.Windows.USB {
 	public class UsbHub : UsbDevice {
 		internal static SafeFileHandle OpenHandle(String path) {
 			SafeFileHandle handle = Kernel32.CreateFile(path, Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_WRITE, IntPtr.Zero, Kernel32.OPEN_EXISTING, 0, IntPtr.Zero);
-			if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error());
+			if (handle.IsInvalid) throw new Win32Exception();
 			return handle;
 		}
 
@@ -64,7 +64,7 @@ namespace UCIS.HWLib.Windows.USB {
 							USB_NODE_CONNECTION_NAME nameConnection = new USB_NODE_CONNECTION_NAME();
 							nameConnection.ConnectionIndex = index;
 							if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_NODE_CONNECTION_NAME, ref nameConnection, nBytes, out nameConnection, nBytes, out nBytes, IntPtr.Zero))
-								throw new Win32Exception(Marshal.GetLastWin32Error());
+								throw new Win32Exception();
 							device = new UsbHub(this, @"\\?\" + nameConnection.NodeName, index);
 						} else {
 							device = new UsbDevice(null, this, index);

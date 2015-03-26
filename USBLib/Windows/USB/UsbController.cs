@@ -18,7 +18,7 @@ namespace UCIS.HWLib.Windows.USB {
 				int nBytesReturned;
 				using (SafeFileHandle handle = UsbHub.OpenHandle(DevicePath))
 					if (!Kernel32.DeviceIoControl(handle, UsbApi.IOCTL_USB_GET_ROOT_HUB_NAME, IntPtr.Zero, 0, out rootHubName, Marshal.SizeOf(rootHubName), out nBytesReturned, IntPtr.Zero))
-						throw new Win32Exception(Marshal.GetLastWin32Error());
+						throw new Win32Exception();
 				if (rootHubName.ActualLength <= 0) return null;
 				return new UsbHub(null, @"\\?\" + rootHubName.RootHubName, 0);
 			}
