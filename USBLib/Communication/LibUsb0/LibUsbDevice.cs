@@ -22,6 +22,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 						   NativeFileFlag.FILE_FLAG_OVERLAPPED,
 						   IntPtr.Zero);
 			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception();
+			ThreadPool.BindHandle(DeviceHandle);
 		}
 		protected override void Dispose(Boolean disposing) {
 			if (disposing && DeviceHandle != null) DeviceHandle.Close();
@@ -42,29 +43,25 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Iface.ID = interfaceID;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			DeviceIoControl(DeviceHandle, LibUsbIoCtl.CLAIM_INTERFACE, ref req, LibUsbRequest.Size, null, 0, out ret);
+			DeviceIoControl(LibUsbIoCtl.CLAIM_INTERFACE, ref req);
 		}
 		public void ReleaseInterface(int interfaceID) {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Iface.ID = interfaceID;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			DeviceIoControl(DeviceHandle, LibUsbIoCtl.RELEASE_INTERFACE, ref req, LibUsbRequest.Size, null, 0, out ret);
+			DeviceIoControl(LibUsbIoCtl.RELEASE_INTERFACE, ref req);
 		}
 		public void SetAltInterface(int interfaceID, int alternateID) {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Iface.ID = interfaceID;
 			req.Iface.AlternateID = alternateID;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			DeviceIoControl(DeviceHandle, LibUsbIoCtl.SET_INTERFACE, ref req, LibUsbRequest.Size, null, 0, out ret);
+			DeviceIoControl(LibUsbIoCtl.SET_INTERFACE, ref req);
 		}
 		public void ResetDevice() {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			DeviceIoControl(DeviceHandle, LibUsbIoCtl.RESET_DEVICE, ref req, LibUsbRequest.Size, null, 0, out ret);
+			DeviceIoControl(LibUsbIoCtl.RESET_DEVICE, ref req);
 		}
 		public unsafe override int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
@@ -74,11 +71,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			req.Descriptor.Recipient = (byte)UsbEndpointDirection.EndpointIn & 0x1F;
 			req.Descriptor.Type = descriptorType;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			fixed (Byte* b = buffer) {
-				DeviceIoControl(DeviceHandle, LibUsbIoCtl.GET_DESCRIPTOR, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), length, out ret);
-			}
-			return ret;
+			return DeviceIoControl(LibUsbIoCtl.GET_DESCRIPTOR, ref req, buffer, offset, length);
 		}
 		public override int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			if ((requestType & UsbControlRequestType.EndpointMask) == UsbControlRequestType.EndpointIn)
@@ -92,11 +85,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			int code;
 			LibUsbRequest req = new LibUsbRequest();
 			PrepareControlTransfer(requestType, request, value, index, length, ref req, out code);
-			int ret;
-			fixed (Byte* b = buffer) {
-				DeviceIoControl(DeviceHandle, code, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), length, out ret);
-			}
-			return ret;
+			return DeviceIoControl(code, ref req, buffer, offset, length);
 		}
 		public unsafe int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
 			Byte[] inbuffer = new Byte[length + LibUsbRequest.Size];
@@ -104,8 +93,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			int code;
 			fixed (Byte* inbufferp = inbuffer)
 				PrepareControlTransfer(requestType, request, value, index, length, ref *((LibUsbRequest*)inbufferp), out code);
-			int ret;
-			DeviceIoControl(DeviceHandle, code, inbuffer, length + LibUsbRequest.Size, null, 0, out ret);
+			int ret = DeviceIoControl(code, inbuffer, null, 0, 0);
 			return length;
 			//ret -= LibUsbRequest.Size;
 			//if (ret <= 0) return 0;
@@ -191,78 +179,83 @@ namespace UCIS.USBLib.Communication.LibUsb {
 		public override int PipeTransfer(Byte epnum, Byte[] buffer, int offset, int length) {
 			return PipeTransfer(epnum, (epnum & (Byte)UsbControlRequestType.EndpointMask) == (Byte)UsbControlRequestType.EndpointOut, false, buffer, offset, length, 0);
 		}
-
 		unsafe int PipeTransfer(Byte epnum, Boolean write, Boolean isochronous, Byte[] buffer, int offset, int length, int packetsize) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			LibUsbRequest req = new LibUsbRequest();
 			req.Endpoint.ID = epnum;
 			req.Endpoint.PacketSize = packetsize;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			fixed (Byte* b = buffer) {
-				if (write) {
-					int cltCode = isochronous ? LibUsbIoCtl.ISOCHRONOUS_WRITE : LibUsbIoCtl.INTERRUPT_OR_BULK_WRITE;
-					int transfered = 0;
-					while (length > 0) {
-						int ret;
-						DeviceIoControl(DeviceHandle, cltCode, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), length, out ret);
-						if (ret <= 0) throw new System.IO.EndOfStreamException();
-						length -= ret;
-						offset += ret;
-						transfered += ret;
-					}
-					return transfered;
-				} else {
-					int cltCode = isochronous ? LibUsbIoCtl.ISOCHRONOUS_READ : LibUsbIoCtl.INTERRUPT_OR_BULK_READ;
-					int ret;
-					DeviceIoControl(DeviceHandle, cltCode, ref req, LibUsbRequest.Size, (IntPtr)(b + offset), length, out ret);
-					return ret;
+			if (write) {
+				int cltCode = isochronous ? LibUsbIoCtl.ISOCHRONOUS_WRITE : LibUsbIoCtl.INTERRUPT_OR_BULK_WRITE;
+				int transfered = 0;
+				while (length > 0) {
+					int ret = DeviceIoControl(cltCode, ref req, buffer, offset, length);
+					if (ret <= 0) throw new System.IO.EndOfStreamException();
+					length -= ret;
+					offset += ret;
+					transfered += ret;
 				}
+				return transfered;
+			} else {
+				int cltCode = isochronous ? LibUsbIoCtl.ISOCHRONOUS_READ : LibUsbIoCtl.INTERRUPT_OR_BULK_READ;
+				return DeviceIoControl(cltCode, ref req, buffer, offset, length);
 			}
+		}
+		public override unsafe IAsyncResult BeginPipeTransfer(Byte epnum, Byte[] buffer, int offset, int length, AsyncCallback callback, Object state) {
+			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
+			Byte[] reqb = new Byte[LibUsbRequest.Size];
+			fixed (Byte* reqptr = reqb) {
+				LibUsbRequest* req = (LibUsbRequest*)reqptr;
+				req->Endpoint.ID = epnum;
+				req->Endpoint.PacketSize = 0;
+				req->Timeout = UsbConstants.DEFAULT_TIMEOUT;
+			}
+			int code = ((epnum & (Byte)UsbControlRequestType.EndpointMask) == (Byte)UsbControlRequestType.EndpointOut) ? LibUsbIoCtl.INTERRUPT_OR_BULK_WRITE : LibUsbIoCtl.INTERRUPT_OR_BULK_READ;
+			return BeginDeviceIoControl(code, reqb, buffer, offset, length, callback, state);
+		}
+		public override int EndPipeTransfer(IAsyncResult asyncResult) {
+			return EndDeviceIoControl(asyncResult);
 		}
 		public override void PipeReset(byte pipeID) {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Endpoint.ID = pipeID;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			DeviceIoControl(DeviceHandle, LibUsbIoCtl.RESET_ENDPOINT, ref req, LibUsbRequest.Size, null, 0, out ret);
+			DeviceIoControl(LibUsbIoCtl.RESET_ENDPOINT, ref req);
 		}
 		public override void PipeAbort(byte pipeID) {
 			LibUsbRequest req = new LibUsbRequest();
 			req.Endpoint.ID = pipeID;
 			req.Timeout = UsbConstants.DEFAULT_TIMEOUT;
-			int ret;
-			DeviceIoControl(DeviceHandle, LibUsbIoCtl.ABORT_ENDPOINT, ref req, LibUsbRequest.Size, null, 0, out ret);
+			DeviceIoControl(LibUsbIoCtl.ABORT_ENDPOINT, ref req);
 		}
 
-		private unsafe void DeviceIoControl(SafeHandle hDevice, int IoControlCode, [In] ref LibUsbRequest InBuffer, int nInBufferSize, Byte[] OutBuffer, int nOutBufferSize, out int pBytesReturned) {
-			fixed (LibUsbRequest* InBufferPtr = &InBuffer) {
-				fixed (Byte* OutBufferPtr = OutBuffer) {
-					DeviceIoControl(hDevice, IoControlCode, (IntPtr)InBufferPtr, nInBufferSize, (IntPtr)OutBufferPtr, nOutBufferSize, out pBytesReturned);
+		void DeviceIoControl(int code, [In] ref LibUsbRequest request) {
+			DeviceIoControl(code, ref request, null, 0, 0);
+		}
+		unsafe int DeviceIoControl(int code, [In] ref LibUsbRequest request, Byte[] outbuffer, int outoffset, int outsize) {
+			Byte[] bytes = new Byte[LibUsbRequest.Size];
+			fixed (Byte* ptr = bytes) *(LibUsbRequest*)ptr = request;
+			return DeviceIoControl(code, bytes, outbuffer, outoffset, outsize);
+		}
+		unsafe int DeviceIoControl(int code, Byte[] inbuffer, Byte[] outbuffer, int outoffset, int outsize) {
+			return EndDeviceIoControl(BeginDeviceIoControl(code, inbuffer, outbuffer, outoffset, outsize, null, null));
+		}
+		unsafe WindowsOverlappedAsyncResult BeginDeviceIoControl(int code, Byte[] inbuffer, Byte[] outbuffer, int outoffset, int outsize, AsyncCallback callback, Object state) {
+			WindowsOverlappedAsyncResult ar = new WindowsOverlappedAsyncResult(callback, state);
+			try {
+				fixed (Byte* inptr = inbuffer, outptr = outbuffer) {
+					int ret;
+					Boolean success = Kernel32.DeviceIoControl(DeviceHandle, code, inptr, inbuffer.Length, outptr + outoffset, outsize, out ret, ar.PackOverlapped(new Object[] { inbuffer, outbuffer }));
+					ar.SyncResult(success, ret);
 				}
+				return ar;
+			} catch {
+				ar.ErrorCleanup();
+				throw;
 			}
 		}
-		private unsafe void DeviceIoControl(SafeHandle hDevice, int IoControlCode, Byte[] InBuffer, int nInBufferSize, Byte[] OutBuffer, int nOutBufferSize, out int pBytesReturned) {
-			fixed (Byte* InBufferPtr = InBuffer, OutBufferPtr = OutBuffer) {
-				DeviceIoControl(hDevice, IoControlCode, (IntPtr)InBufferPtr, nInBufferSize, (IntPtr)OutBufferPtr, nOutBufferSize, out pBytesReturned);
-			}
-		}
-		private unsafe void DeviceIoControl(SafeHandle hDevice, int IoControlCode, [In] ref LibUsbRequest InBuffer, int nInBufferSize, IntPtr OutBuffer, int nOutBufferSize, out int pBytesReturned) {
-			fixed (LibUsbRequest* InBufferPtr = &InBuffer) {
-				DeviceIoControl(hDevice, IoControlCode, (IntPtr)InBufferPtr, nInBufferSize, OutBuffer, nOutBufferSize, out pBytesReturned);
-			}
-		}
-		private unsafe void DeviceIoControl(SafeHandle hDevice, int IoControlCode, IntPtr InBuffer, int nInBufferSize, IntPtr OutBuffer, int nOutBufferSize, out int pBytesReturned) {
-			using (ManualResetEvent evt = new ManualResetEvent(false)) {
-				NativeOverlapped overlapped = new NativeOverlapped();
-				overlapped.EventHandle = evt.SafeWaitHandle.DangerousGetHandle();
-				if (Kernel32.DeviceIoControl(hDevice, IoControlCode, InBuffer, nInBufferSize, OutBuffer, nOutBufferSize, out pBytesReturned, &overlapped))
-					return;
-				int err = Marshal.GetLastWin32Error();
-				if (err != 997) throw new Win32Exception(err);
-				evt.WaitOne();
-				if (!Kernel32.GetOverlappedResult(hDevice, &overlapped, out pBytesReturned, false))
-					throw new Win32Exception();
-			}
+		int EndDeviceIoControl(IAsyncResult ar) {
+			return ((WindowsOverlappedAsyncResult)ar).Complete();
 		}
 	}
 }

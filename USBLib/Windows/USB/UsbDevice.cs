@@ -175,6 +175,8 @@ namespace UCIS.HWLib.Windows.USB {
 		IUsbDeviceRegistry IUsbDevice.Registry { get { throw new NotImplementedException(); } }
 		void IUsbInterface.Close() { }
 		int IUsbInterface.PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		IAsyncResult IUsbInterface.BeginPipeTransfer(Byte endpoint, Byte[] buffer, int offset, int length, AsyncCallback callback, Object state) { throw new NotSupportedException(); }
+		int IUsbInterface.EndPipeTransfer(IAsyncResult asyncResult) { throw new NotSupportedException(); }
 		void IUsbInterface.PipeReset(byte endpoint) { throw new NotImplementedException(); }
 		void IUsbInterface.PipeAbort(byte endpoint) { throw new NotImplementedException(); }
 		int IUsbInterface.ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }

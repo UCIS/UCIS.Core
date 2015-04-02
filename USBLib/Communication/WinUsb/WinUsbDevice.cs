@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Threading;
 using Microsoft.Win32.SafeHandles;
 using UCIS.USBLib.Descriptor;
 using UCIS.USBLib.Internal.Windows;
@@ -76,6 +77,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 				NativeFileFlag.FILE_ATTRIBUTE_NORMAL | NativeFileFlag.FILE_FLAG_OVERLAPPED,
 				IntPtr.Zero);
 			if (DeviceHandle.IsInvalid || DeviceHandle.IsClosed) throw new Win32Exception();
+			ThreadPool.BindHandle(DeviceHandle);
 			SafeWinUsbInterfaceHandle InterfaceHandle;
 			if (!WinUsb_Initialize(DeviceHandle, out InterfaceHandle)) throw new Win32Exception();
 			if (InterfaceHandle.IsInvalid || InterfaceHandle.IsClosed) throw new Win32Exception();
@@ -168,18 +170,33 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			return length;
 		}
 
-		public override unsafe int PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) {
+		unsafe Boolean BeginPipeTransfer(byte endpoint, byte[] buffer, int offset, ref int length, IntPtr overlapped) {
 			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
 			SafeWinUsbInterfaceHandle ih = GetInterfaceHandleForEndpoint(endpoint);
 			fixed (Byte* b = buffer) {
-				Boolean success;
 				if ((endpoint & (Byte)UsbControlRequestType.EndpointMask) == (Byte)UsbControlRequestType.EndpointOut)
-					success = WinUsb_WritePipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero);
+					return WinUsb_WritePipe(ih, endpoint, (IntPtr)(b + offset), length, out length, overlapped);
 				else
-					success = WinUsb_ReadPipe(ih, endpoint, (IntPtr)(b + offset), length, out length, IntPtr.Zero);
-				if (!success) throw new Win32Exception();
+					return WinUsb_ReadPipe(ih, endpoint, (IntPtr)(b + offset), length, out length, overlapped);
 			}
+		}
+		public override int PipeTransfer(byte endpoint, byte[] buffer, int offset, int length) {
+			if (!BeginPipeTransfer(endpoint, buffer, offset, ref length, IntPtr.Zero)) throw new Win32Exception();
 			return length;
+		}
+		public override unsafe IAsyncResult BeginPipeTransfer(Byte endpoint, Byte[] buffer, int offset, int length, AsyncCallback callback, Object state) {
+			WindowsOverlappedAsyncResult ar = new WindowsOverlappedAsyncResult(callback, state);
+			try {
+				Boolean success = BeginPipeTransfer(endpoint, buffer, offset, ref length, (IntPtr)ar.PackOverlapped(buffer));
+				ar.SyncResult(success, length);
+				return ar;
+			} catch {
+				ar.ErrorCleanup();
+				throw;
+			}
+		}
+		public override int EndPipeTransfer(IAsyncResult asyncResult) {
+			return ((WindowsOverlappedAsyncResult)asyncResult).Complete();
 		}
 
 		public override void PipeReset(byte endpoint) {

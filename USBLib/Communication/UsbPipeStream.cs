@@ -45,6 +45,13 @@ namespace UCIS.USBLib.Communication {
 			if (!CanRead) throw new InvalidOperationException("Can not read from an output endpoint");
 			return Device.PipeTransfer(Endpoint, buffer, offset, count);
 		}
+		public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			if (!CanRead) throw new InvalidOperationException("Can not read from an output endpoint");
+			return Device.BeginPipeTransfer(Endpoint, buffer, offset, count, callback, state);
+		}
+		public override int EndRead(IAsyncResult asyncResult) {
+			return Device.EndPipeTransfer(asyncResult);
+		}
 
 		public override long Seek(long offset, SeekOrigin origin) {
 			throw new NotImplementedException();
@@ -58,6 +65,31 @@ namespace UCIS.USBLib.Communication {
 			if (!CanWrite) throw new InvalidOperationException("Can not write to an input endpoint");
 			int written = Device.PipeTransfer(Endpoint, buffer, offset, count);
 			if (written != count) throw new EndOfStreamException("Could not write all data");
+		}
+		public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			if (!CanWrite) throw new InvalidOperationException("Can not write to an input endpoint");
+			AsyncResultWrapper ar = new AsyncResultWrapper() { Callback = callback, AsyncState = state, Length = count };
+			ar.AsyncResult = Device.BeginPipeTransfer(Endpoint, buffer, offset, count, InternalAsyncCallback, ar);
+			return ar;
+		}
+		public override void EndWrite(IAsyncResult asyncResult) {
+			AsyncResultWrapper ar = (AsyncResultWrapper)asyncResult;
+			int ret = Device.EndPipeTransfer(ar.AsyncResult);
+			if (ret != ar.Length) throw new EndOfStreamException("Could not write all data");
+		}
+		static void InternalAsyncCallback(IAsyncResult asyncResult) {
+			AsyncResultWrapper ar = (AsyncResultWrapper)asyncResult.AsyncState;
+			ar.AsyncResult = asyncResult;
+			if (ar.Callback != null) ar.Callback(ar);
+		}
+		class AsyncResultWrapper : IAsyncResult {
+			public IAsyncResult AsyncResult;
+			public AsyncCallback Callback;
+			public int Length;
+			public object AsyncState { get; set; }
+			public System.Threading.WaitHandle AsyncWaitHandle { get { return AsyncResult.AsyncWaitHandle; } }
+			public bool CompletedSynchronously { get { return AsyncResult.CompletedSynchronously; } }
+			public bool IsCompleted { get { return AsyncResult.IsCompleted; } }
 		}
 
 		protected override void Dispose(bool disposing) {

@@ -28,11 +28,20 @@ namespace UCIS.USBLib.Communication {
 			return ControlTransfer(requestType, request, value, index, null, 0, 0);
 		}
 
-
 		public abstract int PipeTransfer(Byte endpoint, Byte[] buffer, int offset, int length);
 		public virtual void PipeReset(Byte endpoint) { throw new NotImplementedException(); }
 		public virtual void PipeAbort(Byte endpoint) { throw new NotImplementedException(); }
 		public abstract int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length);
+
+		delegate int PipeTransferDelegate(Byte endpoint, Byte[] buffer, int offset, int length);
+		PipeTransferDelegate pipeTransferFunc = null;
+		public virtual IAsyncResult BeginPipeTransfer(Byte endpoint, Byte[] buffer, int offset, int length, AsyncCallback callback, Object state) {
+			if (pipeTransferFunc == null) pipeTransferFunc = PipeTransfer;
+			return pipeTransferFunc.BeginInvoke(endpoint, buffer, offset, length, callback, state);
+		}
+		public virtual int EndPipeTransfer(IAsyncResult asyncResult) {
+			return pipeTransferFunc.EndInvoke(asyncResult);
+		}
 
 		public virtual UsbPipeStream GetPipeStream(Byte endpoint) {
 			return new UsbPipeStream(this, endpoint);

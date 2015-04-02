@@ -153,6 +153,7 @@
     <Compile Include="USBLib\Internal\Windows\SetupApi.cs" />
     <Compile Include="USBLib\Internal\Windows\UsbApi.cs" />
     <Compile Include="USBLib\Internal\Windows\Win32Kernel.cs" />
+    <Compile Include="USBLib\WindowsOverlappedAsyncResult.cs" />
     <Compile Include="USBLib\Windows\Devices\DeviceNode.cs" />
     <Compile Include="USBLib\Windows\USB\UsbController.cs" />
     <Compile Include="USBLib\Windows\USB\UsbDevice.cs" />
