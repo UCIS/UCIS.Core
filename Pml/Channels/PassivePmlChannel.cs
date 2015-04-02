@@ -22,7 +22,7 @@ namespace UCIS.Pml {
 
 		public IAsyncResult BeginReadMessage(AsyncCallback callback, object state) {
 			ReadMessageAsyncResult ar = new ReadMessageAsyncResult(callback, state);
-			UCIS.ThreadPool.RunCall(AsyncReadMessage, ar);
+			UThreadPool.RunCall(AsyncReadMessage, ar);
 			return ar;
 		}
 		public PmlElement EndReadMessage(IAsyncResult asyncResult) {

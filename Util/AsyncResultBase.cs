@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading;
-using SysThreadPool = System.Threading.ThreadPool;
 
 namespace UCIS.Util {
 	public abstract class AsyncResultBase : IAsyncResult {
@@ -48,7 +47,7 @@ namespace UCIS.Util {
 						ThreadInCallback = false;
 					}
 				} else {
-					SysThreadPool.QueueUserWorkItem(CallCallback);
+					ThreadPool.QueueUserWorkItem(CallCallback);
 				}
 			}
 		}

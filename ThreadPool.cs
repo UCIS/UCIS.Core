@@ -5,9 +5,9 @@ using System.Threading;
 using UCIS.Util;
 
 namespace UCIS {
-	public class ThreadPool {
-		static readonly ThreadPool pManager = new ThreadPool();
-		public static ThreadPool DefaultPool { get { return pManager; } }
+	public class UThreadPool {
+		static readonly UThreadPool pManager = new UThreadPool();
+		public static UThreadPool DefaultPool { get { return pManager; } }
 
 		public static void RunTask(WaitCallback Callback, object State) {
 			DefaultPool.QueueWorkItem(Callback, State);
@@ -30,11 +30,11 @@ namespace UCIS {
 		WorkQueue<WorkItem> queue;
 
 		public event OnExceptionEventHandler OnException;
-		public delegate void OnExceptionEventHandler(ThreadPool sender, ExceptionEventArgs e);
+		public delegate void OnExceptionEventHandler(UThreadPool sender, ExceptionEventArgs e);
 
-		public ThreadPool() : this(250, 0, 5) { }
+		public UThreadPool() : this(250, 0, 5) { }
 
-		public ThreadPool(int MaxThreads, int MinIdle, int MaxIdle) {
+		public UThreadPool(int MaxThreads, int MinIdle, int MaxIdle) {
 			queue = new WorkQueue<WorkItem>(handler);
 			queue.UseFrameworkThreadpool = false;
 			queue.MaxWorkers = MaxThreads;

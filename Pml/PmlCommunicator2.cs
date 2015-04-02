@@ -192,7 +192,7 @@ namespace UCIS.Pml {
 						lock (SRequest) Monitor.Pulse(SRequest);
 					}
 				} else if (Cmd.Equals("REQ") || Cmd.Equals("MSG")) {
-					UCIS.ThreadPool.RunCall(processCall, Message);
+					UThreadPool.RunCall(processCall, Message);
 				} else {
 					Console.WriteLine("UCIS.PML.Connection.Worker Invalid command received");
 				}

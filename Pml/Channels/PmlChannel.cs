@@ -11,7 +11,7 @@ namespace UCIS.Pml {
 			if (rw == null) throw new ArgumentNullException("rw");
 			_rw = rw;
 			_open = true;
-			ThreadPool.RunTask(worker, null);
+			UThreadPool.RunTask(worker, null);
 		}
 
 		public IPmlReader Reader { get { return _rw; } }

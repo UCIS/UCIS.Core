@@ -25,14 +25,14 @@ namespace UCIS.Net {
 		public event EventHandler<ClientAcceptedEventArgs> ClientAccepted;
 
 		private List<Socket> listeners = new List<Socket>();
-		private UCIS.ThreadPool _ThreadPool;
+		private UThreadPool _ThreadPool;
 
 		public NetworkConnectionList Clients { get; private set; }
 		public ModuleCollection Modules { get; private set; }
 		public IModule DefaultModule { get; set; }
 
 		public TCPServer() {
-			_ThreadPool = UCIS.ThreadPool.DefaultPool;
+			_ThreadPool = UThreadPool.DefaultPool;
 			Clients = new NetworkConnectionList();
 			Modules = new ModuleCollection();
 			DefaultModule = null;
@@ -114,7 +114,7 @@ namespace UCIS.Net {
 				this.Tag = Server;
 			}
 
-			internal void Start(UCIS.ThreadPool Pool) {
+			internal void Start(UThreadPool Pool) {
 				Pool.QueueWorkItem(WorkerProc, null);
 			}
 
