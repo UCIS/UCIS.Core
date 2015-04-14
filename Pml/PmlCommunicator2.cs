@@ -5,22 +5,34 @@ using UCIS.Pml;
 
 namespace UCIS.Pml {
 	public class PmlCommunicator {
-		private class CSyncRequest {
-			internal PmlElement Reply;
+		[Serializable]
+		class PmlRemoteException : Exception {
+			public String ExceptionText { get; private set; }
+			public PmlRemoteException(String message, String text) : base(message) {
+				this.ExceptionText = text;
+			}
+			public override string ToString() {
+				if (ExceptionText == null) return base.ToString();
+				return base.ToString() + Environment.NewLine + "Original exception text:" + Environment.NewLine + ExceptionText;
+			}
 		}
-		private interface ISession {
-			void MessageIn(PmlElement message);
-			void CloseIn();
-			UInt32 ID { get; }
+		class CSyncRequest {
+			internal PmlDictionary Reply = null;
+			internal void Completed(PmlDictionary reply) {
+				lock (this) {
+					this.Reply = reply;
+					Monitor.PulseAll(this);
+				}
+			}
 		}
-		private class PmlSubChannel : ActivePmlChannel, ISession {
+		class SubChannel : ActivePmlChannel {
 			private enum ChannelState { Requesting, Acknowledged, Closed }
 
 			private PmlCommunicator _communicator;
 			private UInt32 _id;
 			private ChannelState _state;
 
-			internal PmlSubChannel(PmlCommunicator communicator, UInt32 sid, bool accepted) {
+			internal SubChannel(PmlCommunicator communicator, UInt32 sid, bool accepted) {
 				_communicator = communicator;
 				_id = sid;
 				_state = accepted ? ChannelState.Acknowledged : ChannelState.Requesting;
@@ -29,13 +41,12 @@ namespace UCIS.Pml {
 
 			public override bool IsOpen { get { return _state == ChannelState.Acknowledged; } }
 
-			uint ISession.ID { get { return _id; } }
-			void ISession.CloseIn() {
+			internal uint ID { get { return _id; } }
+			internal void CloseIn() {
 				_state = ChannelState.Closed;
-				_communicator.RemoveSession(this);
 				base.Close();
 			}
-			void ISession.MessageIn(PmlElement message) {
+			internal void MessageIn(PmlElement message) {
 				base.PushReceivedMessage(message);
 			}
 
@@ -65,7 +76,7 @@ namespace UCIS.Pml {
 			public override IPmlChannel Accept() {
 				if (_accepted || _rejected) throw new InvalidOperationException("The channel has already been accepted or rejected");
 				_accepted = true;
-				return new PmlSubChannel(_communicator, _sid, true);
+				return new SubChannel(_communicator, _sid, true);
 			}
 			public override void Reject() {
 				if (_accepted) throw new InvalidOperationException("The channel has already been accepted");
@@ -83,7 +94,7 @@ namespace UCIS.Pml {
 		public event EventHandler<PmlChannelRequestReceivedEventArgs> ChannelRequestReceived;
 		public event EventHandler Closed;
 
-		private Dictionary<UInt32, ISession> _sessions = new Dictionary<UInt32, ISession>();
+		private Dictionary<UInt32, SubChannel> _sessions = new Dictionary<UInt32, SubChannel>();
 		private Dictionary<UInt32, CSyncRequest> _invocations = new Dictionary<UInt32, CSyncRequest>();
 		private UInt32 pNextSession;
 		private UInt32 pNextSyncRequest;
@@ -101,27 +112,21 @@ namespace UCIS.Pml {
 			_channel.BeginReadMessage(messageReceived, null);
 		}
 		public void StartSync() {
-			while (true) {
-				try {
+			try {
+				while (true) {
 					processMessage(_channel.ReadMessage());
-				} catch (InvalidOperationException ex) {
-					Console.WriteLine("InvalidOperationException in LegacyPmlCommunicator.messageReceived: " + ex.Message);
-					closed();
-					_channel.Close();
-					return;
-				} catch (Exception ex) {
-					Console.WriteLine(ex.ToString());
-					closed();
-					_channel.Close();
-					return;
 				}
+			} catch (InvalidOperationException ex) {
+				Console.WriteLine("InvalidOperationException in LegacyPmlCommunicator.messageReceived: " + ex.Message);
+			} catch (Exception ex) {
+				Console.WriteLine(ex.ToString());
+			} finally {
+				closed();
+				_channel.Close();
 			}
 		}
 		public void Close() {
 			_channel.Close();
-		}
-		public void WriteRawMessage(PmlElement Message) {
-			_WriteMessage(Message);
 		}
 
 		private void _WriteMessage(PmlElement Message) {
@@ -133,17 +138,11 @@ namespace UCIS.Pml {
 		private void closed() {
 			_closed = true;
 			lock (_sessions) {
-				foreach (ISession S in _sessions.Values) {
-					try {
-						S.CloseIn();
-					} catch (Exception ex) {
-						Console.WriteLine(ex.ToString());
-					}
-				}
+				foreach (SubChannel item in _sessions.Values) item.CloseIn();
 				_sessions.Clear();
 			}
 			lock (_invocations) {
-				foreach (CSyncRequest T in _invocations.Values) lock (T) Monitor.Pulse(T);
+				foreach (CSyncRequest item in _invocations.Values) item.Completed(null);
 				_invocations.Clear();
 			}
 			if (Closed != null) Closed(this, new EventArgs());
@@ -158,43 +157,33 @@ namespace UCIS.Pml {
 				Console.WriteLine("InvalidOperationException in LegacyPmlCommunicator.messageReceived: " + ex.Message);
 				closed();
 				_channel.Close();
-				return;
 			} catch (Exception ex) {
 				Console.WriteLine(ex.ToString());
 				closed();
 				_channel.Close();
-				return;
 			}
 		}
 		private void processMessage(PmlElement Message) {
 			if (Message is PmlString) {
-				string Cmd = Message.ToString();
-				if (Cmd.Equals("PING")) {
+				String cmd = Message.ToString();
+				if (cmd == "PING") {
 					_WriteMessage("PONG");
-				} else if (Cmd.Equals("PONG")) {
+				} else if (cmd == "PONG") {
 				}
 			} else if (Message is PmlDictionary) {
-				string Cmd = Message.GetChild("CMD").ToString();
-				if (Cmd.Equals("SES")) {
+				String cmd = Message.GetChild("CMD").ToString();
+				if (cmd == "SES") {
 					processSessionMessage(Message);
-				} else if (Cmd.Equals("RPL")) {
+				} else if (cmd == "RPL") {
 					UInt32 SID = Message.GetChild("SID").ToUInt32();
-					CSyncRequest SRequest = null;
+					CSyncRequest SRequest;
 					lock (_invocations) {
-						if (_invocations.TryGetValue(SID, out SRequest)) {
-							_invocations.Remove(SID);
-						} else {
-							Console.WriteLine("UCIS.PML.Connection.Worker Invalid request ID in reply: " + SID.ToString());
-						}
+						if (!_invocations.TryGetValue(SID, out SRequest)) SRequest = null;
+						_invocations.Remove(SID);
 					}
-					if (SRequest != null) {
-						SRequest.Reply = Message.GetChild("MSG");
-						lock (SRequest) Monitor.Pulse(SRequest);
-					}
-				} else if (Cmd.Equals("REQ") || Cmd.Equals("MSG")) {
+					if (SRequest != null) SRequest.Completed((PmlDictionary)Message);
+				} else if (cmd == "REQ" || cmd == "MSG") {
 					UThreadPool.RunCall(processCall, Message);
-				} else {
-					Console.WriteLine("UCIS.PML.Connection.Worker Invalid command received");
 				}
 			}
 		}
@@ -202,16 +191,13 @@ namespace UCIS.Pml {
 			UInt32 SID = Message.GetChild("SID").ToUInt32();
 			byte SCMD = Message.GetChild("SCMD").ToByte();
 			PmlElement InnerMsg = Message.GetChild("MSG");
-			ISession Session = null;
+			SubChannel Session;
 			lock (_sessions) if (!_sessions.TryGetValue(SID, out Session)) Session = null;
 			switch (SCMD) {
 				case 0: //Request
 					if (Session != null) {
-						try {
-							Session.CloseIn();
-						} catch (Exception ex) {
-							Console.WriteLine("UCIS.Pml.PmlCommunicator.processSessionMessage-Request: exception in session.CloseIn: " + ex.ToString());
-						}
+						RemoveSession(Session);
+						Session.CloseIn();
 						WriteSessionMessage(SID, 2, null);
 					} else if (ChannelRequestReceived != null) {
 						try {
@@ -228,29 +214,16 @@ namespace UCIS.Pml {
 					break;
 				case 1: //Message
 					if (Session != null) {
-						try {
-							Session.MessageIn(InnerMsg);
-						} catch (Exception ex) {
-							Console.WriteLine("UCIS.Pml.PmlCommunicator.processSessionMessage: exception in session.MessageIn: " + ex.ToString());
-							WriteSessionMessage(SID, 2, null);
-						}
+						Session.MessageIn(InnerMsg);
 					} else {
 						WriteSessionMessage(SID, 2, null);
 					}
 					break;
 				case 2: //Close
 					if (Session != null) {
-						try {
-							if (InnerMsg != null && !(InnerMsg is PmlNull)) Session.MessageIn(InnerMsg);
-						} catch (Exception ex) {
-							Console.WriteLine("UCIS.Pml.PmlCommunicator.processSessionMessage-Close: exception in session.MessageIn: " + ex.ToString());
-						} finally {
-							try {
-								Session.CloseIn();
-							} catch (Exception ex) {
-								Console.WriteLine("UCIS.Pml.PmlCommunicator.processSessionMessage: exception in session.CloseIn: " + ex.ToString());
-							}
-						}
+						if (InnerMsg != null && !(InnerMsg is PmlNull)) Session.MessageIn(InnerMsg);
+						RemoveSession(Session);
+						Session.CloseIn();
 					}
 					break;
 			}
@@ -260,33 +233,26 @@ namespace UCIS.Pml {
 			bool wantReply = Message.ContainsKey("SID");
 			UInt32 SID = 0;
 			if (wantReply) SID = Message.GetChild("SID").ToUInt32();
-			PmlElement Reply = null;
+			PmlDictionary reply = new PmlDictionary() { { "CMD", "RPL" }, { "SID", SID } };
 			try {
 				if (CallReceived != null) {
 					PmlCallReceivedEventArgs ea = new PmlCallReceivedEventArgs(Message.GetChild("MSG"), wantReply, SID);
 					CallReceived(this, ea);
-					Reply = ea.Reply;
+					reply.Add("MSG", ea.Reply);
 				}
 			} catch (Exception ex) {
-				Reply = new PmlDictionary();
-				((PmlDictionary)Reply).Add("EXCEPTION", new PmlString(ex.ToString()));
-				Console.WriteLine(ex.ToString());
-			} finally {
-				if (wantReply && Channel.IsOpen) {
-					try {
-						WriteSyncMessage(SID, true, Reply);
-					} catch (Exception ex) {
-						Console.WriteLine("UCIS.Pml.PmlCommunicator.processCall: exception: " + ex.ToString());
-						closed();
-						Channel.Close();
-					}
-				}
+				reply.Add("ERRMSG", ex.Message);
+				reply.Add("ERRTXT", ex.ToString());
+			}
+			if (wantReply && Channel.IsOpen) {
+				try {
+					_WriteMessage(reply);
+				} catch { }
 			}
 		}
 
-		public void Call(PmlElement message) {
-			PmlDictionary Msg = new PmlDictionary() { { "CMD", "MSG" }, { "MSG", message } };
-			_WriteMessage(Msg);
+		public void SendMessage(PmlElement message) {
+			_WriteMessage(new PmlDictionary() { { "CMD", "MSG" }, { "MSG", message } });
 		}
 		public PmlElement Invoke(PmlElement message) {
 			return Invoke(message, 60000);
@@ -299,54 +265,50 @@ namespace UCIS.Pml {
 				SID = GetNextSessionId(ref pNextSyncRequest, _invocations);
 				_invocations.Add(SID, SyncEvent);
 			}
+			Boolean waitSuccess = false;
 			try {
-				WriteSyncMessage(SID, false, message);
-				Boolean success;
-				lock (SyncEvent) success = Monitor.Wait(SyncEvent, timeout);
-				if (!success) throw new TimeoutException("The SyncRequest timed out (SID=" + SID.ToString() + ")");
+				_WriteMessage(new PmlDictionary() { { "CMD", "REQ" }, { "SID", SID }, { "MSG", message } });
+				lock (SyncEvent) waitSuccess = SyncEvent.Reply != null || Monitor.Wait(SyncEvent, timeout);
 			} finally {
 				lock (_invocations) _invocations.Remove(SID);
 			}
-			return SyncEvent.Reply;
+			if (!waitSuccess) throw new TimeoutException("The SyncRequest timed out (SID=" + SID.ToString() + ")");
+			if (SyncEvent.Reply == null) throw new OperationCanceledException("The operation was aborted");
+			PmlElement errmsg = SyncEvent.Reply.GetChild("ERRMSG");
+			if (errmsg != null) {
+				PmlElement errtxt = SyncEvent.Reply.GetChild("ERRTXT");
+				throw new PmlRemoteException(errmsg.ToString(), errtxt == null ? null : errtxt.ToString());
+			}
+			return SyncEvent.Reply.GetChild("MSG");
 		}
 
 		public IPmlChannel CreateChannel(PmlElement data) {
-			UInt32 sid = GetNextSessionId(ref pNextSession, _sessions);
-			PmlSubChannel ch = new PmlSubChannel(this, sid, true);
+			UInt32 sid;
+			SubChannel ch;
+			lock (_sessions) {
+				sid = GetNextSessionId(ref pNextSession, _sessions);
+				ch = new SubChannel(this, sid, true);
+			}
 			WriteSessionMessage(sid, 0, data);
-			if (!ch.IsOpen) return null;
 			return ch;
 		}
 
-		private void AddSession(ISession session) {
+		private void AddSession(SubChannel session) {
 			if (_closed) return;
 			lock (_sessions) _sessions.Add(session.ID, session);
 		}
-		private void RemoveSession(UInt32 session) {
+		private void RemoveSession(SubChannel session) {
 			if (_closed) return;
-			lock (_sessions) _sessions.Remove(session);
-		}
-		private void RemoveSession(ISession session) {
-			RemoveSession(session.ID);
+			lock (_sessions) _sessions.Remove(session.ID);
 		}
 
 		private static UInt32 GetNextSessionId<T>(ref UInt32 id, IDictionary<UInt32, T> dictionary) {
 			lock (dictionary) {
-				do {
-					id++;
-				} while (dictionary.ContainsKey(id));
+				while (dictionary.ContainsKey(++id));
 				return id;
 			}
 		}
 
-		protected void WriteSyncMessage(UInt32 SID, bool RPL, PmlElement MSG) {
-			PmlDictionary Msg2 = new PmlDictionary() {
-				{ "CMD", RPL ? "RPL" : "REQ" },
-				{ "SID", SID },
-				{ "MSG", MSG },
-			};
-			_WriteMessage(Msg2);
-		}
 		protected void WriteSessionMessage(UInt32 SID, byte CMD, PmlElement MSG) {
 			PmlDictionary Msg2 = new PmlDictionary() {
 				{ "CMD", "SES" },
@@ -363,9 +325,6 @@ namespace UCIS.Pml {
 		}
 		public PmlElement SyncRequest(PmlElement Request, int Timeout) {
 			return Invoke(Request, Timeout);
-		}
-		public void SendMessage(PmlElement Message) {
-			Call(Message);
 		}
 	}
 }

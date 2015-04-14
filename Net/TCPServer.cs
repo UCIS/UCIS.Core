@@ -144,7 +144,7 @@ namespace UCIS.Net {
 					Console.WriteLine("TCPServer: Caught Exception: " + ex.ToString());
 				} finally {
 					try {
-						if (closesocket) base.Close();
+						if (closesocket) Close();
 					} catch { }
 				}
 			}

@@ -73,7 +73,7 @@ namespace UCIS.Windows {
 				if (!ConnectNamedPipe(PipeHandle, &overlapped)) {
 					int err = Marshal.GetLastWin32Error();
 					if (err != 997) throw new Win32Exception(err);
-					if (!evt.WaitOne(millisecondsTimeout)) {
+					if (!evt.WaitOne(millisecondsTimeout, false)) {
 						CancelIo(PipeHandle);
 						throw new TimeoutException("The operation timed out");
 					}

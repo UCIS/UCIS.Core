@@ -4,30 +4,16 @@ using System.Text;
 
 namespace UCIS.Pml {
 	public class PmlCallReceivedEventArgs : EventArgs {
-		private PmlElement _request;
-		private PmlElement _reply;
-		private UInt32 _sid;
-		private bool _wantReply;
-
 		internal PmlCallReceivedEventArgs(PmlElement request, bool wantReply, UInt32 sid) {
-			_request = request;
-			_wantReply = wantReply;
-			_sid = sid;
-			_reply = null;
+			this.Request = request;
+			this.WantReply = wantReply;
+			this.SID = sid;
+			this.Reply = null;
 		}
-		public bool WantReply {
-			get { return _wantReply; }
-		}
-		internal UInt32 SID {
-			get { return _sid; }
-		}
-		public PmlElement Reply {
-			get { return _reply; }
-			set { _reply = value; }
-		}
-		public PmlElement Request {
-			get { return _request; }
-		}
+		public bool WantReply { get; private set; }
+		internal UInt32 SID { get; private set; }
+		public PmlElement Request { get; private set; }
+		public PmlElement Reply { get; set; }
 	}
 	public abstract class PmlChannelRequestReceivedEventArgs : EventArgs {
 		public abstract IPmlChannel Accept();
