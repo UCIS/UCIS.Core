@@ -302,25 +302,31 @@ namespace UCIS.Net.HTTP {
 			protected override void Dispose(bool disposing) {
 				base.Dispose(disposing);
 				if (disposing) {
-					switch (Mode) {
-						case HTTPResponseStreamMode.Direct:
-							if (MaxLength == -1 || (MaxLength != -1 && MaxLength > BytesWritten)) Context.KeepAlive = false;
-							break;
-						case HTTPResponseStreamMode.Chunked:
-							WriteChunked(null, 0, 0);
-							Mode = HTTPResponseStreamMode.None;
-							break;
-						case HTTPResponseStreamMode.Buffered:
-						case HTTPResponseStreamMode.Hybrid:
-							long length = (Buffer == null) ? 0 : Buffer.Length;
-							Context.SendHeader("Content-Length", length.ToString());
-							OutputStream = Context.BeginResponseData();
-							if (Buffer != null) Buffer.WriteTo(OutputStream);
-							Buffer = null;
-							Mode = HTTPResponseStreamMode.None;
-							break;
+					try {
+						switch (Mode) {
+							case HTTPResponseStreamMode.Direct:
+								if (MaxLength == -1 || (MaxLength != -1 && MaxLength > BytesWritten)) Context.KeepAlive = false;
+								Mode = HTTPResponseStreamMode.None;
+								break;
+							case HTTPResponseStreamMode.Chunked:
+								WriteChunked(null, 0, 0);
+								Mode = HTTPResponseStreamMode.None;
+								break;
+							case HTTPResponseStreamMode.Buffered:
+							case HTTPResponseStreamMode.Hybrid:
+								long length = (Buffer == null) ? 0 : Buffer.Length;
+								Context.SendHeader("Content-Length", length.ToString());
+								OutputStream = Context.BeginResponseData();
+								if (Buffer != null) Buffer.WriteTo(OutputStream);
+								Buffer = null;
+								Mode = HTTPResponseStreamMode.None;
+								break;
+						}
+						Context.EndResponseData();
+					} catch {
+						if (Context.AsynchronousCompletion) Context.Close();
+						throw;
 					}
-					Context.EndResponseData();
 				}
 			}
 			public override bool CanTimeout {
@@ -878,26 +884,41 @@ namespace UCIS.Net.HTTP {
 		}
 	}
 	public class HTTPPathSelector : IHTTPContentProvider {
-		private List<KeyValuePair<String, IHTTPContentProvider>> Prefixes;
+		private struct PrefixInfo {
+			public String Prefix;
+			public IHTTPContentProvider Handler;
+			public Boolean ExactMatch;
+		}
+		private List<PrefixInfo> Prefixes;
 		private StringComparison PrefixComparison;
 		public HTTPPathSelector() : this(false) { }
 		public HTTPPathSelector(Boolean caseSensitive) {
-			Prefixes = new List<KeyValuePair<string, IHTTPContentProvider>>();
+			Prefixes = new List<PrefixInfo>();
 			PrefixComparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 		}
 		public void AddPrefix(String prefix, IHTTPContentProvider contentProvider) {
-			Prefixes.Add(new KeyValuePair<string, IHTTPContentProvider>(prefix, contentProvider));
-			Prefixes.Sort(delegate(KeyValuePair<String, IHTTPContentProvider> a, KeyValuePair<String, IHTTPContentProvider> b) {
-				return -String.CompareOrdinal(a.Key, b.Key);
-			});
+			AddPrefix(new PrefixInfo() { Prefix = prefix, Handler = contentProvider, ExactMatch = false });
+		}
+		public void AddPath(String path, IHTTPContentProvider contentProvider) {
+			AddPrefix(new PrefixInfo() { Prefix = path, Handler = contentProvider, ExactMatch = true });
+		}
+		private void AddPrefix(PrefixInfo item) {
+			Prefixes.Add(item);
+			Prefixes.Sort(delegate(PrefixInfo a, PrefixInfo b) { return -String.CompareOrdinal(a.Prefix, b.Prefix); });
 		}
 		public void DeletePrefix(String prefix) {
-			Prefixes.RemoveAll(delegate(KeyValuePair<string, IHTTPContentProvider> item) { return prefix.Equals(item.Key, PrefixComparison); });
+			Prefixes.RemoveAll(delegate(PrefixInfo item) { return prefix.Equals(item.Prefix, PrefixComparison); });
+		}
+		public void DeletePath(String prefix) {
+			DeletePrefix(prefix);
 		}
 		public void ServeRequest(HTTPContext context) {
-			KeyValuePair<string, IHTTPContentProvider> c = Prefixes.Find(delegate(KeyValuePair<string, IHTTPContentProvider> item) { return context.RequestPath.StartsWith(item.Key, PrefixComparison); });
-			if (c.Value != null) {
-				c.Value.ServeRequest(context);
+			PrefixInfo c = Prefixes.Find(delegate(PrefixInfo item) {
+				if (item.ExactMatch) return context.RequestQuery.Equals(item.Prefix, PrefixComparison);
+				else return context.RequestPath.StartsWith(item.Prefix, PrefixComparison); 
+			});
+			if (c.Handler != null) {
+				c.Handler.ServeRequest(context);
 			} else {
 				context.SendErrorResponse(404);
 			}

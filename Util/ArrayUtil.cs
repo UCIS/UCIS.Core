@@ -36,6 +36,11 @@ namespace UCIS.Util {
 		public static T[] ToArray<T>(T[] input) {
 			return (T[])input.Clone();
 		}
+		public static Tout[] Convert<Tin, Tout>(IList<Tin> input, Converter<Tin, Tout> converter) {
+			Tout[] output = new Tout[input.Count];
+			for (int i = 0; i < output.Length; i++) output[i] = converter(input[i]);
+			return output;
+		}
 		public static T[] Convert<T>(IList input, Converter<Object, T> converter) {
 			T[] output = new T[input.Count];
 			for (int i = 0; i < output.Length; i++) output[i] = converter(input[i]);

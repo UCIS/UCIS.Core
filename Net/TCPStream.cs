@@ -7,36 +7,32 @@ using UCIS.Util;
 
 namespace UCIS.Net {
 	public class TCPStream : Stream, INetworkConnection {
+		private static long _connectionCounter = 1;
 		private static long _totalBytesRead = 0;
 		private static long _totalBytesWritten = 0;
 		public static ulong TotalBytesWritten { get { return (ulong)_totalBytesWritten; } set { _totalBytesWritten = (long)value; } }
 		public static ulong TotalBytesRead { get { return (ulong)_totalBytesRead; } set { _totalBytesRead = (long)value; } }
 
-		private Socket _Socket;
 		private int _PeekByte;
 		private ulong _BytesWritten;
 		private ulong _BytesRead;
-		private DateTime _StartTime;
 		private Boolean disposed = false;
 
 		public event EventHandler Closed;
 
 		public TCPStream(Socket Socket) {
-			_Socket = Socket;
+			this.Socket = Socket;
 			_PeekByte = -1;
-			_StartTime = DateTime.Now;
+			CreationTime = DateTime.Now;
+			ConnectionIndex = (UInt64)Interlocked.Increment(ref _connectionCounter);
 		}
 
-		public Socket Socket {
-			get { return _Socket; }
-		}
-
-		public DateTime CreationTime {
-			get { return _StartTime; }
-		}
+		public Socket Socket { get; private set; }
+		public DateTime CreationTime { get; private set ; }
+		public UInt64 ConnectionIndex { get; private set; }
 
 		public bool Blocking {
-			get { return _Socket.Blocking; }
+			get { return Socket.Blocking; }
 			set { Socket.Blocking = value; }
 		}
 
@@ -191,7 +187,7 @@ namespace UCIS.Net {
 			int left = size;
 			try {
 				while (left > 0) {
-					int sent = _Socket.Send(buffer, offset, left, 0);
+					int sent = Socket.Send(buffer, offset, left, 0);
 					left -= sent;
 					offset += sent;
 				}
@@ -218,19 +214,19 @@ namespace UCIS.Net {
 		}
 
 		public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
-			IAsyncResult ar = _Socket.BeginSend(buffer, offset, count, SocketFlags.None, callback, state);
+			IAsyncResult ar = Socket.BeginSend(buffer, offset, count, SocketFlags.None, callback, state);
 			_BytesWritten += (ulong)count;
 			Interlocked.Add(ref _totalBytesWritten, count);
 			return ar;
 		}
 		public override void EndWrite(IAsyncResult asyncResult) {
-			_Socket.EndSend(asyncResult);
+			Socket.EndSend(asyncResult);
 		}
 
 		public override void Close() {
 			disposed = true;
 			try {
-				_Socket.Close();
+				Socket.Close();
 			} finally {
 				base.Close();
 				EventHandler eh = Closed;
@@ -251,12 +247,12 @@ namespace UCIS.Net {
 
 		public ulong BytesWritten { get { return _BytesWritten; } }
 		public ulong BytesRead { get { return _BytesRead; } }
-		public TimeSpan Age { get { return DateTime.Now.Subtract(_StartTime); } }
+		public TimeSpan Age { get { return DateTime.Now.Subtract(CreationTime); } }
 		public EndPoint RemoteEndPoint {
 			get {
 				if (disposed) return null;
 				try {
-					return _Socket.RemoteEndPoint;
+					return Socket.RemoteEndPoint;
 				} catch (SocketException) {
 					return null;
 				}
