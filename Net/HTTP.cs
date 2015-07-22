@@ -498,7 +498,12 @@ namespace UCIS.Net.HTTP {
 		private void PrebufferCallback(IAsyncResult ar) {
 			State = HTTPConnectionState.ReceivingRequest;
 			try {
-				Reader.EndPrebuffering(ar);
+				try {
+					Reader.EndPrebuffering(ar);
+				} catch (ObjectDisposedException) {
+					Close();
+					return;
+				}
 				String line = ReadLine();
 				if (line == null) {
 					Close();
@@ -519,7 +524,7 @@ namespace UCIS.Net.HTTP {
 				switch (request[2]) {
 					case "HTTP/1.0": HTTPVersion = 10; break;
 					case "HTTP/1.1": HTTPVersion = 11; break;
-					default: goto SendError505AndClose;
+					default: SendErrorAndClose(400); return;
 				}
 				request = RequestAddress.Split(new Char[] { '?' });
 				RequestPath = Uri.UnescapeDataString(request[0]);
@@ -573,7 +578,9 @@ namespace UCIS.Net.HTTP {
 			} catch (Exception ex) {
 				Server.RaiseOnError(this, ex);
 				switch (State) {
-					case HTTPConnectionState.ProcessingRequest: goto SendError500AndClose;
+					case HTTPConnectionState.ProcessingRequest:
+						SendErrorAndClose(500);
+						return;
 					default:
 						Close();
 						break;
@@ -581,13 +588,7 @@ namespace UCIS.Net.HTTP {
 			}
 			return;
 
-		SendError400AndClose:
-			SendErrorAndClose(400);
-			return;
-		SendError500AndClose:
-			SendErrorAndClose(500);
-			return;
-		SendError505AndClose:
+			SendError400AndClose:
 			SendErrorAndClose(400);
 			return;
 		}
@@ -883,7 +884,7 @@ namespace UCIS.Net.HTTP {
 			Handler(context);
 		}
 	}
-	public class HTTPPathSelector : IHTTPContentProvider {
+	public class HTTPPathSelector : IHTTPContentProvider, IEnumerable<KeyValuePair<String, IHTTPContentProvider>> {
 		private struct PrefixInfo {
 			public String Prefix;
 			public IHTTPContentProvider Handler;
@@ -895,6 +896,9 @@ namespace UCIS.Net.HTTP {
 		public HTTPPathSelector(Boolean caseSensitive) {
 			Prefixes = new List<PrefixInfo>();
 			PrefixComparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+		}
+		public void Add(String path, IHTTPContentProvider contentProvider) {
+			AddPrefix(new PrefixInfo() { Prefix = path.TrimEnd('*'), Handler = contentProvider, ExactMatch = !path.EndsWith("*") });
 		}
 		public void AddPrefix(String prefix, IHTTPContentProvider contentProvider) {
 			AddPrefix(new PrefixInfo() { Prefix = prefix, Handler = contentProvider, ExactMatch = false });
@@ -914,7 +918,7 @@ namespace UCIS.Net.HTTP {
 		}
 		public void ServeRequest(HTTPContext context) {
 			PrefixInfo c = Prefixes.Find(delegate(PrefixInfo item) {
-				if (item.ExactMatch) return context.RequestQuery.Equals(item.Prefix, PrefixComparison);
+				if (item.ExactMatch) return context.RequestPath.Equals(item.Prefix, PrefixComparison);
 				else return context.RequestPath.StartsWith(item.Prefix, PrefixComparison); 
 			});
 			if (c.Handler != null) {
@@ -922,6 +926,13 @@ namespace UCIS.Net.HTTP {
 			} else {
 				context.SendErrorResponse(404);
 			}
+		}
+
+		public IEnumerator<KeyValuePair<String, IHTTPContentProvider>> GetEnumerator() {
+			return Prefixes.ConvertAll(delegate(PrefixInfo item) { return new KeyValuePair<String, IHTTPContentProvider>(item.ExactMatch ? item.Prefix : item.Prefix + "*", item.Handler); }).GetEnumerator();
+		}
+		System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() {
+			return GetEnumerator();
 		}
 	}
 	public class HTTPStaticContent : IHTTPContentProvider {
