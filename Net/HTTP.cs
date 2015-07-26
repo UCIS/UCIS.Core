@@ -517,6 +517,7 @@ namespace UCIS.Net.HTTP {
 					Close();
 					return;
 				}
+				ResponseHeaders = new List<HTTPHeader>(Server.DefaultHeaders);
 				String[] request = line.Split(' ');
 				if (request.Length != 3) goto SendError400AndClose;
 				RequestMethod = request[0];
@@ -558,7 +559,6 @@ namespace UCIS.Net.HTTP {
 					foreach (String encoding in acceptEncodings) if (encoding.Trim().Equals("gzip", StringComparison.InvariantCultureIgnoreCase)) AcceptGzipCompression = true;
 				}
 				if (TimeoutTimer != null) TimeoutTimer.Dispose();
-				ResponseHeaders = new List<HTTPHeader>(Server.DefaultHeaders);
 				State = HTTPConnectionState.ProcessingRequest;
 				SendStatus(200);
 				SendHeader("Date", DateTime.UtcNow.ToString("R"));
@@ -590,7 +590,6 @@ namespace UCIS.Net.HTTP {
 
 			SendError400AndClose:
 			SendErrorAndClose(400);
-			return;
 		}
 
 		public String GetRequestHeader(String name) {
