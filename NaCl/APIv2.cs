@@ -245,6 +245,9 @@ namespace UCIS.NaCl.v2 {
 			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
 			fixed (Byte* p = buffer) state.process(p + offset, count);
 		}
+		public unsafe void Process(Byte[] buffer) {
+			Process(buffer, 0, buffer.Length);
+		}
 		public unsafe void ProcessStream(Stream stream) {
 			Byte[] buffer = new Byte[1024];
 			while (true) {

@@ -259,6 +259,59 @@ namespace UCIS.Remoting {
 			}
 			return value;
 		}
+		private static Object FixObjectType(Object obj, Type type) {
+			if (ReferenceEquals(obj, null)) return type.IsPrimitive ? Activator.CreateInstance(type) : obj;
+			Type objtype = obj.GetType();
+			if (type == objtype || type.IsAssignableFrom(objtype)) return obj;
+			if (objtype.IsArray && ((Array)obj).Rank == 1 && ((Array)obj).GetLowerBound(0) == 0 && (type.IsArray ||
+				(type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(IEnumerable<>) || type.GetGenericTypeDefinition() == typeof(ICollection<>) || type.GetGenericTypeDefinition() == typeof(IList<>)))
+				)) {
+				type = type.IsArray ? type.GetElementType() : type.GetGenericArguments()[0];
+				Array src = (Array)obj;
+				Array dst = Array.CreateInstance(type, src.Length);
+				for (int i = 0; i < src.Length; i++) dst.SetValue(FixObjectType(src.GetValue(i), type), i);
+				return dst;
+			}
+			if (obj is IEnumerable<KeyValuePair<String, Object>>) {
+				Object inst = null;
+				StreamingContext sc = new StreamingContext(StreamingContextStates.All);
+				if (typeof(ISerializable).IsAssignableFrom(type) && type.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Type[] { typeof(SerializationInfo), typeof(StreamingContext) }, null) != null) {
+					SerializationInfo si = new SerializationInfo(type, new TypeFixerConverter());
+					foreach (KeyValuePair<String, Object> kvp in (IEnumerable<KeyValuePair<String, Object>>)obj) si.AddValue(kvp.Key, kvp.Value);
+					inst = Activator.CreateInstance(type, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Object[] { si, sc }, null);
+				} else if (type.IsSerializable) {
+					inst = FormatterServices.GetUninitializedObject(type);
+					List<MemberInfo> members = new List<MemberInfo>();
+					List<Object> values = new List<Object>();
+					foreach (KeyValuePair<String, Object> kvp in (IEnumerable<KeyValuePair<String, Object>>)obj) {
+						MemberInfo[] mms = type.GetMember(kvp.Key, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+						if (mms.Length != 1) throw new InvalidOperationException();
+						members.Add(mms[0]);
+						if (mms[0] is PropertyInfo) {
+							values.Add(FixObjectType(kvp.Value, ((PropertyInfo)mms[0]).PropertyType));
+						} else if (mms[0] is FieldInfo) {
+							values.Add(FixObjectType(kvp.Value, ((FieldInfo)mms[0]).FieldType));
+						} else {
+							throw new InvalidDataException();
+						}
+					}
+					FormatterServices.PopulateObjectMembers(inst, members.ToArray(), values.ToArray());
+				}
+				if (inst != null) {
+					IObjectReference objref = inst as IObjectReference;
+					if (objref != null) inst = objref.GetRealObject(sc);
+					IDeserializationCallback deserializationcallback = inst as IDeserializationCallback;
+					if (deserializationcallback != null) deserializationcallback.OnDeserialization(null);
+					return inst;
+				}
+			}
+			return Convert.ChangeType(obj, type);
+		}
+		class TypeFixerConverter : FormatterConverter, IFormatterConverter {
+			public new Object Convert(Object value, Type type) {
+				return FixObjectType(value, type);
+			}
+		}
 		private Object ProcessRemoteMethodCallRequestA(Object ret) {
 			if (ret is DelegateCallRequest) {
 				DelegateCallRequest call = (DelegateCallRequest)ret;
@@ -288,6 +341,8 @@ namespace UCIS.Remoting {
 					if (target.GetType().IsPublic) retval = target.GetType();
 					else retval = intf;
 				} else {
+					ParameterInfo[] param = meth.GetParameters();
+					for (int i = 0; i < args.Length && i < param.Length; i++) args[i] = FixObjectType(args[i], param[i].ParameterType);
 					retval = meth.Invoke(target, args);
 				}
 				//Todo: causes lots of redundant data transfers, do something about it!
@@ -316,12 +371,16 @@ namespace UCIS.Remoting {
 				} else {
 					return FixReturnType(meth.GetValue(target, null), meth.PropertyType);
 				}
+			} else if (ret is EchoRequest) {
+				Object obj = ((EchoRequest)ret).Object;
+				DebugLog("Remote echo request for {0}", obj);
+				return obj;
 			} else {
 				throw new InvalidDataException("Unexpected object type");
 			}
 		}
 		private Object ProcessRemoteCallRequestA(Object ret) {
-			if (ret is DelegateCallRequest || ret is MethodCallRequest || ret is PropertyAccessRequest) {
+			if (ret is DelegateCallRequest || ret is MethodCallRequest || ret is PropertyAccessRequest || ret is EchoRequest) {
 				MethodCallResponse resp = new MethodCallResponse();
 				try {
 					resp.ReturnValue = ProcessRemoteMethodCallRequestA(ret);
@@ -585,7 +644,7 @@ namespace UCIS.Remoting {
 				} else if (typeof(Delegate).IsAssignableFrom(type) || type.IsMarshalByRef) {
 					GetObjectData(obj, writer);
 				} else if (obj is ISerializable) {
-					SerializationInfo si = new SerializationInfo(type, new FormatterConverter());
+					SerializationInfo si = new SerializationInfo(type, new TypeFixerConverter());
 					((ISerializable)obj).GetObjectData(si, new StreamingContext(StreamingContextStates.All));
 					writer.Write((Byte)128);
 					SerializeType(writer, Type.GetType(si.FullTypeName + "," + si.AssemblyName));
@@ -643,8 +702,16 @@ namespace UCIS.Remoting {
 				int cnt = reader.ReadInt32();
 				Object inst;
 				StreamingContext sc = new StreamingContext(StreamingContextStates.All);
-				if (typeof(ISerializable).IsAssignableFrom(type) && type.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Type[] { typeof(SerializationInfo), typeof(StreamingContext) }, null) != null) {
-					SerializationInfo si = new SerializationInfo(type, new FormatterConverter());
+				if (type == null) {
+					Dictionary<String, Object> obj = new Dictionary<String, Object>();
+					for (int i = 0; i < cnt; i++) {
+						String name = reader.ReadString();
+						Object value = Deserialize(reader, callbackobjects);
+						obj.Add(name, value);
+					}
+					return obj;
+				} else if (typeof(ISerializable).IsAssignableFrom(type) && type.GetConstructor(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new Type[] { typeof(SerializationInfo), typeof(StreamingContext) }, null) != null) {
+					SerializationInfo si = new SerializationInfo(type, new TypeFixerConverter());
 					for (int i = 0; i < cnt; i++) {
 						String name = reader.ReadString();
 						Object value = Deserialize(reader, callbackobjects);
@@ -670,15 +737,17 @@ namespace UCIS.Remoting {
 				IObjectReference objref = inst as IObjectReference;
 				if (objref != null) inst = objref.GetRealObject(sc);
 				IDeserializationCallback deserializationcallback = inst as IDeserializationCallback;
-				if (deserializationcallback != null) callbackobjects.Add(deserializationcallback);
+				if (deserializationcallback != null && callbackobjects != null) callbackobjects.Add(deserializationcallback);
 				return inst;
 			}
-			if (t == 129 || t == 130 || t == 131) {
+			if (t == 129 || t == 130 || t == 131 || t == 132) {
 				return SetObjectData(t, reader);
 			}
 			if (t == 164) {
 				int len = reader.ReadInt32();
-				Type type = DeserializeType(reader); Array arr = Array.CreateInstance(type, len);
+				Type type = DeserializeType(reader);
+				if (type == null) type = typeof(Object);
+				Array arr = Array.CreateInstance(type, len);
 				for (int i = 0; i < len; i++) arr.SetValue(Deserialize(reader, callbackobjects), i);
 				return arr;
 			}
@@ -690,6 +759,7 @@ namespace UCIS.Remoting {
 		private Type DeserializeType(BinaryReader reader) {
 			String name = reader.ReadString();
 			String aname = reader.ReadString();
+			if (name.Length == 0 && aname.Length == 0) return null;
 			Type t = Type.GetType(name + ", " + aname, false);
 			if (t != null) return t;
 			foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()) {
@@ -743,6 +813,16 @@ namespace UCIS.Remoting {
 					w.Write((Byte)130);
 					w.Write((UInt32)rref.RemoteID);
 					SerializeType(w, obj.GetType());
+				} else if (obj is IRemotableWithCachedProperties) {
+					SerializationInfo si = new SerializationInfo(obj.GetType(), new TypeFixerConverter());
+					((IRemotableWithCachedProperties)obj).GetObjectData(si);
+					w.Write((Byte)132);
+					w.Write((UInt32)rref.RemoteID);
+					w.Write((int)si.MemberCount);
+					foreach (SerializationEntry se in si) {
+						w.Write(se.Name);
+						Serialize(w, se.Value);
+					}
 				} else {
 					w.Write((Byte)129);
 					w.Write((UInt32)rref.RemoteID);
@@ -753,6 +833,13 @@ namespace UCIS.Remoting {
 			UInt32 objid = r.ReadUInt32();
 			Type deltype = null;
 			if (t == 130) deltype = DeserializeType(r);
+			if (t == 132) {
+				int cnt = r.ReadInt32();
+				for (int i = 0; i < cnt; i++) {
+					r.ReadString();
+					Deserialize(r, null);
+				}
+			}
 			lock (ObjectReferencesByID) {
 				Object target = null;
 				IObjectReferenceBase rref;
@@ -834,6 +921,10 @@ namespace UCIS.Remoting {
 		struct DelegateCallRequest {
 			public Object Delegate;
 			public Object[] Arguments;
+		}
+		[Serializable]
+		struct EchoRequest {
+			public Object Object;
 		}
 		#endregion
 
@@ -1107,5 +1198,9 @@ namespace UCIS.Remoting {
 			ilGenerator.Emit(OpCodes.Ret);
 		}
 		#endregion
+	}
+
+	public interface IRemotableWithCachedProperties {
+		void GetObjectData(SerializationInfo info);
 	}
 }
