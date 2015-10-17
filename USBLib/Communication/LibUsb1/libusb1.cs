@@ -181,4 +181,30 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 		[DllImport(LIBUSB1_DLL, CallingConvention = LIBUSB1_CC)]
 		public static extern int libusb_get_string_descriptor_ascii(libusb_device_handle dev, Byte desc_index, [MarshalAs(UnmanagedType.LPStr)] StringBuilder data, int length);
 	}
+
+	enum libusb_error {
+		SUCCESS = 0,
+		ERROR_IO = -1,
+		ERROR_INVALID_PARAM = -2,
+		ERROR_ACCESS = -3,
+		ERROR_NO_DEVICE = -4,
+		ERROR_NOT_FOUND = -5,
+		ERROR_BUSY = -6,
+		ERROR_TIMEOUT = -7,
+		ERROR_OVERFLOW = -8,
+		ERROR_PIPE = -9,
+		ERROR_INTERRUPTED = -10,
+		ERROR_NO_MEM = -11,
+		ERROR_NOT_SUPPORTED = -12,
+		ERROR_OTHER = -99,
+	}
+
+	public class LibUsb1Exception : Exception {
+		internal libusb_error Error { get { return (libusb_error)ErrorCode; } }
+		public int ErrorCode { get; private set; }
+		public LibUsb1Exception(String operation, int error)
+			: base(operation + " failed with error " + ((libusb_error)error).ToString()) {
+			this.ErrorCode = error;
+		}
+	}
 }

@@ -188,6 +188,8 @@ namespace UCIS.Pml {
 			}
 		}
 		private void processSessionMessage(PmlElement Message) {
+			//Todo: This function may block or send out PML calls, but incoming packets must be sequenced per channel...
+			//Todo: Generate semi-unique SIDs for bidirectional links?
 			UInt32 SID = Message.GetChild("SID").ToUInt32();
 			byte SCMD = Message.GetChild("SCMD").ToByte();
 			PmlElement InnerMsg = Message.GetChild("MSG");

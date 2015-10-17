@@ -14,7 +14,7 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 				List<LibUsb1Registry> deviceList = new List<LibUsb1Registry>();
 				if (Context == null) {
 					int ret = libusb1.libusb_init(out Context);
-					if (ret != 0) throw new Exception("libusb_init returned " + ret.ToString());
+					if (ret != 0) throw new LibUsb1Exception("libusb_init", ret);
 				}
 				IntPtr* list;
 				IntPtr count = libusb1.libusb_get_device_list(Context, out list);
@@ -33,7 +33,7 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 			if (DeviceDescriptor == null) {
 				libusb1.libusb_device_descriptor descriptor;
 				int ret = libusb1.libusb_get_device_descriptor(Device, out descriptor);
-				if (ret < 0) throw new Exception("libusb_get_device_descriptor returned " + ret.ToString());
+				if (ret < 0) throw new LibUsb1Exception("libusb_get_device_descriptor", ret);
 				DeviceDescriptor = descriptor;
 			}
 			return DeviceDescriptor.Value;
@@ -49,10 +49,10 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 				libusb_device_handle handle;
 				int ret = libusb1.libusb_open(Device, out handle);
 				if (ret != 0) return null;
-				if (ret != 0) throw new Exception("libusb_open returned " + ret.ToString());
+				if (ret != 0) throw new LibUsb1Exception("libusb_open", ret);
 				StringBuilder data = new StringBuilder(1024);
 				ret = libusb1.libusb_get_string_descriptor_ascii(handle, iProduct, data, data.Capacity);
-				if (ret < 0) throw new Exception("libusb_get_string_descriptor_ascii returned " + ret.ToString());
+				if (ret < 0) throw new LibUsb1Exception("libusb_get_string_descriptor_ascii", ret);
 				handle.Close();
 				return data.ToString();
 			}
@@ -63,10 +63,10 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 				libusb_device_handle handle;
 				int ret = libusb1.libusb_open(Device, out handle);
 				if (ret != 0) return null;
-				if (ret != 0) throw new Exception("libusb_open returned " + ret.ToString());
+				if (ret != 0) throw new LibUsb1Exception("libusb_open", ret);
 				StringBuilder data = new StringBuilder(1024);
 				ret = libusb1.libusb_get_string_descriptor_ascii(handle, iProduct, data, data.Capacity);
-				if (ret < 0) throw new Exception("libusb_get_string_descriptor_ascii returned " + ret.ToString());
+				if (ret < 0) throw new LibUsb1Exception("libusb_get_string_descriptor_ascii", ret);
 				handle.Close();
 				return data.ToString();
 			}
@@ -78,17 +78,17 @@ namespace UCIS.USBLib.Communication.LibUsb1 {
 				libusb_device_handle handle;
 				int ret = libusb1.libusb_open(Device, out handle);
 				if (ret != 0) return null;
-				if (ret != 0) throw new Exception("libusb_open returned " + ret.ToString());
+				if (ret != 0) throw new LibUsb1Exception("libusb_open", ret);
 				if (descriptor.iManufacturer != 0) {
 					StringBuilder data = new StringBuilder(1024);
 					ret = libusb1.libusb_get_string_descriptor_ascii(handle, descriptor.iManufacturer, data, data.Capacity);
-					if (ret < 0) throw new Exception("libusb_get_string_descriptor_ascii returned " + ret.ToString());
+					if (ret < 0) throw new LibUsb1Exception("libusb_get_string_descriptor_ascii", ret);
 					mfg = data.ToString();
 				}
 				if (descriptor.iProduct != 0) {
 					StringBuilder data = new StringBuilder(1024);
 					ret = libusb1.libusb_get_string_descriptor_ascii(handle, descriptor.iProduct, data, data.Capacity);
-					if (ret < 0) throw new Exception("libusb_get_string_descriptor_ascii returned " + ret.ToString());
+					if (ret < 0) throw new LibUsb1Exception("libusb_get_string_descriptor_ascii", ret);
 					prod = data.ToString();
 				}
 				handle.Close();

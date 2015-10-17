@@ -85,13 +85,15 @@ namespace UCIS.Net {
 				socket = null;
 			}
 			if (socket != null) {
+				Client client = null;
 				try {
-					Client client = new Client(socket, this);
+					client = new Client(socket, this);
 					Clients.Add(client);
 					if (ClientAccepted != null) ClientAccepted(this, new ClientAcceptedEventArgs(client));
 					client.Start(_ThreadPool);
 				} catch (Exception ex) {
 					Console.WriteLine(ex.ToString());
+					if (client != null) try { client.Close(); } catch { }
 				}
 			}
 			try {
@@ -124,6 +126,7 @@ namespace UCIS.Net {
 					int magicnumber = -2;
 					try {
 						ReadTimeout = 5000;
+						WriteTimeout = 120000;
 						magicnumber = base.PeekByte();
 						if (magicnumber == -1) return;
 					} catch (TimeoutException ex) {
