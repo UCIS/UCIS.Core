@@ -142,7 +142,7 @@ namespace UCIS.Cci {
 			for (int i = _offset + offset; i < _command.Length; i++) c.Add(_command[i]);
 			return c;
 		}
-		public static CciCommand FromPml(PmlCollection pml) {
+		public static CciCommand FromPml(IEnumerable<PmlElement> pml) {
 			List<string> l = new List<string>();
 			foreach (PmlElement e in pml) l.Add(e.ToString());
 			return new CciCommand(l.ToArray());
