@@ -262,7 +262,7 @@ namespace UCIS.Remoting {
 		private static Object FixObjectType(Object obj, Type type) {
 			if (ReferenceEquals(obj, null)) return type.IsPrimitive ? Activator.CreateInstance(type) : obj;
 			Type objtype = obj.GetType();
-			if (type == objtype || type.IsAssignableFrom(objtype)) return obj;
+			if (type == objtype || type.IsAssignableFrom(objtype) || RemotingServices.IsTransparentProxy(obj)) return obj;
 			if (objtype.IsArray && ((Array)obj).Rank == 1 && ((Array)obj).GetLowerBound(0) == 0 && (type.IsArray ||
 				(type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(IEnumerable<>) || type.GetGenericTypeDefinition() == typeof(ICollection<>) || type.GetGenericTypeDefinition() == typeof(IList<>)))
 				)) {
