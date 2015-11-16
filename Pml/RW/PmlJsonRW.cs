@@ -233,8 +233,9 @@ namespace UCIS.Pml {
 					PmlElement e = ReadElementFrom(reader);
 					d.Add(k, e);
 					c = FindNextToken(reader);
-					if (c != ',' && c != '}') throw new JsonFormatException("Expected comma or closing curly brace, got " + (Char)c);
-					if (c == ',') reader.Read();
+					if (c == '}') break;
+					if (c != ',') throw new JsonFormatException("Expected comma or closing curly brace, got " + (Char)c);
+					c = reader.Read();
 					c = FindNextToken(reader);
 				}
 				reader.Read();
@@ -248,6 +249,9 @@ namespace UCIS.Pml {
 					PmlElement e = ReadElementFrom(reader);
 					l.Add(e);
 					c = FindNextToken(reader);
+					if (c == ']') break;
+					if (c != ',') throw new JsonFormatException("Expected comma or closing curly brace, got " + (Char)c);
+					c = reader.Read();
 				}
 				reader.Read();
 				return l;
