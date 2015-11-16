@@ -2,51 +2,52 @@
 
 namespace UCIS.Pml {
 	public class PmlInteger : PmlElement {
-		private UInt64 pUValue;
-		private Int64 pSValue;
-		private bool pSigned;
+		private Int64 value;
+		private Boolean signed;
 
 		public PmlInteger() {
-			pSValue = 0;
-			pSigned = true;
+			value = 0;
+			signed = true;
 		}
-		public PmlInteger(UInt64 Value) {
-			pUValue = Value;
-			pSigned = false;
+		public PmlInteger(UInt64 value) {
+			this.value = (Int64)value;
+			signed = false;
 		}
-		public PmlInteger(Int64 Value) {
-			pSValue = Value;
-			pSigned = true;
+		public PmlInteger(Int64 value) {
+			this.value = value;
+			signed = true;
 		}
-		public PmlInteger(string Value) {
-			if (Int64.TryParse(Value, out pSValue)) {
-				pSigned = true;
-			} else if (UInt64.TryParse(Value, out pUValue)) {
-				pSigned = false;
+		public PmlInteger(String value) {
+			UInt64 uvalue;
+			if (Int64.TryParse(value, out this.value)) {
+				signed = true;
+			} else if (UInt64.TryParse(value, out uvalue)) {
+				this.value = (Int64)uvalue;
+				signed = false;
 			} else {
 				throw new FormatException();
 			}
 		}
 
-		public Boolean IsSigned { get { return pSigned; } }
+		public Boolean IsSigned { get { return signed; } }
 
 		public override PmlType Type { get { return PmlType.Integer; } }
 
-		public override object ToObject() { return pSigned ? (Object)pSValue : (Object)pUValue; }
-		public override string ToString() { return pSigned ? pSValue.ToString() : pUValue.ToString(); }
-		public override bool ToBoolean() { return pSigned ? (pSValue != 0) : (pUValue != 0); }
-		public override byte ToByte() { return pSigned ? (Byte)pSValue : (Byte)pUValue; }
-		public override decimal ToDecimal() { return pSigned ? (Decimal)pSValue : (Decimal)pUValue; }
-		public override double ToDouble() { return pSigned ? (Double)pSValue : (Double)pUValue; }
-		public override short ToInt16() { return pSigned ? (Int16)pSValue : (Int16)pUValue; }
-		public override int ToInt32() { return pSigned ? (Int32)pSValue : (Int32)pUValue; }
-		public override long ToInt64() { return pSigned ? pSValue : (Int64)pUValue; }
-		public override sbyte ToSByte() { return pSigned ? (SByte)pSValue : (SByte)pUValue; }
-		public override float ToSingle() { return pSigned ? (Single)pSValue : (Single)pUValue; }
-		public override ushort ToUInt16() { return pSigned ? (UInt16)pSValue : (UInt16)pUValue; }
-		public override uint ToUInt32() { return pSigned ? (UInt32)pSValue : (UInt32)pUValue; }
-		public override ulong ToUInt64() { return pSigned ? (UInt64)pSValue : pUValue; }
-		public override char ToChar() { return pSigned ? (Char)pSValue : (Char)pUValue; }
-		public override byte[] ToByteArray() { return pSigned ? BitConverter.GetBytes(pSValue) : BitConverter.GetBytes(pUValue); }
+		public override object ToObject() { return signed ? (Object)value : (Object)ToUInt64(); }
+		public override string ToString() { return signed ? value.ToString() : ToUInt64().ToString(); }
+		public override bool ToBoolean() { return value != 0; }
+		public override byte ToByte() { return (Byte)value; }
+		public override decimal ToDecimal() { return signed ? (Decimal)value : (Decimal)ToUInt64(); }
+		public override double ToDouble() { return signed ? (Double)value : (Double)ToUInt64(); }
+		public override short ToInt16() { return (Int16)value; }
+		public override int ToInt32() { return (Int32)value; }
+		public override long ToInt64() { return value; }
+		public override sbyte ToSByte() { return (SByte)value; }
+		public override float ToSingle() { return signed ? (Single)value : (Single)ToUInt64(); }
+		public override ushort ToUInt16() { return (UInt16)value; }
+		public override uint ToUInt32() { return (UInt32)value; }
+		public override ulong ToUInt64() { return (UInt64)value; }
+		public override char ToChar() { return (Char)value; }
+		public override byte[] ToByteArray() { return signed ? BitConverter.GetBytes(value) : BitConverter.GetBytes(ToUInt64()); }
 	}
 }

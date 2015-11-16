@@ -111,13 +111,14 @@
     <Compile Include="Pml\Elements\Element.cs" />
     <Compile Include="Pml\Elements\Integer.cs" />
     <None Include="Pml\Elements\Number.cs" />
-    <Compile Include="Pml\Elements\PmlNull.cs" />
-    <Compile Include="Pml\Elements\PmlString.cs" />
+    <Compile Include="Pml\Elements\Null.cs" />
+    <Compile Include="Pml\Elements\String.cs" />
     <Compile Include="Pml\Channels\IPmlChannel.cs" />
     <Compile Include="Pml\IPmlCommunicator.cs" />
     <Compile Include="Pml\IPmlRpc.cs" />
     <Compile Include="Pml\PmlBuilder.cs" />
     <Compile Include="Pml\PmlCommunicator2.cs" />
+    <Compile Include="Pml\RW\PmlJsonRW.cs" />
     <Compile Include="Pml\RW\PmlAmfRW.cs" />
     <Compile Include="Pml\RW\PmlPHPRW.cs" />
     <Compile Include="Pml\RW\PmlBinaryRW.cs" />

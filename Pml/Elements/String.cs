@@ -1,13 +1,13 @@
 ﻿using System;
-using System.Text;
 using System.Globalization;
+using System.Text;
 
 namespace UCIS.Pml {
 	public class PmlString : PmlElement {
 		private string _Value;
 
 		public PmlString(string Value) {
-			_Value = Value;
+			_Value = Value == null ? String.Empty : Value;
 		}
 
 		public override PmlType Type { get { return PmlType.String; } }
@@ -30,3 +30,4 @@ namespace UCIS.Pml {
 		public override byte[] ToByteArray() { return Encoding.UTF8.GetBytes(_Value); }
 	}
 }
+

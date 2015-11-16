@@ -1,19 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace UCIS.Pml {
-	/*public enum PmlElementType : byte {
-		Null = 0,
-
-		Dictionary = 1,
-		Collection = 2,
-
-		Binary = 10,
-		String = 11,
-
-		Integer = 20
-	}*/
 	public enum PmlType {
 		Null,
 		Dictionary,
@@ -67,7 +55,7 @@ namespace UCIS.Pml {
 		public static explicit operator char(PmlElement e) { return e == null ? '\0' : e.ToChar(); }
 		public static explicit operator byte[](PmlElement e) { return e == null ? null : e.ToByteArray(); }
 
-		public static implicit operator PmlElement(String str) { return new PmlString(str); }
+		public static implicit operator PmlElement(String str) { return str == null ? (PmlElement)new PmlNull() : new PmlString(str); }
 		public static implicit operator PmlElement(UInt64 number) { return new PmlInteger(number); }
 		public static implicit operator PmlElement(UInt32 number) { return new PmlInteger(number); }
 		public static implicit operator PmlElement(Int64 number) { return new PmlInteger(number); }

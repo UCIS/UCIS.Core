@@ -62,7 +62,6 @@ namespace UCIS.Pml {
 		public override char ToChar() { return '\0'; }
 		public override byte[] ToByteArray() { return null; }
 
-		//public override PmlElement GetChild(string name) { return GetChild(name); }
 		public override PmlElement GetChild(int index) { return pItems[index]; }
 		public override IEnumerable<PmlElement> GetChildren() { return pItems; }
 		public override IEnumerable<KeyValuePair<String, PmlElement>> GetNamedChildren() {
