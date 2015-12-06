@@ -742,6 +742,14 @@ namespace UCIS.FBGUI {
 		protected FBGRenderer() : base(null) {
 			BackColor = SystemColors.Control;
 		}
+		public void Resize(Size fbsize) {
+			if (fbsize == size) return;
+			lock (RenderLock) {
+				Frontbuffer = new Bitmap(fbsize.Width, fbsize.Height, PixelFormat.Format32bppRgb);
+				size = Frontbuffer.Size;
+			}
+			base.Bounds = new Rectangle(Point.Empty, size);
+		}
 		protected override void HandleInvalidateMessage(IFBGControl sender, FBGInvalidateMessage e) {
 			e.Area = new Rectangle(PointFromChild(sender, e.Area.Location), e.Area.Size);
 			Invalidate(e.Area);

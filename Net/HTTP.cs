@@ -467,6 +467,7 @@ namespace UCIS.Net.HTTP {
 				if (stream == null) stream = new NetworkStream(socket, true);
 			}
 			Reader = stream as PrebufferingStream ?? new PrebufferingStream(stream);
+			this.HTTPVersion = 10;
 			if (server.RequestTimeout > 0) TimeoutTimer = new Timer(TimeoutCallback, null, server.RequestTimeout * 1000 + 1000, Timeout.Infinite);
 			Reader.BeginPrebuffering(PrebufferCallback, null);
 		}
@@ -484,6 +485,7 @@ namespace UCIS.Net.HTTP {
 				} else {
 					s.Append((Char)b);
 				}
+				if (s.Length > 16384) throw new InvalidDataException("Request line too long");
 			}
 			return s.ToString();
 		}

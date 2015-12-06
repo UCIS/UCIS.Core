@@ -125,6 +125,13 @@ namespace UCIS.ProtocolBuffers {
 			int i = offset + index;
 			return ((int)buffer[i + 0] << 0) | ((int)buffer[i + 1] << 8) | ((int)buffer[i + 2] << 16) | ((int)buffer[i + 3] << 24);
 		}
+
+		public static TResponse FromArray<TResponse>(Byte[] data) where TResponse : IPBMessage, new() {
+			IPBReader responsereader = new ArrayPBReader(data);
+			TResponse response = new TResponse();
+			response.Decode(responsereader);
+			return response;
+		}
 	}
 	public class StreamPBWriter : IPBWriter {
 		Stream stream;

@@ -81,7 +81,7 @@ namespace UCIS.Pml {
 		class ReadMessageAsyncResult : AsyncResultBase {
 			internal PmlElement Message;
 			public ReadMessageAsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
-			public void SetCompleted(Boolean synchronously, Exception error) {
+			public new void SetCompleted(Boolean synchronously, Exception error) {
 				base.SetCompleted(synchronously, error);
 			}
 		}

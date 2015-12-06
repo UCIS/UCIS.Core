@@ -19,7 +19,7 @@ namespace UCIS.Util {
 			public new void SetCompleted(Boolean synchronously, Exception error) {
 				base.SetCompleted(synchronously, error);
 			}
-			public int WaitForCompletion() {
+			public new int WaitForCompletion() {
 				base.WaitForCompletion();
 				ThrowError();
 				return Count;
