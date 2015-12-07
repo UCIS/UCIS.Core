@@ -131,7 +131,7 @@ namespace UCIS.FBGUI {
 			get { return visible; }
 			set {
 				visible = value;
-				Invalidate();
+				Parent.HandleMessage(this, new FBGInvalidateMessage(this, new Rectangle(Point.Empty, Bounds.Size)));
 			}
 		}
 		public virtual FBGCursor Cursor { get; set; }
@@ -146,6 +146,7 @@ namespace UCIS.FBGUI {
 			Invalidate(new Rectangle(Point.Empty, Bounds.Size));
 		}
 		public virtual void Invalidate(Rectangle rect) {
+			if (!Visible) return;
 			Parent.HandleMessage(this, new FBGInvalidateMessage(this, rect));
 		}
 		void IFBGControl.HandleEvent(FBGEvent e) {
@@ -868,6 +869,9 @@ namespace UCIS.FBGUI {
 		public Boolean Sizable { get; set; }
 		public Boolean Movable { get; set; }
 		public Boolean Closable { get; set; }
+		const int menubar_height = 30;
+		const int menubar_btnsize = 24;
+		NonClientOps selectedNonClientOp = NonClientOps.None;
 		[Flags]
 		private enum NonClientOps : int {
 			None = 0,
@@ -879,7 +883,7 @@ namespace UCIS.FBGUI {
 			ButtonClose = 32,
 			MoveResize = ResizeLeft | ResizeRight | ResizeBottom | ResizeTop | Move,
 		}
-		public override Rectangle ClientRectangle { get { return new Rectangle(4, 22, Bounds.Width - 8, Bounds.Height - 26); } }
+		public override Rectangle ClientRectangle { get { return new Rectangle(4, menubar_height + 2, Bounds.Width - 8, Bounds.Height - menubar_height - 4); } }
 		public FBGForm(IFBGContainerControl parent) : base(parent) {
 			BackColor = SystemColors.Control;
 			Sizable = true;
@@ -888,7 +892,7 @@ namespace UCIS.FBGUI {
 		}
 		public String Text { get { return text; } set { if (text == value) return; text = value; Invalidate(new Rectangle(0, 0, Bounds.Width, 20)); RaiseEvent(TextChanged); } }
 		private NonClientOps GetNonClientOperation(Point p) {
-			if ((new Rectangle(Bounds.Width - 5 - 14, 4, 14, 14)).Contains(p)) return NonClientOps.ButtonClose;
+			if ((new Rectangle(Bounds.Width - 5 - menubar_btnsize, 4, menubar_btnsize, menubar_btnsize)).Contains(p)) return NonClientOps.ButtonClose;
 			NonClientOps mr = 0;
 			if (Sizable) {
 				if (Movable) {
@@ -898,7 +902,7 @@ namespace UCIS.FBGUI {
 				if (p.X >= Bounds.Width - 4) mr |= NonClientOps.ResizeRight;
 				if (p.Y >= Bounds.Height - 4) mr |= NonClientOps.ResizeBottom;
 			}
-			if (mr == 0 && Movable && p.Y < 20) mr = NonClientOps.Move;
+			if (mr == 0 && Movable && p.Y < menubar_height) mr = NonClientOps.Move;
 			return mr;
 		}
 		private void SetCursorForNonClientOperation(NonClientOps op, FBGPointingEvent e) {
@@ -943,6 +947,10 @@ namespace UCIS.FBGUI {
 			NonClientOps mr = moveresize;
 			if (mr == 0) mr = GetNonClientOperation(position);
 			if (mr == 0) return true;
+			if (selectedNonClientOp != mr) {
+				selectedNonClientOp = mr;
+				Invalidate(new Rectangle(1, 1, Width - 2, menubar_height));
+			}
 			SetCursorForNonClientOperation(mr, e);
 			if ((moveresize & NonClientOps.MoveResize) != 0) {
 				Rectangle b = Bounds;
@@ -965,8 +973,8 @@ namespace UCIS.FBGUI {
 					b.Height += dy;
 					prevPosition.Y = position.Y;
 				}
-				if (b.Width < 55) b.Width = 55;
-				if (b.Height < 25) b.Height = 25;
+				b.Width = Math.Max(b.Width, 3 * menubar_btnsize + 5);
+				b.Height = Math.Max(b.Height, menubar_height + 5);
 				Bounds = b;
 			}
 			return false;
@@ -978,7 +986,7 @@ namespace UCIS.FBGUI {
 			} else if ((buttons & MouseButtons.Left) != 0) {
 				MouseMove(position, buttons);
 				CaptureMouse(false);
-				if (moveresize == NonClientOps.ButtonClose && (new Rectangle(Bounds.Width - 5 - 14, 4, 14, 14)).Contains(position) && Closable) Close();
+				if (moveresize == NonClientOps.ButtonClose && (new Rectangle(Bounds.Width - 5 - menubar_btnsize, 4, menubar_btnsize, menubar_btnsize)).Contains(position) && Closable) Close();
 				moveresize = 0;
 				SetCursorForNonClientOperation(GetNonClientOperation(position), e);
 			}
@@ -986,26 +994,34 @@ namespace UCIS.FBGUI {
 		}
 		protected override void Paint(Graphics g) {
 			base.Paint(g);
+			//Window frame
 			g.DrawRectangle(Pens.Gray, 0, 0, Bounds.Width - 1, Bounds.Height - 1);
 			g.DrawRectangle(Pens.LightGray, 1, 1, Bounds.Width - 3, Bounds.Height - 3);
-			g.DrawRectangle(Pens.DarkGray, 2, 20, Bounds.Width - 5, Bounds.Height - 23);
-			g.DrawRectangle(Pens.Gray, 3, 21, Bounds.Width - 7, Bounds.Height - 25);
-			using (Brush b = new LinearGradientBrush(new Rectangle(0, 1, 1, 18), Color.Gray, Color.LightGray, LinearGradientMode.Vertical))
-				g.FillRectangle(b, 2, 2, Bounds.Width - 4, 18);
+			g.DrawRectangle(Pens.DarkGray, 2, menubar_height, Bounds.Width - 5, Bounds.Height - menubar_height - 3);
+			g.DrawRectangle(Pens.Gray, 3, menubar_height + 1, Bounds.Width - 7, Bounds.Height - menubar_height - 5);
+			using (Brush b = new LinearGradientBrush(new Rectangle(0, 1, 1, menubar_height - 2), Color.Gray, Color.LightGray, LinearGradientMode.Vertical))
+				g.FillRectangle(b, 2, 2, Bounds.Width - 4, menubar_height - 2);
 
-			g.DrawString(Text, SystemFonts.CaptionFont, Brushes.Black, 4, 1);
+			g.DrawString(Text, SystemFonts.CaptionFont, Brushes.Black, 4, 8);
 
-			g.DrawRectangle(Pens.Gray, Bounds.Width - 5 - 14, 4, 14, 14);
-			g.DrawRectangle(Pens.Gray, Bounds.Width - 5 - 14 - 16, 4, 14, 14);
-			g.DrawRectangle(Pens.Gray, Bounds.Width - 5 - 14 - 32, 4, 14, 14);
-			using (Brush b = new LinearGradientBrush(new Rectangle(0, 5, 1, 13), Color.LightGray, Color.DarkGray, LinearGradientMode.Vertical)) {
-				g.FillRectangle(b, Bounds.Width - 5 - 14 + 1, 5, 13, 13);
-				g.FillRectangle(b, Bounds.Width - 5 - 14 + 1 - 16, 5, 13, 13);
-				g.FillRectangle(b, Bounds.Width - 5 - 14 + 1 - 32, 5, 13, 13);
+			g.SmoothingMode = SmoothingMode.AntiAlias;
+			//PaintMenuButton(g, Bounds.Width - 9 - menubar_btnsize * 3, 4, menubar_btnsize, menubar_btnsize, NonClientOps.None);
+			//PaintMenuButton(g, Bounds.Width - 7 - menubar_btnsize * 2, 4, menubar_btnsize, menubar_btnsize, NonClientOps.None);
+			if (Closable)
+				PaintMenuButton(g, Bounds.Width - 5 - menubar_btnsize * 1, 4, menubar_btnsize, menubar_btnsize, NonClientOps.ButtonClose);
+		}
+		private void PaintMenuButton(Graphics g, int x, int y, int w, int h, NonClientOps btn) {
+			g.DrawRectangle(Pens.Gray, x, y, w, h);
+			Color color2 = Color.DarkGray;
+			if (btn != NonClientOps.None && btn == selectedNonClientOp) color2 = Color.Brown;
+			using (Brush b = new LinearGradientBrush(new Rectangle(0, y + 1, 1, h - 1), Color.LightGray, color2, LinearGradientMode.Vertical)) {
+				g.FillRectangle(b, x + 1, y + 2, w - 2, h - 2);
 			}
-			if (Closable) {
-				g.DrawLine(Pens.Black, Bounds.Width - 5 - 14 + 3, 4 + 3, Bounds.Width - 5 - 14 + 14 - 3, 4 + 14 - 3);
-				g.DrawLine(Pens.Black, Bounds.Width - 5 - 14 + 3, 4 + 14 - 3, Bounds.Width - 5 - 14 + 14 - 3, 4 + 3);
+			if (btn == NonClientOps.ButtonClose) {
+				using (Pen pen = new Pen(Brushes.Black, 2)) {
+					g.DrawLine(pen, x + 3.5f, y + 4.5f, x + w - 4, y + h - 4);
+					g.DrawLine(pen, x + w - 4, y + 4.5f, x + 3.5f, y + h - 4);
+				}
 			}
 		}
 		public void Close() {
