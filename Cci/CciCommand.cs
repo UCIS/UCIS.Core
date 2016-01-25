@@ -158,6 +158,10 @@ namespace UCIS.Cci {
 			return _command[_offset + index + 1];
 		}
 
+		public string[] GetArguments() {
+			return UCIS.Util.ArrayUtil.Slice(_command, _offset + 1);
+		}
+
 		public CciCommand Jump(int offset) {
 			_offset += offset;
 			return this;

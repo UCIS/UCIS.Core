@@ -268,7 +268,7 @@ namespace UCIS.Pml {
 				return 0;
 			} else if (c == '-' || (c >= '0' && c <= '9')) {
 				StringBuilder sb = new StringBuilder();
-				while (c == '.' || c == '+' || c == '.' || c == 'e' || c == 'E' || (c >= '0' && c <= '9')) {
+				while (c == '.' || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E' || (c >= '0' && c <= '9')) {
 					sb.Append((Char)c);
 					reader.Read();
 					c = reader.Peek();
