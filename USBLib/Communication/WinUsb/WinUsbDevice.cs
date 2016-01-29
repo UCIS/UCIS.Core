@@ -143,7 +143,7 @@ namespace UCIS.USBLib.Communication.WinUsb {
 			}
 		}
 
-		public override unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+		SafeWinUsbInterfaceHandle PrepareControlTransfer(UsbControlRequestType requestType, short index, ref Byte[] buffer, int offset, int length) {
 			if (buffer == null) buffer = new Byte[0];
 			if (offset < 0 || length < 0 || length > short.MaxValue || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length");
 			SafeWinUsbInterfaceHandle ih = InterfaceHandles[0];
@@ -152,6 +152,10 @@ namespace UCIS.USBLib.Communication.WinUsb {
 				case UsbControlRequestType.RecipEndpoint: ih = GetInterfaceHandleForEndpoint(index & 0xff); break;
 				case UsbControlRequestType.RecipOther: break;
 			}
+			return ih;
+		}
+		public override unsafe int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
+			SafeWinUsbInterfaceHandle ih = PrepareControlTransfer(requestType, index, ref buffer, offset, length);
 			fixed (Byte* b = buffer) {
 				if (!WinUsb_ControlTransfer(ih,
 					new UsbSetupPacket((byte)requestType, request, value, index, (short)length),
@@ -159,6 +163,25 @@ namespace UCIS.USBLib.Communication.WinUsb {
 					throw new Win32Exception();
 				return length;
 			}
+		}
+		public override unsafe IAsyncResult BeginControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length, AsyncCallback callback, Object state) {
+			SafeWinUsbInterfaceHandle ih = PrepareControlTransfer(requestType, index, ref buffer, offset, length);
+			WindowsOverlappedAsyncResult ar = new WindowsOverlappedAsyncResult(callback, state);
+			try {
+				fixed (Byte* b = buffer) {
+					Boolean success = WinUsb_ControlTransfer(ih,
+						new UsbSetupPacket((byte)requestType, request, value, index, (short)length),
+						(IntPtr)(b + offset), length, out length, (IntPtr)ar.PackOverlapped(buffer));
+					ar.SyncResult(success, length);
+					return ar;
+				}
+			} catch {
+				ar.ErrorCleanup();
+				throw;
+			}
+		}
+		public override int EndControlTransfer(IAsyncResult asyncResult) {
+			return ((WindowsOverlappedAsyncResult)asyncResult).Complete();
 		}
 
 		public unsafe override int GetDescriptor(byte descriptorType, byte index, short langId, byte[] buffer, int offset, int length) {

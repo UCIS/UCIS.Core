@@ -6,31 +6,37 @@ using System.Threading;
 namespace UCIS.USBLib {
 	unsafe class WindowsOverlappedAsyncResult : IAsyncResult {
 		public Object AsyncState { get; private set; }
-		public WaitHandle AsyncWaitHandle { get; private set; }
-		public bool CompletedSynchronously { get { return false; } }
+		public bool CompletedSynchronously { get; private set; }
 		public bool IsCompleted { get; private set; }
 		int ErrorCode;
 		int Result;
 		AsyncCallback Callback;
 		NativeOverlapped* pOverlapped = null;
+		ManualResetEvent WaitEvent = null;
+		Object MonitorWaitHandle = new Object();
+		//Note that the file handle must be registered with the ThreadPool for the callback to work correctly!
 		public WindowsOverlappedAsyncResult(AsyncCallback callback, Object state) {
 			this.Callback = callback;
 			this.AsyncState = state;
 			IsCompleted = false;
-			AsyncWaitHandle = new ManualResetEvent(false);
 		}
 		public NativeOverlapped* PackOverlapped(Object userData) {
 			if (pOverlapped != null) throw new InvalidOperationException();
-			Overlapped overlapped = new Overlapped(0, 0, AsyncWaitHandle.SafeWaitHandle.DangerousGetHandle(), this);
+			//Passing a real WaitHandle to the Overlapped constructor results in a race condition between CompletionCallback / Complete because the event may be signalled before the callback completes
+			Overlapped overlapped = new Overlapped(0, 0, IntPtr.Zero, this);
 			return pOverlapped = overlapped.Pack(CompletionCallback, userData);
 		}
 		static void CompletionCallback(UInt32 errorCode, UInt32 numBytes, NativeOverlapped* poverlapped) {
 			Overlapped overlapped = Overlapped.Unpack(poverlapped);
 			WindowsOverlappedAsyncResult ar = (WindowsOverlappedAsyncResult)overlapped.AsyncResult;
 			Overlapped.Free(poverlapped);
-			ar.ErrorCode = (int)errorCode;
-			ar.Result = (int)numBytes;
-			ar.IsCompleted = true;
+			lock (ar.MonitorWaitHandle) {
+				ar.ErrorCode = (int)errorCode;
+				ar.Result = (int)numBytes;
+				ar.IsCompleted = true;
+				if (ar.WaitEvent != null) ar.WaitEvent.Set();
+				Monitor.PulseAll(ar.MonitorWaitHandle);
+			}
 			if (ar.Callback != null) ar.Callback(ar);
 		}
 		internal void SyncResult(Boolean success, int length) {
@@ -49,10 +55,18 @@ namespace UCIS.USBLib {
 			AsyncWaitHandle.Close();
 		}
 		internal int Complete() {
-			if (!IsCompleted) AsyncWaitHandle.WaitOne();
+			lock (MonitorWaitHandle) if (!IsCompleted) Monitor.Wait(MonitorWaitHandle);
 			if (ErrorCode != 0) throw new Win32Exception(ErrorCode);
 			AsyncWaitHandle.Close();
 			return Result;
+		}
+		public WaitHandle AsyncWaitHandle {
+			get {
+				lock (MonitorWaitHandle) {
+					if (WaitEvent == null) WaitEvent = new ManualResetEvent(IsCompleted);
+					return WaitEvent;
+				}
+			}
 		}
 	}
 }

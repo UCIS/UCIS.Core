@@ -288,10 +288,23 @@ namespace UCIS.Util {
 		}
 
 		public override void SetLength(long value) { throw new NotImplementedException(); }
-		public override long Seek(long offset, SeekOrigin origin) { throw new NotImplementedException(); }
+		public override long Seek(long offset, SeekOrigin origin) {
+			prebuffercount = 0;
+			return baseStream.Seek(offset, origin);
+		}
+		public void Skip(int count) {
+			if (count < 0) throw new ArgumentOutOfRangeException("count");
+			while (count > 0) {
+				int skip = Math.Min(count, prebuffercount);
+				prebufferoffset += skip;
+				prebuffercount -= skip;
+				count -= skip;
+				if (count > 0) Prebuffer(Math.Min(count, defaultbuffersize));
+			}
+		}
 
 		public override bool CanRead { get { return prebuffercount > 0 || baseStream.CanRead; } }
-		public override bool CanSeek { get { return false; } }
+		public override bool CanSeek { get { return baseStream.CanSeek; } }
 		public override bool CanTimeout { get { return baseStream.CanTimeout; } }
 		public override bool CanWrite { get { return baseStream.CanWrite; } }
 

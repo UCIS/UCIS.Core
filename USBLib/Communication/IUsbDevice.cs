@@ -21,6 +21,8 @@ namespace UCIS.USBLib.Communication {
 		void PipeReset(Byte endpoint);
 		void PipeAbort(Byte endpoint);
 		int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, Byte[] buffer, int offset, int length);
+		IAsyncResult BeginControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, Byte[] buffer, int offset, int length, AsyncCallback callback, Object state);
+		int EndControlTransfer(IAsyncResult asyncResult);
 
 		UsbPipeStream GetPipeStream(Byte endpoint);
 	}
