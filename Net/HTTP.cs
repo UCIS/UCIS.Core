@@ -108,7 +108,10 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public static String GetMimeTypeForExtension(String extension) {
-			switch (extension.TrimStart('.').ToLowerInvariant()) {
+			if (String.IsNullOrEmpty(extension)) return null;
+			int i = extension.LastIndexOf('.');
+			if (i != -1) extension = extension.Substring(i + 1);
+			switch (extension.ToLowerInvariant()) {
 				case "txt": return "text/plain";
 				case "htm":
 				case "html": return "text/html";

@@ -9,7 +9,6 @@ namespace UCIS.Util {
 		Byte[] ReceiveBuffer = null;
 		int ReceiveBufferOffset = 0;
 		int ReceiveWaiting = 0;
-		AutoResetEvent ReceiveEvent = new AutoResetEvent(false);
 		AsyncResult AsyncReceiveOperation = null;
 		protected Boolean Closed { get; private set; }
 
@@ -28,22 +27,23 @@ namespace UCIS.Util {
 			lock (ReceiveQueue) {
 				ReceiveQueue.Enqueue(store);
 				Interlocked.Add(ref ReceiveWaiting, store.Length);
-				ReceiveEvent.Set();
 				if (AsyncReceiveOperation != null && (store.Length > 0 || AsyncReceiveOperation.IsReadPacket)) {
 					AsyncReceiveOperation.SetCompleted(false);
 					AsyncReceiveOperation = null;
+				} else {
+					Monitor.Pulse(ReceiveQueue);
 				}
 			}
 		}
 		public override void Close() {
 			Closed = true;
 			base.Close();
-			ReceiveEvent.Set();
 			lock (ReceiveQueue) {
 				if (AsyncReceiveOperation != null) {
 					AsyncReceiveOperation.SetCompleted(false);
 					AsyncReceiveOperation = null;
 				}
+				Monitor.PulseAll(ReceiveQueue);
 			}
 		}
 
@@ -65,9 +65,9 @@ namespace UCIS.Util {
 						ReceiveBufferOffset = 0;
 						continue;
 					}
+					if (Closed) throw new ObjectDisposedException("QueuedPacketStream", "The connection has been closed");
+					if (ReadTimeout == 0 || !Monitor.Wait(ReceiveQueue, ReadTimeout)) throw new TimeoutException();
 				}
-				if (Closed) throw new ObjectDisposedException("QueuedPacketStream", "The connection has been closed");
-				if (ReadTimeout == 0 || !ReceiveEvent.WaitOne(ReadTimeout, false)) throw new TimeoutException();
 			}
 			return ReceiveBuffer.Length - ReceiveBufferOffset;
 		}

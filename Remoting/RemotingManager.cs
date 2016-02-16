@@ -261,8 +261,9 @@ namespace UCIS.Remoting {
 		}
 		private static Object FixObjectType(Object obj, Type type) {
 			if (ReferenceEquals(obj, null)) return type.IsPrimitive ? Activator.CreateInstance(type) : obj;
+			if (RemotingServices.IsTransparentProxy(obj)) return obj;
 			Type objtype = obj.GetType();
-			if (type == objtype || type.IsAssignableFrom(objtype) || RemotingServices.IsTransparentProxy(obj)) return obj;
+			if (type == objtype || type.IsAssignableFrom(objtype)) return obj;
 			if (objtype.IsArray && ((Array)obj).Rank == 1 && ((Array)obj).GetLowerBound(0) == 0 && (type.IsArray ||
 				(type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(IEnumerable<>) || type.GetGenericTypeDefinition() == typeof(ICollection<>) || type.GetGenericTypeDefinition() == typeof(IList<>)))
 				)) {
@@ -727,6 +728,11 @@ namespace UCIS.Remoting {
 						Object value = Deserialize(reader, callbackobjects);
 						MemberInfo[] mms = type.GetMember(mname, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 						if (mms.Length != 1) throw new InvalidOperationException();
+						if (mms[0] is PropertyInfo) {
+							value = FixObjectType(value, ((PropertyInfo)mms[0]).PropertyType);
+						} else if (mms[0] is FieldInfo) {
+							value = FixObjectType(value, ((FieldInfo)mms[0]).FieldType);
+						}
 						members.Add(mms[0]);
 						values.Add(value);
 					}

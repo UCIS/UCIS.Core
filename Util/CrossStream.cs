@@ -2,24 +2,21 @@
 
 namespace UCIS.Util {
 	public class CrossStream : QueuedPacketStream {
-		protected CrossStream otherPart;
-		private Boolean otherClosed = false;
-
-		public CrossStream OtherSide { get { return otherPart; } }
+		public CrossStream OtherSide { get; private set; }
 
 		public static CrossStream CreatePair(out CrossStream stream1, out CrossStream stream2) {
 			return stream1 = CreatePair(out stream2);
 		}
 		public static CrossStream CreatePair(out CrossStream stream2) {
 			stream2 = new CrossStream();
-			return stream2.otherPart;
+			return stream2.OtherSide;
 		}
 
 		public CrossStream() {
-			otherPart = new CrossStream(this);
+			OtherSide = new CrossStream(this);
 		}
 		protected CrossStream(CrossStream other) {
-			otherPart = other;
+			OtherSide = other;
 		}
 
 		public override bool CanRead { get { return true; } }
@@ -27,17 +24,18 @@ namespace UCIS.Util {
 		public override void Flush() { }
 
 		public override void Write(byte[] buffer, int offset, int count) {
-			if (otherClosed) throw new ObjectDisposedException("CrossStream", "The stream has been closed");
-			otherPart.AddReadBufferCopy(buffer, offset, count);
+			CrossStream other = OtherSide;
+			if (other == null) throw new ObjectDisposedException("CrossStream", "The stream has been closed");
+			other.AddReadBufferCopy(buffer, offset, count);
 		}
 
 		public override void Close() {
+			CrossStream other = OtherSide;
 			CloseBase();
-			otherPart.CloseBase();
+			if (other != null) other.CloseBase();
 		}
 		private void CloseBase() {
-			otherClosed = true;
-			otherPart = null;
+			OtherSide = null;
 			base.Close();
 		}
 	}
