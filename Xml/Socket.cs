@@ -40,12 +40,10 @@ namespace UCIS.Xml {
 		public virtual MemoryStream ReadRawDocument() {
 			MemoryStream Buffer = new MemoryStream();
 			byte[] ByteBuffer = new byte[1];
-			int ByteCount = 0;
 			while (true) {
-				ByteCount = pStream.Read(ByteBuffer, 0, 1);
-				if (ByteCount == 0) {
-					throw new EndOfStreamException();
-				} else if (ByteBuffer[0] == 0) {
+				int count = pStream.Read(ByteBuffer, 0, 1);
+				if (count != 1) throw new EndOfStreamException();
+				if (ByteBuffer[0] == 0) {
 					if (Buffer.Length > 0) break;
 				} else {
 					Buffer.WriteByte(ByteBuffer[0]);
@@ -85,10 +83,8 @@ namespace UCIS.Xml {
 			}
 		}
 		public override void Close() {
-			if (pWriter != null) {
-				pWriter.Close();
-				pWriter = null;
-			}
+			if (pWriter != null) pWriter.Close();
+			pWriter = null;
 			pStream.Close();
 		}
 
@@ -123,13 +119,9 @@ namespace UCIS.Xml {
 			WriteEndDocument();
 		}
 
-		public override System.Xml.WriteState WriteState {
+		public override WriteState WriteState {
 			get {
-				if (pWriter != null) {
-					return pWriter.WriteState;
-				} else {
-					return WriteState.Start;
-				}
+				return pWriter == null ? WriteState.Start : pWriter.WriteState;
 			}
 		}
 

@@ -514,7 +514,7 @@ namespace UCIS.Net.HTTP {
 					Close();
 					return;
 				}
-				if (Server.ServeFlashPolicyFile && line[0] == '<') { //<policy-file-request/>
+				if (Server.ServeFlashPolicyFile && line.Length > 0 && line[0] == '<') { //<policy-file-request/>
 					StreamWriter writer = new StreamWriter(Reader, Encoding.ASCII) { NewLine = "\r\n", AutoFlush = false };
 					writer.WriteLine("<cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>");
 					writer.Flush();
@@ -823,7 +823,12 @@ namespace UCIS.Net.HTTP {
 			State = HTTPConnectionState.Completed;
 			if (KeepAlive && KeepAliveMaxRequests > 1) {
 				State = HTTPConnectionState.Closed;
-				new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1, IsSecure);
+                                try {
+					new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1, IsSecure);
+				} catch (Exception ex) {
+					Server.RaiseOnError(this, ex);
+					Reader.Close();
+				}
 			} else {
 				Close();
 			}
