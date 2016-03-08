@@ -21,8 +21,9 @@ namespace UCIS.Net.HTTP {
 				String SecWebSocketKey1 = context.GetRequestHeader("Sec-WebSocket-Key1");
 				String SecWebSocketKey2 = context.GetRequestHeader("Sec-WebSocket-Key2");
 				String SecWebSocketProtocol = context.GetRequestHeader("Sec-WebSocket-Protocol");
-				String[] SecWebSocketProtocols = SecWebSocketProtocol == null ? null : SecWebSocketProtocol.Split(new String[] { ", " }, StringSplitOptions.None);
+				String[] SecWebSocketProtocols = SecWebSocketProtocol == null ? null : SecWebSocketProtocol.Split(',');
 				if (!ConnectionUpgrade || !UpgradeWebsocket) throw new InvalidOperationException("The HTTP context does not contain a WebSocket request");
+				if (SecWebSocketProtocols != null) SecWebSocketProtocols = Array.ConvertAll(SecWebSocketProtocols, s => s.Trim().ToLowerInvariant());
 				binaryProtocol = SecWebSocketProtocols != null && Array.IndexOf(SecWebSocketProtocols, "binary") != -1;
 				if (SecWebSocketKey != null) {
 					wsProtocol = 13;
