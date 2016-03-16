@@ -77,7 +77,7 @@ namespace UCIS.Util {
 			TarchiveEntry entry = new TarchiveEntry() { Reader = this, OriginalName = fname, Offset = SourceOffset - 512, Size = fsize, Name = ffname };
 			if (ustar) {
 				entry.IsDirectory = header[156] == '5';
-				entry.IsDirectory = header[156] == '0' || header[156] == 0;
+				entry.IsFile = header[156] == '0' || header[156] == 0;
 			} else {
 				entry.IsDirectory = fname.EndsWith("/");
 				entry.IsFile = !entry.IsDirectory && header[156] == '0';

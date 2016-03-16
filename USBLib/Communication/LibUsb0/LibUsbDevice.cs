@@ -31,7 +31,7 @@ namespace UCIS.USBLib.Communication.LibUsb {
 		public override Byte Configuration {
 			get { return base.Configuration; }
 			set {
-				ControlWrite(
+				ControlTransfer(
 					UsbControlRequestType.EndpointOut | UsbControlRequestType.TypeStandard | UsbControlRequestType.RecipDevice,
 					(byte)UsbStandardRequest.SetConfiguration,
 					value,
@@ -74,30 +74,9 @@ namespace UCIS.USBLib.Communication.LibUsb {
 			return DeviceIoControl(LibUsbIoCtl.GET_DESCRIPTOR, ref req, buffer, offset, length);
 		}
 		public override int ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			if ((requestType & UsbControlRequestType.EndpointMask) == UsbControlRequestType.EndpointIn)
-				return ControlRead(requestType, request, value, index, buffer, offset, length);
-			else
-				return ControlWrite(requestType, request, value, index, buffer, offset, length);
-		}
-		public unsafe int ControlRead(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			if (buffer == null) buffer = new Byte[0];
-			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
-			int code;
-			LibUsbRequest req = new LibUsbRequest();
-			PrepareControlTransfer(requestType, request, value, index, length, ref req, out code);
-			return DeviceIoControl(code, ref req, buffer, offset, length);
-		}
-		public unsafe int ControlWrite(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) {
-			Byte[] inbuffer = new Byte[length + LibUsbRequest.Size];
-			if (length > 0) Buffer.BlockCopy(buffer, offset, inbuffer, LibUsbRequest.Size, length);
-			int code;
-			fixed (Byte* inbufferp = inbuffer)
-				PrepareControlTransfer(requestType, request, value, index, length, ref *((LibUsbRequest*)inbufferp), out code);
-			int ret = DeviceIoControl(code, inbuffer, null, 0, 0);
-			return length;
-			//ret -= LibUsbRequest.Size;
-			//if (ret <= 0) return 0;
-			//return ret;
+			int ret = EndDeviceIoControl(BeginControlTransfer(requestType, request, value, index, buffer, offset, length, null, null));
+			if ((requestType & UsbControlRequestType.EndpointMask) == UsbControlRequestType.EndpointOut) ret = length;
+			return ret;
 		}
 		void PrepareControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, int length, ref LibUsbRequest req, out int code) {
 			code = LibUsbIoCtl.CONTROL_TRANSFER;
@@ -174,6 +153,25 @@ namespace UCIS.USBLib.Communication.LibUsb {
 				default:
 					throw new ArgumentException(String.Format("Invalid or unsupported request type: 0x{0:X8}", requestType));
 			}
+		}
+		public override unsafe IAsyncResult BeginControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length, AsyncCallback callback, Object state) {
+			if (offset < 0 || length < 0 || (buffer == null && length != 0) || (buffer != null && offset + length > buffer.Length)) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer length");
+			int code;
+			Byte[] inbuffer;
+			if ((requestType & UsbControlRequestType.EndpointMask) == UsbControlRequestType.EndpointIn) {
+				if (buffer == null) buffer = new Byte[0];
+				inbuffer = new Byte[sizeof(LibUsbRequest)];
+			} else {
+				inbuffer = new Byte[length + LibUsbRequest.Size];
+				if (length > 0) Buffer.BlockCopy(buffer, offset, inbuffer, LibUsbRequest.Size, length);
+				buffer = null;
+				offset = length = 0;
+			}
+			fixed (Byte* inbufferp = inbuffer) PrepareControlTransfer(requestType, request, value, index, length, ref *((LibUsbRequest*)inbufferp), out code);
+			return BeginDeviceIoControl(code, inbuffer, buffer, offset, length, callback, state);
+		}
+		public override int EndControlTransfer(IAsyncResult asyncResult) {
+			return EndDeviceIoControl(asyncResult);
 		}
 
 		public override int PipeTransfer(Byte epnum, Byte[] buffer, int offset, int length) {

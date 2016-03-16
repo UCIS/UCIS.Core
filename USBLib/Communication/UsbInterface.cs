@@ -43,6 +43,16 @@ namespace UCIS.USBLib.Communication {
 			return pipeTransferFunc.EndInvoke(asyncResult);
 		}
 
+		delegate int ControlTransferDelegate(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length);
+		ControlTransferDelegate controlTransferFunc = null;
+		public virtual IAsyncResult BeginControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length, AsyncCallback callback, Object state) {
+			if (controlTransferFunc == null) controlTransferFunc = ControlTransfer;
+			return controlTransferFunc.BeginInvoke(requestType, request, value, index, buffer, offset, length, callback, state);
+		}
+		public virtual int EndControlTransfer(IAsyncResult asyncResult) {
+			return controlTransferFunc.EndInvoke(asyncResult);
+		}
+
 		public virtual UsbPipeStream GetPipeStream(Byte endpoint) {
 			return new UsbPipeStream(this, endpoint);
 		}

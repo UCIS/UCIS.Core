@@ -179,7 +179,9 @@ namespace UCIS.HWLib.Windows.USB {
 		int IUsbInterface.EndPipeTransfer(IAsyncResult asyncResult) { throw new NotSupportedException(); }
 		void IUsbInterface.PipeReset(byte endpoint) { throw new NotImplementedException(); }
 		void IUsbInterface.PipeAbort(byte endpoint) { throw new NotImplementedException(); }
-		int IUsbInterface.ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotSupportedException(); }
+		int IUsbInterface.ControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, byte[] buffer, int offset, int length) { throw new NotImplementedException(); }
+		IAsyncResult IUsbInterface.BeginControlTransfer(UsbControlRequestType requestType, byte request, short value, short index, Byte[] buffer, int offset, int length, AsyncCallback callback, Object state) { throw new NotImplementedException(); }
+		int IUsbInterface.EndControlTransfer(IAsyncResult asyncResult) { throw new NotImplementedException(); }
 		UsbPipeStream IUsbInterface.GetPipeStream(byte endpoint) { throw new NotSupportedException(); }
 		void IDisposable.Dispose() { }
 		void IUsbDevice.ClaimInterface(int interfaceID) { }
