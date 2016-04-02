@@ -188,6 +188,7 @@ namespace UCIS.Net {
 			try {
 				while (left > 0) {
 					int sent = Socket.Send(buffer, offset, left, 0);
+					if (sent <= 0) throw new EndOfStreamException();
 					left -= sent;
 					offset += sent;
 				}
