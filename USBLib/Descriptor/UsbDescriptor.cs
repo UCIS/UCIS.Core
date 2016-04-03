@@ -13,7 +13,7 @@ namespace UCIS.USBLib.Descriptor {
 		public Byte Length { get { return Data.Array[Data.Offset + 0]; } }
 		public UsbDescriptorType Type { get { return (UsbDescriptorType)Data.Array[Data.Offset + 1]; } }
 		public Byte[] GetBytes() { return ArrayUtil.ToArray(Data); }
-		public static explicit operator UsbDescriptor(UsbDescriptorBlob self) { return UsbDescriptor.FromByteArray(self.Data.Array, self.Data.Offset, self.Data.Count); }
+		public static implicit operator UsbDescriptor(UsbDescriptorBlob self) { return UsbDescriptor.FromByteArray(self.Data.Array, self.Data.Offset, self.Data.Count); }
 		public static explicit operator UsbDeviceDescriptor(UsbDescriptorBlob self) { return UsbDeviceDescriptor.FromByteArray(self.Data.Array, self.Data.Offset, self.Data.Count); }
 		public static explicit operator UsbConfigurationDescriptor(UsbDescriptorBlob self) { return UsbConfigurationDescriptor.FromByteArray(self.Data.Array, self.Data.Offset, self.Data.Count); }
 		public static explicit operator UsbInterfaceDescriptor(UsbDescriptorBlob self) { return UsbInterfaceDescriptor.FromByteArray(self.Data.Array, self.Data.Offset, self.Data.Count); }
@@ -25,17 +25,46 @@ namespace UCIS.USBLib.Descriptor {
 	public struct UsbDescriptor {
 		byte bmLength;
 		byte bType;
+		unsafe fixed Byte data[253];
 		public Byte Length { get { return bmLength; } }
 		public UsbDescriptorType Type { get { return (UsbDescriptorType)bType; } }
 		internal static short FromLittleEndian(short value) {
 			if (BitConverter.IsLittleEndian) return value;
 			return (short)(((value & 0xFF) << 8) | ((value >> 8) & 0xFF));
 		}
-		public unsafe static UsbDescriptor FromByteArray(Byte[] buffer, int offset, int length) {
-			if (length < Marshal.SizeOf(typeof(UsbDescriptor))) throw new ArgumentOutOfRangeException("length", "The data length is smaller than the descriptor length");
-			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer dimensions");
-			fixed (Byte* ptr = buffer) return *(UsbDescriptor*)(ptr + offset);
+		internal static short ToLittleEndian(short value) {
+			if (BitConverter.IsLittleEndian) return value;
+			return (short)(((value & 0xFF) << 8) | ((value >> 8) & 0xFF));
 		}
+		public unsafe static UsbDescriptor FromByteArray(Byte[] buffer) {
+			return FromByteArray(buffer, 0, buffer.Length);
+		}
+		public unsafe static UsbDescriptor FromByteArray(Byte[] buffer, int offset, int length) {
+			if (offset < 0 || length < 0 || offset + length > buffer.Length) throw new ArgumentOutOfRangeException("length", "The specified offset and length exceed the buffer dimensions");
+			if (length < 2 || length < buffer[offset]) throw new ArgumentOutOfRangeException("length", "The data length is smaller than the descriptor length");
+			UsbDescriptor desc;
+			Marshal.Copy(buffer, offset, (IntPtr)(&desc), Math.Min(length, 255));
+			return desc;
+		}
+		public unsafe Byte[] GetBytes() {
+			Byte[] buffer = new Byte[Length];
+			fixed (UsbDescriptor* ptr = &this) Marshal.Copy((IntPtr)ptr, buffer, 0, Length);
+			return buffer;
+		}
+		public static implicit operator Byte[](UsbDescriptor self) { return self.GetBytes(); }
+		public static implicit operator UsbDescriptorBlob(UsbDescriptor self) { return new UsbDescriptorBlob(self.GetBytes()); }
+		public static unsafe explicit operator UsbDeviceDescriptor(UsbDescriptor self) { if (self.Length < UsbDeviceDescriptor.Size || self.Type != UsbDescriptorType.Device) throw new InvalidCastException("The descriptor is too short or of an incorrect type"); return *(UsbDeviceDescriptor*)&self; }
+		public static unsafe explicit operator UsbConfigurationDescriptor(UsbDescriptor self) { if (self.Length < UsbConfigurationDescriptor.Size || self.Type != UsbDescriptorType.Configuration) throw new InvalidCastException("The descriptor is too short or of an incorrect type"); return *(UsbConfigurationDescriptor*)&self; }
+		public static unsafe explicit operator UsbInterfaceDescriptor(UsbDescriptor self) { if (self.Length < UsbInterfaceDescriptor.Size || self.Type != UsbDescriptorType.Interface) throw new InvalidCastException("The descriptor is too short or of an incorrect type"); return *(UsbInterfaceDescriptor*)&self; }
+		public static unsafe explicit operator UsbEndpointDescriptor(UsbDescriptor self) { if (self.Length < UsbEndpointDescriptor.Size || self.Type != UsbDescriptorType.Endpoint) throw new InvalidCastException("The descriptor is too short or of an incorrect type"); return *(UsbEndpointDescriptor*)&self; }
+		public static unsafe explicit operator UsbHidDescriptor(UsbDescriptor self) { if (self.Length < UsbHidDescriptor.Size || self.Type != UsbDescriptorType.Hid) throw new InvalidCastException("The descriptor is too short or of an incorrect type"); return *(UsbHidDescriptor*)&self; }
+		public static unsafe explicit operator UsbHubDescriptor(UsbDescriptor self) { if (self.Length < UsbHubDescriptor.Size || self.Type != UsbDescriptorType.Hub) throw new InvalidCastException("The descriptor is too short or of an incorrect type"); return *(UsbHubDescriptor*)&self; }
+		public static unsafe implicit operator UsbDescriptor(UsbDeviceDescriptor from) { UsbDescriptor desc; *(UsbDeviceDescriptor*)&desc = from; return desc; }
+		public static unsafe implicit operator UsbDescriptor(UsbConfigurationDescriptor from) { UsbDescriptor desc; *(UsbConfigurationDescriptor*)&desc = from; return desc; }
+		public static unsafe implicit operator UsbDescriptor(UsbInterfaceDescriptor from) { UsbDescriptor desc; *(UsbInterfaceDescriptor*)&desc = from; return desc; }
+		public static unsafe implicit operator UsbDescriptor(UsbEndpointDescriptor from) { UsbDescriptor desc; *(UsbEndpointDescriptor*)&desc = from; return desc; }
+		public static unsafe implicit operator UsbDescriptor(UsbHidDescriptor from) { UsbDescriptor desc; *(UsbHidDescriptor*)&desc = from; return desc; }
+		public static unsafe implicit operator UsbDescriptor(UsbHubDescriptor from) { UsbDescriptor desc; *(UsbHubDescriptor*)&desc = from; return desc; }
 	}
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public struct UsbStringDescriptor {
@@ -84,6 +113,22 @@ namespace UCIS.USBLib.Descriptor {
 		public Byte ProductStringID { get { return iProduct; } }
 		public Byte SerialNumberStringID { get { return iSerialNumber; } }
 		public Byte NumConfigurations { get { return numConfigurations; } }
+		public UsbDeviceDescriptor(short usbversion, UsbClassCode deviceClass, Byte deviceSubClass, Byte deviceProtocol, UInt16 deviceVersion, Byte maxControlPacketSize, UInt16 vendorID, UInt16 productID, Byte manufacturerString, Byte productString, Byte serialNumberString, Byte numConfigurations) : this() {
+			bmLength = (Byte)Size;
+			bType = (Byte)UsbDescriptorType.Device;
+			bcdUSB = UsbDescriptor.ToLittleEndian(usbversion);
+			bDeviceClass = (Byte)deviceClass;
+			bDeviceSubClass = deviceSubClass;
+			bDeviceProtocol = deviceProtocol;
+			bcdDevice = UsbDescriptor.ToLittleEndian((Int16)deviceVersion);
+			bMaxControlPacketSize = maxControlPacketSize;
+			idVendor = UsbDescriptor.ToLittleEndian((Int16)vendorID);
+			idProduct = UsbDescriptor.ToLittleEndian((Int16)productID);
+			iManufacturer = manufacturerString;
+			iProduct = productString;
+			iSerialNumber = serialNumberString;
+			this.numConfigurations = numConfigurations;
+		}
 		public unsafe Byte[] GetBytes() {
 			Byte[] buffer = new Byte[Size];
 			fixed (Byte* ptr = buffer) *(UsbDeviceDescriptor*)ptr = this;
@@ -133,6 +178,16 @@ namespace UCIS.USBLib.Descriptor {
 			return FromByteArray(buff, 0, len);
 		}
 		public static unsafe int Size { get { return sizeof(UsbConfigurationDescriptor); } }
+		public UsbConfigurationDescriptor(UInt16 totalLength, Byte numInterfaces, Byte configurationValue, Byte configurationStringIndex, Byte attributes, int maxPowerMA) : this() {
+			bmLength = (Byte)Size;
+			bType = (Byte)UsbDescriptorType.Configuration;
+			wTotalLength = UsbDescriptor.ToLittleEndian((Int16)totalLength);
+			bNumInterfaces = numInterfaces;
+			bConfigurationValue = configurationValue;
+			bConfigurationStringID = configurationStringIndex;
+			bmAttributes = attributes;
+			bMaxPower = (Byte)Math.Min(255, maxPowerMA / 2);
+		}
 	}
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public struct UsbInterfaceDescriptor {
@@ -160,6 +215,17 @@ namespace UCIS.USBLib.Descriptor {
 			fixed (Byte* ptr = buffer) return *(UsbInterfaceDescriptor*)(ptr + offset);
 		}
 		public static unsafe int Size { get { return sizeof(UsbInterfaceDescriptor); } }
+		public UsbInterfaceDescriptor(Byte interfaceNumber, Byte alternateSetting, Byte numEndpoints, UsbClassCode interfaceClass, Byte interfaceSubClass, Byte interfaceProtocol, Byte stringID) : this() {
+			bmLength = (Byte)Size;
+			bType = (Byte)UsbDescriptorType.Interface;
+			bInterfaceNumber = interfaceNumber;
+			bAlternateSetting = alternateSetting;
+			bNumEndpoints = numEndpoints;
+			bInterfaceClass = (Byte)interfaceClass;
+			bInterfaceSubClass = interfaceSubClass;
+			bInterfaceProtocol = interfaceProtocol;
+			bInterfaceStringID = stringID;
+		}
 	}
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public struct UsbEndpointDescriptor {
@@ -187,6 +253,14 @@ namespace UCIS.USBLib.Descriptor {
 			fixed (Byte* ptr = buffer) return *(UsbEndpointDescriptor*)(ptr + offset);
 		}
 		public static unsafe int Size { get { return sizeof(UsbEndpointDescriptor); } }
+		public UsbEndpointDescriptor(Byte address, Byte attributes, UInt16 maxPacketSize, Byte interval) : this() {
+			bmLength = (Byte)Size;
+			bType = (Byte)UsbDescriptorType.Endpoint;
+			bEndpointAddress = address;
+			bmAttributes = attributes;
+			wMaxPacketSize = UsbDescriptor.ToLittleEndian((Int16)maxPacketSize);
+			bInterval = interval;
+		}
 	}
 	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public struct UsbHidDescriptor {

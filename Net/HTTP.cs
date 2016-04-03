@@ -63,8 +63,10 @@ namespace UCIS.Net.HTTP {
 			Socket socket = (Socket)args[0];
 			SslStream ssl = (SslStream)args[1];
 			Stream streamwrapper = (Stream)args[2];
+			IDisposable timeout = (IDisposable)args[3];
 			try {
 				ssl.EndAuthenticateAsServer(ar);
+				timeout.Dispose();
 				new HTTPContext(this, ssl, socket, -1, true);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
@@ -82,7 +84,7 @@ namespace UCIS.Net.HTTP {
 			try {
 				if (SSLCertificate != null) {
 					SslStream ssl = new SslStream(streamwrapper);
-					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl, streamwrapper });
+					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl, streamwrapper, new TimedDisposer(ssl, 10000) });
 				} else {
 					new HTTPContext(this, streamwrapper, socket, -1, false);
 				}

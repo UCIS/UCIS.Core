@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading;
 
 namespace UCIS.Util {
 	public static class StreamUtil {
@@ -21,6 +22,22 @@ namespace UCIS.Util {
 		}
 		public static void WriteAll(Stream stream, Byte[] buffer) {
 			stream.Write(buffer, 0, buffer.Length);
+		}
+	}
+	public class TimedDisposer : IDisposable {
+		Timer timer;
+		public TimedDisposer(IDisposable target, int timeout) {
+			this.timer = new Timer(Callback, target, timeout, Timeout.Infinite);
+		}
+		void Callback(Object state) {
+			((IDisposable)state).Dispose();
+			timer.Dispose();
+		}
+		public void Reset(int timeout) {
+			timer.Change(timeout, Timeout.Infinite);
+		}
+		public void Dispose() {
+			timer.Dispose();
 		}
 	}
 }
