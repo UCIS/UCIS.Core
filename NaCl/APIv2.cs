@@ -5,6 +5,9 @@ using UCIS.Util;
 using curve25519xsalsa20poly1305impl = UCIS.NaCl.crypto_box.curve25519xsalsa20poly1305;
 using ed25519impl = UCIS.NaCl.crypto_sign.ed25519;
 using edwards25519sha512batchimpl = UCIS.NaCl.crypto_sign.edwards25519sha512batch;
+using md5impl = UCIS.NaCl.crypto_hash.md5;
+using sha1impl = UCIS.NaCl.crypto_hash.sha1;
+using sha256impl = UCIS.NaCl.crypto_hash.sha256;
 using sha512impl = UCIS.NaCl.crypto_hash.sha512;
 using xsalsa20poly1305impl = UCIS.NaCl.crypto_secretbox.xsalsa20poly1305;
 
@@ -236,10 +239,187 @@ namespace UCIS.NaCl.v2 {
 			return size - 64;
 		}
 	}
+	public class md5 {
+		md5impl.md5state state = new md5impl.md5state();
+		public md5() {
+			state.init();
+		}
+		private md5(md5impl.md5state state) {
+			this.state = state;
+		}
+		public unsafe void Process(Byte[] buffer, int offset, int count) {
+			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
+			fixed (Byte* p = buffer) state.process(p + offset, count);
+		}
+		public unsafe void Process(Byte[] buffer) {
+			Process(buffer, 0, buffer.Length);
+		}
+		public unsafe void ProcessStream(Stream stream) {
+			Byte[] buffer = new Byte[1024];
+			while (true) {
+				int read = stream.Read(buffer, 0, buffer.Length);
+				if (read == 0) break;
+				if (read < 0) throw new EndOfStreamException();
+				Process(buffer, 0, read);
+			}
+		}
+		public unsafe void GetHash(Byte[] hash, int offset) {
+			if (offset < 0 || offset + 16 > hash.Length) throw new ArgumentException("hash");
+			fixed (Byte* p = hash) state.finish(p + offset);
+		}
+		public unsafe Byte[] GetHash() {
+			Byte[] hash = new Byte[16];
+			GetHash(hash, 0);
+			return hash;
+		}
+		public md5 Clone() {
+			return new md5(state);
+		}
+		public static unsafe void GetHash(Byte[] buffer, int offset, int count, Byte[] hash, int hashoffset) {
+			md5 sha = new md5();
+			sha.Process(buffer, offset, count);
+			sha.GetHash(hash, hashoffset);
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer, int offset, int count) {
+			md5 sha = new md5();
+			sha.Process(buffer, offset, count);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer) {
+			return GetHash(buffer, 0, buffer.Length);
+		}
+		public static unsafe Byte[] HashStream(Stream stream) {
+			md5 sha = new md5();
+			sha.ProcessStream(stream);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] HashFile(String filename) {
+			using (FileStream stream = File.OpenRead(filename)) return HashStream(stream);
+		}
+	}
+	public class sha1 {
+		sha1impl.sha1state state = new sha1impl.sha1state();
+		public sha1() {
+			state.init();
+		}
+		private sha1(sha1impl.sha1state state) {
+			this.state = state;
+		}
+		public unsafe void Process(Byte[] buffer, int offset, int count) {
+			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
+			fixed (Byte* p = buffer) state.process(p + offset, count);
+		}
+		public unsafe void Process(Byte[] buffer) {
+			Process(buffer, 0, buffer.Length);
+		}
+		public unsafe void ProcessStream(Stream stream) {
+			Byte[] buffer = new Byte[1024];
+			while (true) {
+				int read = stream.Read(buffer, 0, buffer.Length);
+				if (read == 0) break;
+				if (read < 0) throw new EndOfStreamException();
+				Process(buffer, 0, read);
+			}
+		}
+		public unsafe void GetHash(Byte[] hash, int offset) {
+			if (offset < 0 || offset + 20 > hash.Length) throw new ArgumentException("hash");
+			fixed (Byte* p = hash) state.finish(p + offset);
+		}
+		public unsafe Byte[] GetHash() {
+			Byte[] hash = new Byte[20];
+			GetHash(hash, 0);
+			return hash;
+		}
+		public sha1 Clone() {
+			return new sha1(state);
+		}
+		public static unsafe void GetHash(Byte[] buffer, int offset, int count, Byte[] hash, int hashoffset) {
+			sha1 sha = new sha1();
+			sha.Process(buffer, offset, count);
+			sha.GetHash(hash, hashoffset);
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer, int offset, int count) {
+			sha1 sha = new sha1();
+			sha.Process(buffer, offset, count);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer) {
+			return GetHash(buffer, 0, buffer.Length);
+		}
+		public static unsafe Byte[] HashStream(Stream stream) {
+			sha1 sha = new sha1();
+			sha.ProcessStream(stream);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] HashFile(String filename) {
+			using (FileStream stream = File.OpenRead(filename)) return HashStream(stream);
+		}
+	}
+	public class sha256 {
+		sha256impl.sha256state state = new sha256impl.sha256state();
+		public sha256() {
+			state.init();
+		}
+		private sha256(sha256impl.sha256state state) {
+			this.state = state;
+		}
+		public unsafe void Process(Byte[] buffer, int offset, int count) {
+			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
+			fixed (Byte* p = buffer) state.process(p + offset, count);
+		}
+		public unsafe void Process(Byte[] buffer) {
+			Process(buffer, 0, buffer.Length);
+		}
+		public unsafe void ProcessStream(Stream stream) {
+			Byte[] buffer = new Byte[1024];
+			while (true) {
+				int read = stream.Read(buffer, 0, buffer.Length);
+				if (read == 0) break;
+				if (read < 0) throw new EndOfStreamException();
+				Process(buffer, 0, read);
+			}
+		}
+		public unsafe void GetHash(Byte[] hash, int offset) {
+			if (offset < 0 || offset + 32 > hash.Length) throw new ArgumentException("hash");
+			fixed (Byte* p = hash) state.finish(p + offset);
+		}
+		public unsafe Byte[] GetHash() {
+			Byte[] hash = new Byte[32];
+			GetHash(hash, 0);
+			return hash;
+		}
+		public sha256 Clone() {
+			return new sha256(state);
+		}
+		public static unsafe void GetHash(Byte[] buffer, int offset, int count, Byte[] hash, int hashoffset) {
+			sha256 sha = new sha256();
+			sha.Process(buffer, offset, count);
+			sha.GetHash(hash, hashoffset);
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer, int offset, int count) {
+			sha256 sha = new sha256();
+			sha.Process(buffer, offset, count);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] GetHash(Byte[] buffer) {
+			return GetHash(buffer, 0, buffer.Length);
+		}
+		public static unsafe Byte[] HashStream(Stream stream) {
+			sha256 sha = new sha256();
+			sha.ProcessStream(stream);
+			return sha.GetHash();
+		}
+		public static unsafe Byte[] HashFile(String filename) {
+			using (FileStream stream = File.OpenRead(filename)) return HashStream(stream);
+		}
+	}
 	public class sha512 {
 		sha512impl.sha512state state = new sha512impl.sha512state();
 		public sha512() {
 			state.init();
+		}
+		private sha512(sha512impl.sha512state state) {
+			this.state = state;
 		}
 		public unsafe void Process(Byte[] buffer, int offset, int count) {
 			if (offset < 0 || count < 0 || offset + count > buffer.Length) throw new ArgumentException("buffer");
@@ -265,6 +445,9 @@ namespace UCIS.NaCl.v2 {
 			Byte[] hash = new Byte[64];
 			GetHash(hash, 0);
 			return hash;
+		}
+		public sha512 Clone() {
+			return new sha512(state);
 		}
 		public static unsafe void GetHash(Byte[] buffer, int offset, int count, Byte[] hash, int hashoffset) {
 			sha512 sha = new sha512();
