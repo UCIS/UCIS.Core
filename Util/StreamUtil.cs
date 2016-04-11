@@ -22,5 +22,56 @@ namespace UCIS.Util {
 		public static void WriteAll(Stream stream, Byte[] buffer) {
 			stream.Write(buffer, 0, buffer.Length);
 		}
+
+		class IOAsyncResult : AsyncResultBase {
+			public Stream Stream { get; set; }
+			public Byte[] Buffer { get; set; }
+			public int Offset { get; set; }
+			public int Left { get; set; }
+			public int Count { get; set; }
+			public IOAsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
+			public void SetCompleted(Boolean synchronously, int count, Exception error) {
+				this.Count = count;
+				base.SetCompleted(synchronously, error);
+			}
+			public new void SetCompleted(Boolean synchronously, Exception error) {
+				base.SetCompleted(synchronously, error);
+			}
+			public new int WaitForCompletion() {
+				base.WaitForCompletion();
+				ThrowError();
+				return Count;
+			}
+		}
+		public static IAsyncResult BeginReadAll(Stream stream, byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			IOAsyncResult ar = new IOAsyncResult(callback, state) { Stream = stream, Buffer = buffer, Offset = 0, Count = 0, Left = count };
+			if (ar.Left <= 0) {
+				ar.SetCompleted(true, null);
+				return ar;
+			}
+			stream.BeginRead(ar.Buffer, ar.Offset, ar.Left, asyncReadAllReadCallback, ar);
+			return ar;
+		}
+		private static void asyncReadAllReadCallback(IAsyncResult ar) {
+			IOAsyncResult myar = (IOAsyncResult)ar.AsyncState;
+			try {
+				int len = myar.Stream.EndRead(ar);
+				if (len <= 0) throw new EndOfStreamException();
+				myar.Offset += len;
+				myar.Left -= len;
+				myar.Count += len;
+				if (myar.Left > 0) {
+					myar.Stream.BeginRead(myar.Buffer, myar.Offset, myar.Left, asyncReadAllReadCallback, ar);
+				} else {
+					myar.SetCompleted(false, myar.Count, null);
+				}
+			} catch (Exception ex) {
+				myar.SetCompleted(false, ex);
+			}
+		}
+		public static int EndReadAll(IAsyncResult asyncResult) {
+			IOAsyncResult myar = (IOAsyncResult)asyncResult;
+			return myar.WaitForCompletion();
+		}
 	}
 }

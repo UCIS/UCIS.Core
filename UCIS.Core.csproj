@@ -46,6 +46,7 @@
     <Compile Include="Database.cs" />
     <Compile Include="FBGUI\FBGUI.cs">
     </Compile>
+    <Compile Include="NaCl\ACMEClient.cs" />
     <Compile Include="NaCl\APIv2.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -58,9 +59,13 @@
     <Compile Include="NaCl\crypto_core\salsa20.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="NaCl\crypto_hashblocks\sha256.cs" />
     <Compile Include="NaCl\crypto_hashblocks\sha512.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="NaCl\crypto_hash\md5.cs" />
+    <Compile Include="NaCl\crypto_hash\sha1.cs" />
+    <Compile Include="NaCl\crypto_hash\sha256.cs" />
     <Compile Include="NaCl\crypto_hash\sha512.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -95,6 +100,8 @@
     <Compile Include="NaCl\randombytes.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="NaCl\SSLUtils.cs" />
+    <Compile Include="NaCl\TLSStream.cs" />
     <Compile Include="Net\ConnectionList.cs" />
     <Compile Include="Net\HTTP.cs" />
     <Compile Include="Net\INetworkConnection.cs" />
