@@ -85,7 +85,7 @@ namespace UCIS.Util {
 					lock (queue) {
 						if (workers > maxWorkers) break;
 						if (queue.Count == 0) {
-							if (idleWorkers > maxIdleWorkers) {
+							if (idleWorkers >= maxIdleWorkers) {
 								queue.TrimExcess();
 								break;
 							}

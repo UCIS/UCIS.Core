@@ -26,21 +26,32 @@ namespace UCIS.NaCl {
 			} else {
 				using (MemoryStream ms = new MemoryStream()) {
 					using (TextWriter writer = new StreamWriter(ms, Encoding.ASCII)) {
-						foreach (X509Certificate2 cert in certs) {
-							writer.WriteLine("-----BEGIN CERTIFICATE-----");
-							writer.WriteLine(Convert.ToBase64String(cert.Export(X509ContentType.Cert, String.Empty), Base64FormattingOptions.InsertLineBreaks));
-							writer.WriteLine("-----END CERTIFICATE-----");
-							if (cert.HasPrivateKey) {
-								RSACryptoServiceProvider rsakey = cert.PrivateKey as RSACryptoServiceProvider;
-								if (rsakey != null) {
-									writer.WriteLine("-----BEGIN RSA PRIVATE KEY-----");
-									writer.WriteLine(Convert.ToBase64String(EncodeRSAPrivateKey(rsakey.ExportParameters(true)), Base64FormattingOptions.InsertLineBreaks));
-									writer.WriteLine("-----END RSA PRIVATE KEY-----");
-								}
-							}
-						}
+						EncodeCertificatesAsPEM(writer, certs, true);
 					}
 					return ms.ToArray();
+				}
+			}
+		}
+
+		public static String EncodeCertificatesAsPEM(X509Certificate2Collection certs, Boolean includeKeys) {
+			using (StringWriter writer = new StringWriter()) {
+				EncodeCertificatesAsPEM(writer, certs, includeKeys);
+				return writer.ToString();
+			}
+		}
+
+		public static void EncodeCertificatesAsPEM(TextWriter writer, X509Certificate2Collection certs, Boolean includeKeys) {
+			foreach (X509Certificate2 cert in certs) {
+				writer.WriteLine("-----BEGIN CERTIFICATE-----");
+				writer.WriteLine(Convert.ToBase64String(cert.Export(X509ContentType.Cert, String.Empty), Base64FormattingOptions.InsertLineBreaks));
+				writer.WriteLine("-----END CERTIFICATE-----");
+				if (includeKeys && cert.HasPrivateKey) {
+					RSACryptoServiceProvider rsakey = cert.PrivateKey as RSACryptoServiceProvider;
+					if (rsakey != null) {
+						writer.WriteLine("-----BEGIN RSA PRIVATE KEY-----");
+						writer.WriteLine(Convert.ToBase64String(EncodeRSAPrivateKey(rsakey.ExportParameters(true)), Base64FormattingOptions.InsertLineBreaks));
+						writer.WriteLine("-----END RSA PRIVATE KEY-----");
+					}
 				}
 			}
 		}
@@ -215,38 +226,17 @@ namespace UCIS.NaCl {
 		}
 
 		static Byte[] EncodeRSAPrivateKey(RSAParameters rsakey) {
-			using (MemoryStream buffer = new MemoryStream()) {
-				using (BinaryWriter w = new BinaryWriter(buffer)) {
-					w.Write((UInt16)0x8130);
-					w.Write((Byte)0);
-					w.Write((UInt16)0x0102);
-					w.Write((Byte)0);
-					WritePemBytes(w, rsakey.Modulus);
-					WritePemBytes(w, rsakey.Exponent);
-					WritePemBytes(w, rsakey.D);
-					WritePemBytes(w, rsakey.P);
-					WritePemBytes(w, rsakey.Q);
-					WritePemBytes(w, rsakey.DP);
-					WritePemBytes(w, rsakey.DQ);
-					WritePemBytes(w, rsakey.InverseQ);
-					return buffer.ToArray();
-				}
-			}
-		}
-
-		static void WritePemBytes(BinaryWriter w, Byte[] bytes) {
-			w.Write((Byte)2);
-			if (bytes.Length < 0x80) {
-				w.Write((Byte)bytes.Length);
-			} else if (bytes.Length <= 0xFF) {
-				w.Write((Byte)0x81);
-				w.Write((Byte)bytes.Length);
-			} else {
-				w.Write((Byte)0x82);
-				w.Write((Byte)(bytes.Length >> 8));
-				w.Write((Byte)bytes.Length);
-			}
-			w.Write(bytes);
+			return EncodeDerTag(0, true, 0x10, //SEQUENCE
+				EncodeDerTag(0, false, 0x02, new Byte[] { 0x00 }), //INTEGER Version: 0
+				EncodeDerTag(0, false, 0x02, rsakey.Modulus),
+				EncodeDerTag(0, false, 0x02, rsakey.Exponent),
+				EncodeDerTag(0, false, 0x02, rsakey.D),
+				EncodeDerTag(0, false, 0x02, rsakey.P),
+				EncodeDerTag(0, false, 0x02, rsakey.Q),
+				EncodeDerTag(0, false, 0x02, rsakey.DP),
+				EncodeDerTag(0, false, 0x02, rsakey.DQ),
+				EncodeDerTag(0, false, 0x02, rsakey.InverseQ)
+			);
 		}
 
 		private static Byte[] EncodeDerTag(Byte tclass, Boolean tconstructed, Int32 tnumber, params Byte[][] values) {
