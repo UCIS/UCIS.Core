@@ -105,8 +105,18 @@ namespace UCIS.Remoting {
 			ReceiveCallbackB((IAsyncResult)state);
 		}
 		private void ReceiveCallbackB(IAsyncResult ar) {
+			Boolean isclosed = false;
 			try {
-				ArraySegment<Byte> packet = stream.EndReadPacketFast(ar);
+				ArraySegment<Byte> packet;
+				try {
+					packet = stream.EndReadPacketFast(ar);
+				} catch (ObjectDisposedException) {
+					isclosed = true;
+					throw;
+				} catch (EndOfStreamException) {
+					isclosed = true;
+					throw;
+				}
 				Byte[] array = packet.Array;
 				if (packet.Count < 2) throw new ArgumentOutOfRangeException("packet.Count", "Packet is too small");
 				int offset = packet.Offset;
@@ -136,7 +146,7 @@ namespace UCIS.Remoting {
 					foreach (StreamChannel s in streamChannels.Values) s.MultiplexorClosed();
 					streamChannels.Clear();
 				}
-				ErrorLog(ex);
+				if (!isclosed) ErrorLog(ex);
 				if (OnClosed != null) OnClosed(this);
 			}
 		}

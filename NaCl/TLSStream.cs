@@ -69,6 +69,7 @@ namespace UCIS.NaCl {
 		Byte[] handshakeReceiveBuffer = null;
 		int readBusy = 0;
 		Object writeLock = new Object();
+		int writeFragmentSize = 16 * 1024;
 
 		enum RecordType : byte {
 			ChangeCipherSpec = 20,
@@ -134,8 +135,8 @@ namespace UCIS.NaCl {
 
 		void WriteRecord(RecordType type, Byte[] buffer, int offset, int length) {
 			lock (writeLock) {
-				while (length > 32 * 1024) {
-					int part = Math.Min(length, 32 * 1024);
+				while (length > writeFragmentSize) {
+					int part = Math.Min(length, writeFragmentSize);
 					WriteRecord(type, buffer, offset, part);
 					offset += part;
 					length -= part;
@@ -229,7 +230,7 @@ namespace UCIS.NaCl {
 				if (header[1] != 0x03) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.ProtocolVersion, "Invalid protocol version");
 				if (header[2] < 0x01) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.ProtocolVersion, "Invalid protocol version");
 				int length = (header[3] << 8) | header[4];
-				if (length > 34 * 1024) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.RecordOverflow, "Packet too large");
+				if (length > 18 * 1024) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.RecordOverflow, "Packet too large");
 				Byte[] buffer = new Byte[length];
 				ar.Payload = buffer;
 				StreamUtil.BeginReadAll(stream, buffer, 0, length, AsyncReadRecordCallback2, ar);
@@ -257,7 +258,7 @@ namespace UCIS.NaCl {
 			if (header[1] != 0x03) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.ProtocolVersion, "Invalid protocol version");
 			if (header[2] < 0x01) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.ProtocolVersion, "Invalid protocol version");
 			int length = (header[3] << 8) | header[4];
-			if (length > 34 * 1024) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.RecordOverflow, "Packet too large");
+			if (length > 18 * 1024) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.RecordOverflow, "Packet too large");
 			Byte[] data = StreamUtil.ReadAll(stream, length);
 			return ReadRecordDecode(header, data, out type);
 		}
@@ -499,8 +500,26 @@ namespace UCIS.NaCl {
 				int compression_methods_length = record[35 + session_id_length + 2 + cipher_suites_length];
 				Byte[] compression_methods = ArrayUtil.Slice(record, 35 + session_id_length + 2 + cipher_suites_length + 1, compression_methods_length);
 				//Console.WriteLine("compression_methods: {0}", ToHexString(compression_methods));
-				Byte[] extensions = ArrayUtil.Slice(record, 35 + session_id_length + 2 + cipher_suites_length + 1 + compression_methods_length);
-				//Console.WriteLine("extensions: {0}", ToHexString(extensions));
+				if (record.Length > 35 + session_id_length + 2 + cipher_suites_length + 1 + compression_methods_length) {
+					UInt16 extensions_length = DecodeUInt16BE(record, 35 + session_id_length + 2 + cipher_suites_length + 1 + compression_methods_length);
+					Byte[] extensions = ArrayUtil.Slice(record, 35 + session_id_length + 2 + cipher_suites_length + 1 + compression_methods_length + 2, extensions_length);
+					//Console.WriteLine("extensions: {0}", ToHexString(extensions));
+					int ext_offset = 0;
+					while (ext_offset + 3 < extensions.Length) {
+						UInt16 ext_type = DecodeUInt16BE(extensions, ext_offset);
+						UInt16 ext_length = DecodeUInt16BE(extensions, ext_offset + 2);
+						//Console.WriteLine("extension {0}: {1} bytes", ext_type, ext_length);
+						switch (ext_type) {
+							case 0: //server_name
+							case 1: //max_fragment_length
+							case 4: //truncated_hmac
+							case 15: //heartbeat
+							case 16: //application_layer_protocol_negotiation
+								break;
+						}
+						ext_offset += 4 + ext_length;
+					}
+				}
 
 				if (tlsVersion > client_version) tlsVersion = client_version;
 				if (tlsVersion > 0x0303) tlsVersion = 0x0303;

@@ -106,7 +106,6 @@ namespace UCIS.NaCl {
 			return GetCertificate(new RSACryptoServiceProvider(2048), domains);
 		}
 		public X509Certificate2 GetCertificate(RSACryptoServiceProvider key, params String[] domains) {
-			AuthorizeDomains(domains);
 			Byte[] csr = SSLUtils.GenerateCertificateSigningRequest(key, domains);
 			Byte[] cert = signed_request(acme_url + "/acme/new-cert", new PmlDictionary() { { "resource", "new-cert" }, { "csr", urlbase64(csr) } });
 			X509Certificate2 c = new X509Certificate2(cert);

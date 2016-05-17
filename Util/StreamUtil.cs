@@ -62,7 +62,7 @@ namespace UCIS.Util {
 				myar.Left -= len;
 				myar.Count += len;
 				if (myar.Left > 0) {
-					myar.Stream.BeginRead(myar.Buffer, myar.Offset, myar.Left, asyncReadAllReadCallback, ar);
+					myar.Stream.BeginRead(myar.Buffer, myar.Offset, myar.Left, asyncReadAllReadCallback, myar);
 				} else {
 					myar.SetCompleted(false, myar.Count, null);
 				}
