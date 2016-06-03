@@ -172,7 +172,6 @@ namespace UCIS.Net.HTTP {
 			ProcessingRequest = 2,
 			SendingHeaders = 3,
 			SendingContent = 4,
-			Completed = 5,
 			Closed = 6,
 		}
 
@@ -302,7 +301,7 @@ namespace UCIS.Net.HTTP {
 				}
 			}
 			public override bool CanWrite {
-				get { return Context.State != HTTPConnectionState.Completed && Context.State != HTTPConnectionState.Closed && (OutputStream == null || OutputStream.CanWrite); }
+				get { return Context.State != HTTPConnectionState.Closed && (OutputStream == null || OutputStream.CanWrite); }
 			}
 			protected override void Dispose(bool disposing) {
 				base.Dispose(disposing);
@@ -813,7 +812,7 @@ namespace UCIS.Net.HTTP {
 			return Reader;
 		}
 		private void EndResponseData() {
-			if (State == HTTPConnectionState.Completed || State == HTTPConnectionState.Closed) return;
+			if (State == HTTPConnectionState.Closed) return;
 			OpenRequestStream().Close();
 			if (State != HTTPConnectionState.SendingContent) {
 				if ((ResponseStatusCode >= 100 && ResponseStatusCode <= 199) || ResponseStatusCode == 204 || ResponseStatusCode == 304) {
@@ -822,10 +821,10 @@ namespace UCIS.Net.HTTP {
 					WriteResponseData(new Byte[0]);
 				}
 			}
-			State = HTTPConnectionState.Completed;
-			if (KeepAlive && KeepAliveMaxRequests > 1) {
+			//If WriteResponseData is called above, it will call EndResponseData which will close the connection, so check state again.
+			if (State == HTTPConnectionState.SendingContent && KeepAlive && KeepAliveMaxRequests > 1) {
 				State = HTTPConnectionState.Closed;
-                                try {
+				try {
 					new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1, IsSecure);
 				} catch (Exception ex) {
 					Server.RaiseOnError(this, ex);

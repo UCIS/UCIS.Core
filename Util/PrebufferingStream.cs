@@ -145,6 +145,7 @@ namespace UCIS.Util {
 		}
 
 		public override int Read(byte[] buffer, int offset, int count) {
+			if (count == 0) return 0;
 			if (prebuffercount > 0 || (count < 16 && defaultbuffersize > 0)) {
 				if (prebuffercount == 0) if (Prebuffer() < 1) return 0;
 				if (count > prebuffercount) count = prebuffercount;
