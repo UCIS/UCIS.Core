@@ -912,7 +912,7 @@ namespace UCIS.NaCl {
 
 		int ReadDataFromBuffer(byte[] buffer, int offset, int count) {
 			count = Math.Min(readdata.Length, count);
-			Buffer.BlockCopy(readdata, 0, buffer, offset, readdata.Length);
+			Buffer.BlockCopy(readdata, 0, buffer, offset, count);
 			if (readdata.Length <= count) {
 				readdata = null;
 			} else {
