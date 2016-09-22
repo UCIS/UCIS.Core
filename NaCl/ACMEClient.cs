@@ -15,7 +15,7 @@ namespace UCIS.NaCl {
 		//const String acme_url = "https://acme-staging.api.letsencrypt.org";
 		const String acme_url = "https://acme-v01.api.letsencrypt.org";
 		const String ca_cert_url = "https://letsencrypt.org/certs/lets-encrypt-x3-cross-signed.der";
-		const String agreement_url = "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf";
+		const String agreement_url = "https://letsencrypt.org/documents/LE-SA-v1.1.1-August-1-2016.pdf";
 
 		public delegate void CreateHTTPChallengeCallback(String path, String value);
 
