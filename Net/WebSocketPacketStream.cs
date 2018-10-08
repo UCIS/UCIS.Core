@@ -311,6 +311,7 @@ namespace UCIS.Net.HTTP {
 		class AsyncResult : AsyncResultBase {
 			public Byte[] Buffer { get; private set; }
 			public int Opcode { get; private set; }
+			public ArraySegment<Byte> ToBuffer;
 			public AsyncResult(AsyncCallback callback, Object state) : base(callback, state) { }
 			public void SetCompleted(Boolean synchronously, Byte[] buffer, int opcode, Exception error) {
 				this.Buffer = buffer;
@@ -359,6 +360,28 @@ namespace UCIS.Net.HTTP {
 				case 2: return Encoding.UTF8.GetString(ar.Buffer);
 				default: throw new InvalidOperationException("Internal error: unexpected frame type");
 			}
+		}
+
+		public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state) {
+			AsyncResult ar = new AsyncResult(callback, state);
+			ar.ToBuffer = new ArraySegment<byte>(buffer, offset, count);
+			Byte[] packet = Interlocked.Exchange(ref leftOver, null);
+			if (packet != null) {
+				ar.SetCompleted(true, packet, 2, null);
+			} else {
+				baseStream.BeginPrebuffering(AsyncReadReady, ar);
+			}
+			return ar;
+		}
+		public override int EndRead(IAsyncResult asyncResult) {
+			AsyncResult ar = (AsyncResult)asyncResult;
+			Byte[] packet = EndReadPacket(asyncResult);
+			if (packet == null) return 0;
+			int count = ar.ToBuffer.Count;
+			if (count > packet.Length) count = packet.Length;
+			Buffer.BlockCopy(packet, 0, ar.ToBuffer.Array, ar.ToBuffer.Offset, count);
+			if (packet.Length > count) leftOver = ArrayUtil.Slice(packet, count);
+			return count;
 		}
 	}
 }
