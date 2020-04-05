@@ -9,7 +9,8 @@ namespace UCIS.Pml {
 		Binary,
 		String,
 		Integer,
-		//Number,
+		Number,
+		Boolean,
 	}
 	public abstract class PmlElement {
 		public abstract PmlType Type { get; }
@@ -63,6 +64,7 @@ namespace UCIS.Pml {
 		public static implicit operator PmlElement(Int16 number) { return new PmlInteger(number); }
 		public static implicit operator PmlElement(UInt16 number) { return new PmlInteger(number); }
 		public static implicit operator PmlElement(Byte number) { return new PmlInteger(number); }
-		//public static implicit operator PmlElement(Double number) { return new PmlNumber(number); }
+		public static implicit operator PmlElement(Double number) { return new PmlNumber(number); }
+		public static implicit operator PmlElement(Boolean value) { return new PmlBoolean(value); }
 	}
 }

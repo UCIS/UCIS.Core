@@ -129,6 +129,14 @@ namespace UCIS.Pml {
 						Writer.Write((ulong)RMInt);
 					}
 					break;
+				case PmlType.Boolean:
+					Writer.Write((byte)21);
+					Writer.Write(Element.ToBoolean());
+					break;
+				case PmlType.Number:
+					Writer.Write((byte)22);
+					Writer.Write(Element.ToDouble());
+					break;
 				default:
 					Writer.Write((byte)0);
 					Console.WriteLine("PmlBinaryRW: Can not encode PML type {0}", Element.Type);
@@ -215,6 +223,8 @@ namespace UCIS.Pml {
 						else if (B == 1) return new PmlInteger(Reader.ReadInt64());
 						else return null;
 					}
+				case 21: return Reader.ReadBoolean();
+				case 22: return Reader.ReadDouble();
 				default:
 					throw new Exception("Unknown PML type code " + EType.ToString());
 			}

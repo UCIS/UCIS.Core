@@ -114,10 +114,11 @@
     <None Include="Pml\Elements\Array.cs" />
     <Compile Include="Pml\Elements\Binary.cs" />
     <Compile Include="Pml\Elements\Collection.cs" />
+    <Compile Include="Pml\Elements\Boolean.cs" />
     <Compile Include="Pml\Elements\Dictionary.cs" />
     <Compile Include="Pml\Elements\Element.cs" />
     <Compile Include="Pml\Elements\Integer.cs" />
-    <None Include="Pml\Elements\Number.cs" />
+    <Compile Include="Pml\Elements\Number.cs" />
     <Compile Include="Pml\Elements\Null.cs" />
     <Compile Include="Pml\Elements\String.cs" />
     <Compile Include="Pml\Channels\IPmlChannel.cs" />

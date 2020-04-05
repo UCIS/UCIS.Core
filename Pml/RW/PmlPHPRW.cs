@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Globalization;
 using System.IO;
+using System.Text;
 
 namespace UCIS.Pml {
 	public class PmlPHPWriter : IPmlWriter {
@@ -70,6 +71,11 @@ namespace UCIS.Pml {
 				case PmlType.Integer:
 					WriteString(stream, encoding, "i:");
 					WriteString(stream, encoding, element.ToString());
+					WriteString(stream, encoding, ";");
+					break;
+				case PmlType.Number:
+					WriteString(stream, encoding, "d:");
+					WriteString(stream, encoding, element.ToDouble().ToString("f", CultureInfo.InvariantCulture));
 					WriteString(stream, encoding, ";");
 					break;
 				case PmlType.Dictionary:
@@ -180,8 +186,7 @@ namespace UCIS.Pml {
 					return new PmlInteger(ReadNumber(stream, ';'));
 				case 'd':
 					ReadExpect(stream, ':');
-					//Return New PML.PMLNumber(ReadNumber(Reader, ";"c))
-					return new PmlString(ReadNumber(stream, ';'));
+					return new PmlNumber(ReadNumber(stream, ';'));
 				case 's':
 					ReadExpect(stream, ':');
 					int strlen = int.Parse(ReadNumber(stream, ':'));

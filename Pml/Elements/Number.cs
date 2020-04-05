@@ -18,7 +18,7 @@ namespace UCIS.Pml {
 		public override PmlType Type { get { return PmlType.Number; } }
 
 		public override object ToObject() { return _Value; }
-		public override string ToString() { return _Value.ToString("#,#", CultureInfo.InvariantCulture); }
+		public override string ToString() { return _Value.ToString("f", CultureInfo.InvariantCulture); }
 		public override bool ToBoolean() { return _Value != 0; }
 		public override byte ToByte() { return (Byte)_Value; }
 		public override decimal ToDecimal() { return (Decimal)_Value; }

@@ -90,8 +90,13 @@ namespace UCIS.Pml {
 					}
 					break;
 				case PmlType.Integer:
+				case PmlType.Number:
 					Writer.Write((byte)AmfDataType.Number);
 					WriteDouble(Writer, (Element as PmlInteger).ToDouble());
+					break;
+				case PmlType.Boolean:
+					Writer.Write((byte)AmfDataType.Boolean);
+					Writer.Write((byte)(Element.ToBoolean() ? 1 : 0));
 					break;
 			}
 		}
@@ -189,10 +194,10 @@ namespace UCIS.Pml {
 					} else if (d == (double)(UInt64)d) {
 						return new PmlInteger((UInt64)d);
 					} else {
-						return new PmlString(d.ToString());
+						return new PmlNumber(d);
 					}
 				case AmfDataType.Boolean:
-					return new PmlInteger(Reader.ReadByte());
+					return new PmlBoolean(Reader.ReadByte() != 0);
 				case AmfDataType.String:
 					return new PmlString(ReadShortString(Reader));
 				case AmfDataType.Array:

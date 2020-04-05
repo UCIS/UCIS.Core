@@ -92,6 +92,12 @@ namespace UCIS.Pml {
 				case PmlType.Integer:
 					stream.Write(element.ToInt64().ToString(CultureInfo.InvariantCulture));
 					break;
+				case PmlType.Number:
+					stream.Write(element.ToDouble().ToString("f", CultureInfo.InvariantCulture));
+					break;
+				case PmlType.Boolean:
+					stream.Write(element.ToBoolean() ? "true" : "false");
+					break;
 				case PmlType.Dictionary:
 					IDictionary<String, PmlElement> dict = (IDictionary<String, PmlElement>)element;
 					Boolean first = true;
@@ -262,10 +268,10 @@ namespace UCIS.Pml {
 				return new PmlNull();
 			} else if (c == 't') {
 				ExpectLiteral(reader, "true");
-				return 1;
+				return true;
 			} else if (c == 'f') {
 				ExpectLiteral(reader, "false");
-				return 0;
+				return false;
 			} else if (c == '-' || (c >= '0' && c <= '9')) {
 				StringBuilder sb = new StringBuilder();
 				while (c == '.' || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E' || (c >= '0' && c <= '9')) {
@@ -275,8 +281,7 @@ namespace UCIS.Pml {
 				}
 				String str = sb.ToString();
 				if (str.IndexOf(".", StringComparison.OrdinalIgnoreCase) != -1 || str.IndexOf("e", StringComparison.OrdinalIgnoreCase) != -1) {
-					Double number = Double.Parse(str, NumberStyles.Any, CultureInfo.InvariantCulture);
-					return str;
+					return Double.Parse(str, NumberStyles.Any, CultureInfo.InvariantCulture);
 				} else {
 					return Int64.Parse(str, NumberStyles.Any, CultureInfo.InvariantCulture);
 				}
