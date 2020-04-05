@@ -252,7 +252,7 @@ namespace UCIS.HWLib.Windows.Devices {
 			uint len;
 			CR ret = SetupApi.CM_Get_Device_Interface_List_Size(out len, ref classGuid, DeviceID, 0);
 			CMException.Throw(ret, "CM_Get_Device_Interface_List_Size");
-			if (len <= 1) return null;
+			if (len <= 1) return new String[0];
 			Byte[] buffer = new Byte[2 * len];
 			ret = SetupApi.CM_Get_Device_Interface_List(ref classGuid, DeviceID, buffer, len, 0);
 			CMException.Throw(ret, "CM_Get_Device_Interface_List");
