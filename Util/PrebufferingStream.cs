@@ -236,7 +236,7 @@ namespace UCIS.Util {
 				myar.Left -= len;
 				myar.Count += len;
 				if (myar.Left > 0) {
-					baseStream.BeginRead(myar.Buffer, myar.Offset, myar.Left, asyncReadAllReadCallback, ar);
+					baseStream.BeginRead(myar.Buffer, myar.Offset, myar.Left, asyncReadAllReadCallback, myar);
 				} else {
 					myar.SetCompleted(false, myar.Count, null);
 				}

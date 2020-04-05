@@ -21,5 +21,20 @@ namespace UCIS.Util {
 		public virtual void WritePacketFast(Byte[] packet, int unusedBefore, int unusedAfter) { Write(packet, unusedBefore, packet.Length - unusedBefore - unusedAfter); }
 		public virtual int WriteFastBytesBefore { get { return 0; } }
 		public virtual int WriteFastBytesAfter { get { return 0; } }
+		public virtual void WritePacket(params Byte[][] parts) {
+			int before = WriteFastBytesBefore;
+			int after = WriteFastBytesAfter;
+			int length = before;
+			foreach (Byte[] part in parts) if (part != null) length += part.Length;
+			length += after;
+			Byte[] buffer = new Byte[length];
+			length = before;
+			foreach (Byte[] part in parts) {
+				if (part == null) continue;
+				part.CopyTo(buffer, length);
+				length += part.Length;
+			}
+			WritePacketFast(buffer, before, after);
+		}
 	}
 }
