@@ -31,9 +31,10 @@ namespace UCIS.Util {
 		}
 
 		protected void SetCompleted(Boolean synchronously, Exception error) {
-			this.CompletedSynchronously = synchronously;
-			this.Error = error;
 			lock (MonitorWaitHandle) {
+				if (IsCompleted) return;
+				this.CompletedSynchronously = synchronously;
+				this.Error = error;
 				IsCompleted = true;
 				if (WaitEvent != null) WaitEvent.Set();
 				Monitor.PulseAll(MonitorWaitHandle);
