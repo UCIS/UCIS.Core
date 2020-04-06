@@ -169,7 +169,7 @@
     <Compile Include="USBLib\Windows\USB\UsbHub.cs" />
     <Compile Include="UTF8NoPreamble.cs" />
     <Compile Include="Util\ArrayUtil.cs" />
-    <Compile Include="Util\AsyncResultBase.cs" />
+    <Compile Include="Util\AsyncResult.cs" />
     <Compile Include="Util\AsyncStream.cs" />
     <Compile Include="Util\CrossStream.cs" />
     <Compile Include="Util\HoldStream.cs" />
