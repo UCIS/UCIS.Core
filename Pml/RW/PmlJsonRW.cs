@@ -51,7 +51,7 @@ namespace UCIS.Pml {
 				case '\t': stream.Write("\\t"); break;
 				case '\b': stream.Write("\\b"); break;
 				case '\f': stream.Write("\\f"); break;
-				default: stream.Write(c); break;
+				default: stream.Write("\\u"); stream.Write(((Int16)c).ToString("X4")); break;
 			}
 		}
 		private static void WriteEscapedString(TextWriter stream, String str) {
