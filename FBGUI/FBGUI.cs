@@ -645,7 +645,12 @@ namespace UCIS.FBGUI {
 		}
 		private static FBGCursor LoadFromResource(String name, int hotX, int hotY) {
 			using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("UCIS.FBGUI." + name + ".png")) {
-				return new FBGCursor(Image.FromStream(s), new Point(hotX, hotY));
+				try {
+					return new FBGCursor(Image.FromStream(s), new Point(hotX, hotY));
+				} catch (ArgumentException) {
+					Console.Error.WriteLine("FBGUI: Failed to load cursor " + name);
+					return new FBGCursor(null, Point.Empty);
+				}
 			}
 		}
 
