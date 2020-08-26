@@ -104,6 +104,8 @@
     <Compile Include="NaCl\TLSStream.cs" />
     <Compile Include="Net\ConnectionList.cs" />
     <Compile Include="Net\HTTP.cs" />
+    <Compile Include="Net\HTTPContentProviders.cs" />
+    <Compile Include="Net\IHTTPContext.cs" />
     <Compile Include="Net\INetworkConnection.cs" />
     <Compile Include="Net\TCPServer.cs" />
     <Compile Include="Net\TCPStream.cs" />
