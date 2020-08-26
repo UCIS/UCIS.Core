@@ -888,14 +888,14 @@ namespace UCIS.NaCl {
 		public override bool CanRead { get { return stream.CanRead; } }
 		public override bool CanSeek { get { return false; } }
 		public override bool CanWrite { get { return stream.CanWrite; } }
-		public override bool CanTimeout { get { return base.CanTimeout; } }
+		public override bool CanTimeout { get { return stream.CanTimeout; } }
 		public override int ReadTimeout {
-			get { return base.ReadTimeout; }
-			set { base.ReadTimeout = value; }
+			get { return stream.ReadTimeout; }
+			set { stream.ReadTimeout = value; }
 		}
 		public override int WriteTimeout {
-			get { return base.WriteTimeout; }
-			set { base.WriteTimeout = value; }
+			get { return stream.WriteTimeout; }
+			set { stream.WriteTimeout = value; }
 		}
 
 		public override void Flush() {

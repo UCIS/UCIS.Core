@@ -297,7 +297,7 @@ namespace UCIS.VNCServer {
 			}
 			if (Listening) socket.BeginAccept(AcceptCallback, socket);
 		}
-		void IHTTPContentProvider.ServeRequest(HTTPContext context) {
+		void IHTTPContentProvider.ServeRequest(IHTTPContext context) {
 			WebSocketPacketStream stream = new WebSocketPacketStream(context);
 			ClientAccepted(new VNCServerConnection(stream, context.Socket));
 		}

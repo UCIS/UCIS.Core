@@ -12,15 +12,15 @@ namespace UCIS.Net.HTTP {
 		Boolean binaryProtocol = false;
 		int wsProtocol = -1;
 
-		public WebSocketPacketStream(HTTPContext context) {
+		public WebSocketPacketStream(IHTTPContext context) {
 			try {
-				String ConnectionHeader = context.GetRequestHeader("Connection"); //can be comma-separated list
+				String ConnectionHeader = context.RequestHeaders["Connection"]; //can be comma-separated list
 				Boolean ConnectionUpgrade = ConnectionHeader != null && ConnectionHeader.Contains("Upgrade");
-				Boolean UpgradeWebsocket = "WebSocket".Equals(context.GetRequestHeader("Upgrade"), StringComparison.OrdinalIgnoreCase);
-				String SecWebSocketKey = context.GetRequestHeader("Sec-WebSocket-Key");
-				String SecWebSocketKey1 = context.GetRequestHeader("Sec-WebSocket-Key1");
-				String SecWebSocketKey2 = context.GetRequestHeader("Sec-WebSocket-Key2");
-				String SecWebSocketProtocol = context.GetRequestHeader("Sec-WebSocket-Protocol");
+				Boolean UpgradeWebsocket = "WebSocket".Equals(context.RequestHeaders["Upgrade"], StringComparison.OrdinalIgnoreCase);
+				String SecWebSocketKey = context.RequestHeaders["Sec-WebSocket-Key"];
+				String SecWebSocketKey1 = context.RequestHeaders["Sec-WebSocket-Key1"];
+				String SecWebSocketKey2 = context.RequestHeaders["Sec-WebSocket-Key2"];
+				String SecWebSocketProtocol = context.RequestHeaders["Sec-WebSocket-Protocol"];
 				String[] SecWebSocketProtocols = SecWebSocketProtocol == null ? null : SecWebSocketProtocol.Split(',');
 				if (!ConnectionUpgrade || !UpgradeWebsocket) throw new InvalidOperationException("The HTTP context does not contain a WebSocket request");
 				if (SecWebSocketProtocols != null) SecWebSocketProtocols = Array.ConvertAll(SecWebSocketProtocols, s => s.Trim().ToLowerInvariant());
@@ -33,11 +33,11 @@ namespace UCIS.Net.HTTP {
 						Byte[] hash = sha1.ComputeHash(hashable);
 						hashedKey = Convert.ToBase64String(hash, Base64FormattingOptions.None);
 					}
-					context.SendStatus(101);
-					context.SetResponseHeader("Connection", "Upgrade");
-					context.SetResponseHeader("Upgrade", "websocket");
-					context.SetResponseHeader("Sec-WebSocket-Accept", hashedKey);
-					if (SecWebSocketProtocols != null) context.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
+					context.Response.SendStatus(101);
+					context.Response.SetResponseHeader("Connection", "Upgrade");
+					context.Response.SetResponseHeader("Upgrade", "websocket");
+					context.Response.SetResponseHeader("Sec-WebSocket-Accept", hashedKey);
+					if (SecWebSocketProtocols != null) context.Response.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
 					Stream rawstream = context.GetDirectStream();
 					baseStream = rawstream as PrebufferingStream ?? new PrebufferingStream(rawstream);
 				} else if (SecWebSocketKey1 != null && SecWebSocketKey2 != null) {
@@ -45,12 +45,12 @@ namespace UCIS.Net.HTTP {
 					Byte[] key = new Byte[4 + 4 + 8];
 					CalculateHybi00MagicNumber(SecWebSocketKey1, key, 0);
 					CalculateHybi00MagicNumber(SecWebSocketKey2, key, 4);
-					context.SendStatus(101);
-					context.SetResponseHeader("Connection", "Upgrade");
-					context.SetResponseHeader("Upgrade", "websocket");
-					if (SecWebSocketProtocols != null) context.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
-					context.SendHeader("Sec-WebSocket-Origin", context.GetRequestHeader("Origin"));
-					context.SendHeader("Sec-WebSocket-Location", (context.IsSecure ? "wss://" : "ws://") + context.GetRequestHeader("Host") + context.RequestPath);
+					context.Response.SendStatus(101);
+					context.Response.SetResponseHeader("Connection", "Upgrade");
+					context.Response.SetResponseHeader("Upgrade", "websocket");
+					if (SecWebSocketProtocols != null) context.Response.SetResponseHeader("Sec-WebSocket-Protocol", binaryProtocol ? "binary" : "base64");
+					context.Response.SendHeader("Sec-WebSocket-Origin", context.RequestHeaders["Origin"]);
+					context.Response.SendHeader("Sec-WebSocket-Location", (context.IsSecure ? "wss://" : "ws://") + context.RequestHeaders["Host"] + context.RequestPath);
 					Stream rawstream = context.GetDirectStream();
 					baseStream = rawstream as PrebufferingStream ?? new PrebufferingStream(rawstream);
 					baseStream.ReadAll(key, 8, 8);
