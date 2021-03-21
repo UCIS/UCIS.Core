@@ -1108,7 +1108,7 @@ namespace UCIS.Remoting {
 		private IProxyBase CreateDelegateProxy(UInt32 objid, Type deltype) {
 			MethodInfo newMethod = deltype.GetMethod("Invoke");
 			ParameterInfo[] parameters = newMethod.GetParameters();
-			Type[] mparams = ArrayUtil.Merge(new Type[1] { typeof(DelegateProxy) }, Array.ConvertAll(parameters, delegate(ParameterInfo pi) { return pi.ParameterType; }));
+			Type[] mparams = ArrayUtil.Concat(new Type[1] { typeof(DelegateProxy) }, Array.ConvertAll(parameters, delegate(ParameterInfo pi) { return pi.ParameterType; }));
 			DynamicMethod methodBuilder = new DynamicMethod(String.Empty, newMethod.ReturnType, mparams, typeof(DelegateProxy));
 			ILGenerator ilGenerator = methodBuilder.GetILGenerator();
 			GenerateProxyMethodCode(ilGenerator, parameters, newMethod.ReturnType, typeof(DelegateProxy), "DoCall", null);

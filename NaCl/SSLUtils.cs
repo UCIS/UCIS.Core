@@ -240,7 +240,7 @@ namespace UCIS.NaCl {
 		}
 
 		private static Byte[] EncodeDerTag(Byte tclass, Boolean tconstructed, Int32 tnumber, params Byte[][] values) {
-			Byte[] value = values == null ? new Byte[0] : ArrayUtil.Merge(values);
+			Byte[] value = values == null ? new Byte[0] : ArrayUtil.Concat(values);
 			using (MemoryStream ms = new MemoryStream()) {
 				if (tnumber <= 30) {
 					ms.WriteByte((Byte)(((tclass & 3) << 6) | (tconstructed ? 0x20 : 0x00) | (tnumber & 0x1F)));
@@ -298,7 +298,7 @@ namespace UCIS.NaCl {
 						EncodeDerTag(0, false, 0x03, //BIT STRING
 							new Byte[1] { 0 }, //Number of unused bits in final octet
 							EncodeDerTag(0, true, 0x10, //SEQUENCE
-								EncodeDerTag(0, false, 0x02, ArrayUtil.Merge(new Byte[] { 0 }, key_params.Modulus)), //INTEGER - Don't know why we need the extra zero, but it seems necessary for the CSR to be accepted.
+								EncodeDerTag(0, false, 0x02, ArrayUtil.Concat(new Byte[] { 0 }, key_params.Modulus)), //INTEGER - Don't know why we need the extra zero, but it seems necessary for the CSR to be accepted.
 								EncodeDerTag(0, false, 0x02, key_params.Exponent) //INTEGER
 							)
 						)
@@ -380,7 +380,7 @@ namespace UCIS.NaCl {
 					EncodeDerTag(0, false, 0x03, //BIT STRING
 						new Byte[1] { 0 }, //Number of unused bits in final octet
 						EncodeDerTag(0, true, 0x10, //SEQUENCE
-							EncodeDerTag(0, false, 0x02, ArrayUtil.Merge(new Byte[] { 0 }, key_params.Modulus)), //INTEGER - Don't know why we need the extra zero, but it seems necessary for the CSR to be accepted.
+							EncodeDerTag(0, false, 0x02, ArrayUtil.Concat(new Byte[] { 0 }, key_params.Modulus)), //INTEGER - Don't know why we need the extra zero, but it seems necessary for the CSR to be accepted.
 							EncodeDerTag(0, false, 0x02, key_params.Exponent) //INTEGER
 						)
 					)

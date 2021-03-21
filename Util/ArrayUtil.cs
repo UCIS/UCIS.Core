@@ -64,7 +64,7 @@ namespace UCIS.Util {
 		}
 		//Array shuffle
 		//Array unique
-		public static T[] Merge<T>(params ArraySegment<T>[] parts) {
+		public static T[] Concat<T>(params ArraySegment<T>[] parts) {
 			int count = 0;
 			foreach (ArraySegment<T> segment in parts) count += segment.Count;
 			T[] ret = new T[count];
@@ -75,7 +75,7 @@ namespace UCIS.Util {
 			}
 			return ret;
 		}
-		public static T[] Merge<T>(params T[][] parts) {
+		public static T[] Concat<T>(params T[][] parts) {
 			int count = 0;
 			foreach (T[] segment in parts) count += segment.Length;
 			T[] ret = new T[count];
@@ -86,7 +86,7 @@ namespace UCIS.Util {
 			}
 			return ret;
 		}
-		public static T[] Merge<T>(params IList<T>[] parts) {
+		public static T[] Concat<T>(params IList<T>[] parts) {
 			int count = 0;
 			foreach (IList<T> segment in parts) count += segment.Count;
 			T[] ret = new T[count];

@@ -357,7 +357,7 @@ namespace UCIS.NaCl {
 				} else {
 					if (rtype != RecordType.Handshake) throw new TLSException(TLSAlertLevel.Fatal, TLSAlertDescription.UnexpectedMessage, "Unexpected record type");
 					if (ar.Header[1] != (Byte)HandshakeType.HelloRequest) handshakeHasher.Process(data, 0, data.Length);
-					ar.Payload = ArrayUtil.Merge(ar.Payload, data);
+					ar.Payload = ArrayUtil.Concat(ar.Payload, data);
 				}
 				int length = (ar.Header[2] << 16) | (ar.Header[3] << 8) | ar.Header[4];
 				if (length == ar.Payload.Length) {
@@ -386,7 +386,7 @@ namespace UCIS.NaCl {
 		}
 
 		void WriteHandshake(HandshakeType type, params Byte[][] args) {
-			Byte[] arg = ArrayUtil.Merge(args);
+			Byte[] arg = ArrayUtil.Concat(args);
 			Byte[] record = new Byte[4 + arg.Length];
 			record[0] = (Byte)type;
 			record[1] = (Byte)(arg.Length >> 16);
@@ -555,7 +555,7 @@ namespace UCIS.NaCl {
 					Byte[] certsbytes = new Byte[0];
 					foreach (X509Certificate cert in handshake_server_certificates) {
 						Byte[] certbytes = cert.Export(X509ContentType.Cert, String.Empty);
-						certsbytes = ArrayUtil.Merge(certsbytes, EncodeUInt24((UInt32)certbytes.Length), certbytes);
+						certsbytes = ArrayUtil.Concat(certsbytes, EncodeUInt24((UInt32)certbytes.Length), certbytes);
 					}
 					WriteHandshake(HandshakeType.Certificate, EncodeUInt24((UInt32)certsbytes.Length), certsbytes);
 					handshake_server_certificates = null;
@@ -704,7 +704,7 @@ namespace UCIS.NaCl {
 					handshakeReceiveHeader = ArrayUtil.Slice(record, 0, 4);
 					handshakeReceiveBuffer = ArrayUtil.Slice(record, 4);
 				} else {
-					handshakeReceiveBuffer = ArrayUtil.Merge(handshakeReceiveBuffer, record);
+					handshakeReceiveBuffer = ArrayUtil.Concat(handshakeReceiveBuffer, record);
 				}
 				if (handshakeReceiveHeader[0] != (Byte)HandshakeType.HelloRequest) handshakeHasher.Process(record, 0, record.Length);
 				int length = (handshakeReceiveHeader[1] << 16) | (handshakeReceiveHeader[2] << 8) | handshakeReceiveHeader[3];
@@ -740,7 +740,7 @@ namespace UCIS.NaCl {
 				sha1.Process(buffer, offset, length);
 			}
 			public Byte[] GetHash() {
-				return ArrayUtil.Merge(md5.Clone().GetHash(), sha1.Clone().GetHash());
+				return ArrayUtil.Concat(md5.Clone().GetHash(), sha1.Clone().GetHash());
 			}
 		}
 		class SHA256Hasher : IHandshakeHasher {
@@ -756,7 +756,7 @@ namespace UCIS.NaCl {
 			Byte[] buffer = null;
 			public void Process(Byte[] buffer, int offset, int length) {
 				buffer = ArrayUtil.Slice(buffer, offset, length);
-				this.buffer = (this.buffer == null) ? buffer : ArrayUtil.Merge(this.buffer, buffer);
+				this.buffer = (this.buffer == null) ? buffer : ArrayUtil.Concat(this.buffer, buffer);
 			}
 			public Byte[] GetHash() {
 				throw new NotSupportedException();
@@ -834,19 +834,19 @@ namespace UCIS.NaCl {
 
 		Byte[] tls_prf(Byte[] secret, String label, int out_length, params Byte[][] input) {
 			if (tlsVersion >= 0x0303) {
-				return tls_prf_sha256(secret, label, ArrayUtil.Merge(input), out_length);
+				return tls_prf_sha256(secret, label, ArrayUtil.Concat(input), out_length);
 			} else {
-				return tls_prf_md5sha1(secret, label, ArrayUtil.Merge(input), out_length);
+				return tls_prf_md5sha1(secret, label, ArrayUtil.Concat(input), out_length);
 			}
 		}
 		static Byte[] tls_prf_sha256(Byte[] secret, String label, Byte[] seed, int outlen) {
-			seed = ArrayUtil.Merge(Encoding.ASCII.GetBytes(label), seed);
+			seed = ArrayUtil.Concat(Encoding.ASCII.GetBytes(label), seed);
 			Byte[] a = seed;
 			int pos = 0;
 			Byte[] ret = new Byte[outlen];
 			while (pos < outlen) {
 				a = hmac_sha256(secret, a);
-				Byte[] b = hmac_sha256(secret, ArrayUtil.Merge(a, seed));
+				Byte[] b = hmac_sha256(secret, ArrayUtil.Concat(a, seed));
 				int clen = Math.Min(outlen - pos, b.Length);
 				Buffer.BlockCopy(b, 0, ret, pos, clen);
 				pos += clen;
@@ -854,7 +854,7 @@ namespace UCIS.NaCl {
 			return ret;
 		}
 		static Byte[] tls_prf_md5sha1(Byte[] secret, String label, Byte[] seed, int outlen) {
-			seed = ArrayUtil.Merge(Encoding.ASCII.GetBytes(label), seed);
+			seed = ArrayUtil.Concat(Encoding.ASCII.GetBytes(label), seed);
 			Byte[] S1 = ArrayUtil.Slice(secret, 0, (secret.Length + 1) / 2);
 			Byte[] S2 = ArrayUtil.Slice(secret, secret.Length - (secret.Length + 1) / 2, (secret.Length + 1) / 2);
 
@@ -863,7 +863,7 @@ namespace UCIS.NaCl {
 			Byte[] a = seed;
 			while (pos < outlen) {
 				a = hmac_md5(S1, a);
-				Byte[] b = hmac_md5(S1, ArrayUtil.Merge(a, seed));
+				Byte[] b = hmac_md5(S1, ArrayUtil.Concat(a, seed));
 				int clen = Math.Min(outlen - pos, b.Length);
 				Buffer.BlockCopy(b, 0, ret, pos, clen);
 				pos += clen;
@@ -872,7 +872,7 @@ namespace UCIS.NaCl {
 			a = seed;
 			while (pos < outlen) {
 				a = hmac_sha1(S2, a);
-				Byte[] b = hmac_sha1(S2, ArrayUtil.Merge(a, seed));
+				Byte[] b = hmac_sha1(S2, ArrayUtil.Concat(a, seed));
 				int clen = Math.Min(outlen - pos, b.Length);
 				for (int i = 0; i < clen; i++) ret[pos + i] ^= b[i];
 				pos += clen;
