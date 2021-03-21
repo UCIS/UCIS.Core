@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
+using System.Globalization;
 
 namespace UCIS.Util {
 	public class ArrayUtil {
@@ -181,6 +183,39 @@ namespace UCIS.Util {
 			if (index < array.Length - 1) Array.Copy(array, index + 1, newarray, index, array.Length - index - 1);
 			array = newarray;
 			return true;
+		}
+	}
+
+	public static class ByteArrayUtil {
+		public static String ToHexString(Byte[] bytes) {
+			StringBuilder sb = new StringBuilder(bytes.Length * 2);
+			foreach (Byte b in bytes) sb.Append(b.ToString("x2"));
+			return sb.ToString();
+		}
+		public static Byte[] FromHexString(String hex) {
+			if (hex.Length % 2 != 0) hex = "0" + hex;
+			Byte[] r = new Byte[hex.Length / 2];
+			for (int i = 0; i < r.Length; i++) if (!Byte.TryParse(hex.Substring(2 * i, 2), NumberStyles.HexNumber, null, out r[i])) return null;
+			return r;
+
+			{
+				Byte[] binary = new Byte[(hex.Length + 1) / 2];
+				int i = 0;
+				foreach (Char c in hex) {
+					if (Char.IsWhiteSpace(c)) continue;
+					Byte v;
+					if (c >= '0' && c <= '9') v = (Byte)(c - '0');
+					else if (c >= 'a' && c <= 'f') v = (Byte)(c - 'a' + 10);
+					else if (c >= 'A' && c <= 'F') v = (Byte)(c - 'A' + 10);
+					else throw new InvalidOperationException("Unexpected character: " + c);
+					if ((i % 2) == 0) v <<= 4;
+					binary[i / 2] |= v;
+					i++;
+				}
+				if ((i % 2) != 0) throw new InvalidOperationException("Odd number of data characters in input string");
+				if (binary.Length != i / 2) Array.Resize(ref binary, i / 2);
+				return binary;
+			}
 		}
 	}
 }
