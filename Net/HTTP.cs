@@ -21,6 +21,11 @@ namespace UCIS.Net.HTTP {
 		public IList<KeyValuePair<String, String>> DefaultHeaders { get; private set; }
 		public ErrorEventHandler OnError;
 		private Socket Listener = null;
+		public event EventHandler<HTTPServerEventArgs> ConnectionAccepted;
+		public event EventHandler<HTTPServerEventArgs> ConnectionClosed;
+		public event EventHandler<HTTPServerEventArgs> RequestStarted;
+		public event EventHandler<HTTPServerEventArgs> RequestReceived;
+		public event EventHandler<HTTPServerEventArgs> RequestFinished;
 
 		public HTTPServer() {
 			DefaultHeaders = new List<KeyValuePair<String, String>>() {
@@ -70,6 +75,7 @@ namespace UCIS.Net.HTTP {
 				new HTTPContext(this, ssl, socket, -1, true);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
+				if (socket != null) RaiseEvent(ConnectionClosed, null, socket);
 				streamwrapper.Close();
 				if (socket != null) socket.Close();
 			}
@@ -95,7 +101,13 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void HandleClient(Socket client) {
-			HandleClient(client, null);
+			RaiseEvent(ConnectionAccepted, null, client);
+			try {
+				HandleClient(client, null);
+			} catch {
+				RaiseEvent(ConnectionClosed, null, client);
+				throw;
+			}
 		}
 
 		bool TCPServer.IModule.Accept(TCPStream stream) {
@@ -126,6 +138,38 @@ namespace UCIS.Net.HTTP {
 				case "ico": return "image/x-icon";
 				default: return null;
 			}
+		}
+
+		private void RaiseEvent(EventHandler<HTTPServerEventArgs> eh, HTTPContext ctx, Socket socket) {
+			if (eh != null) eh((Object)ctx ?? this, new HTTPServerEventArgs(this, ctx, socket));
+		}
+
+		internal void RaiseRequestStarted(HTTPContext ctx) {
+			RaiseEvent(RequestStarted, ctx, ctx.Socket);
+		}
+
+		internal void RaiseRequestReceived(HTTPContext ctx) {
+			RaiseEvent(RequestReceived, ctx, ctx.Socket);
+		}
+
+		internal void RaiseRequestFinished(HTTPContext ctx) {
+			RaiseEvent(RequestFinished, ctx, ctx.Socket);
+		}
+
+		internal void RaiseConnectionClosed(HTTPContext ctx) {
+			RaiseEvent(ConnectionClosed, ctx, ctx.Socket);
+		}
+	}
+
+	public class HTTPServerEventArgs : EventArgs {
+		public HTTPServer Server { get; private set; }
+		public Socket Socket { get; private set; }
+		public IHTTPContext Context { get; private set; }
+
+		public HTTPServerEventArgs(HTTPServer server, IHTTPContext context, Socket socket) {
+			this.Server = server;
+			this.Socket = socket;
+			this.Context = context;
 		}
 	}
 
@@ -482,6 +526,7 @@ namespace UCIS.Net.HTTP {
 			if (server.RequestTimeout > 0) TimeoutTimer = new Timer(TimeoutCallback, null, server.RequestTimeout * 1000 + 1000, Timeout.Infinite);
 			Environment = new HTTPRequestEnvironment();
 			Reader.BeginPrebuffering(PrebufferCallback, null);
+			server.RaiseRequestStarted(this);
 		}
 
 		public static String ReadLine(Stream stream) {
@@ -576,6 +621,7 @@ namespace UCIS.Net.HTTP {
 				} else {
 					SetResponseHeader("Connection", "Close");
 				}
+				Server.RaiseRequestReceived(this);
 				IHTTPContentProvider content = Server.ContentProvider;
 				if (content == null) {
 					SendErrorResponse(404);
@@ -727,7 +773,9 @@ namespace UCIS.Net.HTTP {
 				} catch (Exception ex) {
 					Server.RaiseOnError(this, ex);
 					Reader.Close();
+					Server.RaiseConnectionClosed(this);
 				}
+				Server.RaiseRequestFinished(this);
 			} else {
 				Close();
 			}
@@ -741,6 +789,8 @@ namespace UCIS.Net.HTTP {
 				if (State != HTTPConnectionState.SendingContent) throw new InvalidOperationException("Unexpected request state");
 				State = HTTPConnectionState.Closed;
 			}
+			Server.RaiseRequestFinished(this);
+			Server.RaiseConnectionClosed(this);
 			return Reader.Buffered > 0 ? Reader : Reader.BaseStream;
 		}
 
@@ -766,6 +816,8 @@ namespace UCIS.Net.HTTP {
 			}
 			Reader.Close();
 			try { if (RequestBody != null) RequestBody.Dispose(); } catch { }
+			Server.RaiseRequestFinished(this);
+			Server.RaiseConnectionClosed(this);
 		}
 
 		public static long CopyStream(Stream input, Stream output, long length) {
