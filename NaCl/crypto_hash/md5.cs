@@ -1,8 +1,21 @@
 ﻿using System;
 
 namespace UCIS.NaCl.crypto_hash {
-	class md5 {
+	public class md5 {
 		public static int BYTES = 16;
+
+		public static unsafe void crypto_hash(Byte[] outv, Byte[] inv, int offset, int inlen) {
+			if (outv.Length < 32) throw new ArgumentException("outv.Length < 16");
+			if (offset < 0) throw new ArgumentException("offset < 0");
+			if (inv.Length < offset + inlen) throw new ArgumentException("inv.Length < offset + inlen");
+			fixed (Byte* outp = outv, inp = inv) crypto_hash(outp, inp + offset, (UInt64)inlen);
+		}
+		public static unsafe void crypto_hash(Byte* outp, Byte* inp, UInt64 inlen) {
+			md5state state = new md5state();
+			state.init();
+			state.process(inp, (int)inlen);
+			state.finish(outp);
+		}
 
 		public unsafe struct md5state {
 			fixed UInt32 state[4];

@@ -4,6 +4,12 @@ namespace UCIS.NaCl.crypto_hash {
 	public static class sha512 {
 		public static int BYTES = 64;
 
+		public static unsafe void crypto_hash(Byte[] outv, Byte[] inv, int offset, int inlen) {
+			if (outv.Length < 64) throw new ArgumentException("outv.Length < 64");
+			if (offset < 0) throw new ArgumentException("offset < 0");
+			if (inv.Length < offset + inlen) throw new ArgumentException("inv.Length < offset + inlen");
+			fixed (Byte* outp = outv, inp = inv) crypto_hash(outp, offset + inp, (UInt64)inlen);
+		}
 		public static unsafe void crypto_hash(Byte[] outv, Byte[] inv, int inlen) {
 			if (outv.Length < 64) throw new ArgumentException("outv.Length < 64");
 			if (inv.Length < inlen) throw new ArgumentException("inv.Length < inlen");
