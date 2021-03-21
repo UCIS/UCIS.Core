@@ -510,7 +510,11 @@ namespace UCIS.Net.HTTP {
 		}
 
 		private void PrebufferCallback(IAsyncResult ar) {
-			State = HTTPConnectionState.ReceivingRequest;
+			lock (this) {
+				if (State == HTTPConnectionState.Closed) return;
+				if (State != HTTPConnectionState.Starting) return; //this should not happen
+				State = HTTPConnectionState.ReceivingRequest;
+			}
 			try {
 				try {
 					Reader.EndPrebuffering(ar);
@@ -558,7 +562,10 @@ namespace UCIS.Net.HTTP {
 					foreach (String encoding in acceptEncodings) if (encoding.Trim().Equals("gzip", StringComparison.InvariantCultureIgnoreCase)) AcceptGzipCompression = true;
 				}
 				if (TimeoutTimer != null) TimeoutTimer.Dispose();
-				State = HTTPConnectionState.ProcessingRequest;
+				lock (this) {
+					if (State != HTTPConnectionState.ReceivingRequest) throw new InvalidOperationException("Unexpected request state");
+					State = HTTPConnectionState.ProcessingRequest;
+				}
 				Response = new HTTPResponse(this);
 				RequestBody = new HTTPRequestBody(this, new HTTPInputStream(this));
 				Response.SendStatus(200);
@@ -675,14 +682,23 @@ namespace UCIS.Net.HTTP {
 			return ResponseStream = new HTTPOutputStream(this, HTTPResponseStreamMode.Direct, length);
 		}
 		private Stream BeginResponseData() {
-			if (State == HTTPConnectionState.ProcessingRequest) {
-				State = HTTPConnectionState.SendingHeaders;
+			Boolean sendHeaders = false;
+			lock (this) {
+				if (State == HTTPConnectionState.ProcessingRequest) {
+					sendHeaders = true;
+					State = HTTPConnectionState.SendingHeaders;
+				}
+			}
+			if (sendHeaders) {
 				StreamWriter writer = new StreamWriter(Reader, Encoding.ASCII) { AutoFlush = false, NewLine = "\r\n" };
 				writer.WriteLine("HTTP/{0}.{1} {2} {3}", HTTPVersion / 10, HTTPVersion % 10, ResponseStatusCode, ResponseStatusInfo);
 				foreach (HTTPHeader header in ResponseHeaders) writer.WriteLine(header.Key + ": " + header.Value);
 				writer.WriteLine();
 				writer.Flush();
-				State = HTTPConnectionState.SendingContent;
+				lock (this) {
+					if (State != HTTPConnectionState.SendingHeaders) throw new InvalidOperationException("Unexpected request state");
+					State = HTTPConnectionState.SendingContent;
+				}
 			}
 			if (State != HTTPConnectionState.SendingContent) throw new InvalidOperationException("The response stream can not be opened in the current state");
 			//TODO: disallow response stream if HTTP status does not allow content, or if HEAD request
@@ -700,8 +716,12 @@ namespace UCIS.Net.HTTP {
 				}
 			}
 			//If WriteResponseData is called above, it will call EndResponseData which will close the connection, so check state again.
-			if (State == HTTPConnectionState.SendingContent && KeepAlive && KeepAliveMaxRequests > 1) {
-				State = HTTPConnectionState.Closed;
+			Boolean keepAlive = KeepAlive && KeepAliveMaxRequests > 1;
+			lock (this) {
+				if (State != HTTPConnectionState.SendingContent) keepAlive = false;
+				if (keepAlive) State = HTTPConnectionState.Closed;
+			}
+			if (keepAlive) {
 				try {
 					new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1, IsSecure);
 				} catch (Exception ex) {
@@ -717,13 +737,18 @@ namespace UCIS.Net.HTTP {
 			if (State == HTTPConnectionState.Closed) throw new InvalidOperationException("The context has been closed");
 			KeepAlive = false;
 			BeginResponseData();
-			State = HTTPConnectionState.Closed;
+			lock (this) {
+				if (State != HTTPConnectionState.SendingContent) throw new InvalidOperationException("Unexpected request state");
+				State = HTTPConnectionState.Closed;
+			}
 			return Reader.Buffered > 0 ? Reader : Reader.BaseStream;
 		}
 
 		private void SendErrorAndClose(int code) {
 			try {
-				if (State == HTTPConnectionState.Starting || State == HTTPConnectionState.ReceivingRequest) State = HTTPConnectionState.ProcessingRequest;
+				lock (this) {
+					if (State == HTTPConnectionState.Starting || State == HTTPConnectionState.ReceivingRequest) State = HTTPConnectionState.ProcessingRequest;
+				}
 				if (State == HTTPConnectionState.ProcessingRequest) SendErrorResponse(code);
 			} catch (IOException) {
 			} catch (SocketException) {
@@ -735,8 +760,10 @@ namespace UCIS.Net.HTTP {
 			}
 		}
 		private void Close() {
-			if (State == HTTPConnectionState.Closed) return;
-			State = HTTPConnectionState.Closed;
+			lock (this) {
+				if (State == HTTPConnectionState.Closed) return;
+				State = HTTPConnectionState.Closed;
+			}
 			Reader.Close();
 			try { if (RequestBody != null) RequestBody.Dispose(); } catch { }
 		}
