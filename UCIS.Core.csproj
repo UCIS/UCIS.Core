@@ -175,6 +175,7 @@
     <Compile Include="Util\AsyncStream.cs" />
     <Compile Include="Util\CrossStream.cs" />
     <Compile Include="Util\HoldStream.cs" />
+    <Compile Include="Util\INIReader.cs" />
     <Compile Include="Util\PacketStream.cs" />
     <Compile Include="Util\PipeStream.cs" />
     <Compile Include="Util\PrebufferingStream.cs" />
