@@ -390,7 +390,8 @@ namespace UCIS.Net.HTTP {
 					case HTTPResponseStreamMode.Chunked:
 						if (BytesLeft == 0) {
 							String length = ReadLine(InputStream);
-							if (!long.TryParse(length, out BytesLeft)) BytesLeft = 0;
+							if (length.Length == 0) length = ReadLine(InputStream);
+							if (!long.TryParse(length, System.Globalization.NumberStyles.HexNumber, null, out BytesLeft)) BytesLeft = 0;
 							if (BytesLeft == 0) {
 								while (true) {
 									String line = ReadLine(InputStream);
