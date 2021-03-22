@@ -525,8 +525,18 @@ namespace UCIS.Net.HTTP {
 			this.HTTPVersion = 10;
 			if (server.RequestTimeout > 0) TimeoutTimer = new Timer(TimeoutCallback, null, server.RequestTimeout * 1000 + 1000, Timeout.Infinite);
 			Environment = new HTTPRequestEnvironment();
-			Reader.BeginPrebuffering(PrebufferCallback, null);
+			ResponseHeaders = new List<HTTPHeader>(Server.DefaultHeaders);
 			server.RaiseRequestStarted(this);
+			BeginReadLine(Reader).AddCallback(ReadRequestLineCallback);
+		}
+
+		public override string ToString() {
+			String s = LocalEndPoint.ToString() + " <=> " + RemoteEndPoint.ToString() + " - " + State.ToString();
+			if (State > HTTPConnectionState.ReceivingRequest) {
+				s += " - " + RequestMethod + " " + RequestPath;
+				if (RequestQuery != null) s += "?" + RequestQuery;
+			}
+			return s;
 		}
 
 		public static String ReadLine(Stream stream) {
@@ -550,24 +560,57 @@ namespace UCIS.Net.HTTP {
 			return ReadLine(Reader);
 		}
 
+		public static AsyncResult<String> BeginReadLine(PrebufferingStream stream) {
+			String ret;
+			if (TryReadString(stream, out ret)) return ret;
+			AsyncResultSource<String> ar = new AsyncResultSource<String>();
+			stream.BeginPrebuffering(stream.Buffered + 1, ReadLineCallback, new Object[] { stream, ar, stream.Buffered });
+			return ar;
+		}
+		private static void ReadLineCallback(IAsyncResult ar) {
+			Object[] state = (Object[])ar.AsyncState;
+			PrebufferingStream stream = (PrebufferingStream)state[0];
+			AsyncResultSource<String> rar = (AsyncResultSource<String>)state[1];
+			int last = (int)state[2];
+			try {
+				int read = stream.EndPrebuffering(ar);
+				String ret;
+				if (TryReadString(stream, out ret)) rar.SetCompleted(false, ret);
+				else if (last == read) rar.SetCompleted(false, (String)null);
+				else stream.BeginPrebuffering(read + 1, ReadLineCallback, new Object[] { stream, ar });
+			} catch (Exception ex) {
+				rar.SetCompleted(false, ex);
+			}
+		}
+		private static Boolean TryReadString(PrebufferingStream stream, out String ret) {
+			Byte[] buffer = new Byte[16384];
+			int len = stream.TryPeek(buffer, 0, buffer.Length);
+			for (int i = 0; i < len; i++) {
+				if (buffer[i] == 10 || buffer[i] == 0) {
+					int skip = i;
+					if (i > 0 && buffer[i - 1] == 13) i--;
+					ret = Encoding.ASCII.GetString(buffer, 0, i);
+					stream.Skip(skip + 1);
+					return true;
+				}
+			}
+			if (len == buffer.Length) throw new InvalidDataException("Request line too long");
+			ret = null;
+			return false;
+		}
+
 		private void TimeoutCallback(Object state) {
 			if (State == HTTPConnectionState.Starting || State == HTTPConnectionState.ReceivingRequest) Close();
 		}
 
-		private void PrebufferCallback(IAsyncResult ar) {
+		private void ReadRequestLineCallback(AsyncResult<String> ar) {
 			lock (this) {
 				if (State == HTTPConnectionState.Closed) return;
 				if (State != HTTPConnectionState.Starting) return; //this should not happen
 				State = HTTPConnectionState.ReceivingRequest;
 			}
 			try {
-				try {
-					Reader.EndPrebuffering(ar);
-				} catch (InvalidOperationException) {
-					Close();
-					return;
-				}
-				String line = ReadLine();
+				String line = ar.Result;
 				if (line == null) {
 					Close();
 					return;
@@ -580,7 +623,6 @@ namespace UCIS.Net.HTTP {
 					Close();
 					return;
 				}
-				ResponseHeaders = new List<HTTPHeader>(Server.DefaultHeaders);
 				String[] request = line.Split(' ');
 				if (request.Length != 3) { SendErrorAndClose(400); return; }
 				RequestMethod = request[0].ToUpperInvariant();
@@ -593,7 +635,23 @@ namespace UCIS.Net.HTTP {
 				request = RequestAddress.Split(new Char[] { '?' });
 				RequestPath = Uri.UnescapeDataString(request[0]);
 				RequestQuery = request.Length > 1 ? request[1] : null;
-				RequestHeaders = HTTPRequestHeaderCollection.FromStream(Reader);
+				HTTPRequestHeaderCollection.BeginReadFromStream(Reader).AddCallback(ReadRequestHeadersCallback);
+			} catch (Exception ex) {
+				Server.RaiseOnError(this, ex);
+				switch (State) {
+					case HTTPConnectionState.ProcessingRequest:
+						SendErrorAndClose(500);
+						return;
+					default:
+						Close();
+						break;
+				}
+			}
+		}
+
+		private void ReadRequestHeadersCallback(AsyncResult<HTTPRequestHeaderCollection> ar) {
+			try {
+				RequestHeaders = ar.Result;
 				if (RequestHeaders == null) { SendErrorAndClose(400); return; }
 				String connectionHeader = RequestHeaders["Connection"];
 				if (HTTPVersion == 10) {
@@ -814,10 +872,10 @@ namespace UCIS.Net.HTTP {
 				if (State == HTTPConnectionState.Closed) return;
 				State = HTTPConnectionState.Closed;
 			}
-			Reader.Close();
-			try { if (RequestBody != null) RequestBody.Dispose(); } catch { }
 			Server.RaiseRequestFinished(this);
 			Server.RaiseConnectionClosed(this);
+			Reader.Close();
+			try { if (RequestBody != null) RequestBody.Dispose(); } catch { }
 		}
 
 		public static long CopyStream(Stream input, Stream output, long length) {
@@ -880,6 +938,40 @@ namespace UCIS.Net.HTTP {
 			}
 			if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
 			return new HTTPRequestHeaderCollection(RequestHeaders);
+		}
+		public static AsyncResult<HTTPRequestHeaderCollection> BeginReadFromStream(PrebufferingStream stream) {
+			AsyncResultSource<HTTPRequestHeaderCollection> source = new AsyncResultSource<HTTPRequestHeaderCollection>();
+			List<HTTPHeader> RequestHeaders = new List<HTTPHeader>();
+			String headerName = null, headerValue = null;
+			Action<AsyncResult<String>> callback = null;
+			callback = (result) => {
+				try {
+					String line = result.Result;
+					if (line == null) {
+						source.SetCompleted(false, (HTTPRequestHeaderCollection)null);
+					} else if (line.Length == 0) {
+						if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
+						source.SetCompleted(false, new HTTPRequestHeaderCollection(RequestHeaders));
+					} else if (line[0] == ' ' || line[0] == '\t') {
+						headerValue += line;
+						HTTPContext.BeginReadLine(stream).AddCallback(callback);
+					} else {
+						if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
+						String[] request = line.Split(new Char[] { ':' }, 2, StringSplitOptions.None);
+						if (request.Length != 2) {
+							source.SetCompleted(false, (HTTPRequestHeaderCollection)null);
+						} else {
+							headerName = request[0];
+							headerValue = request[1];
+							HTTPContext.BeginReadLine(stream).AddCallback(callback);
+						}
+					}
+				} catch (Exception ex) {
+					source.SetCompleted(false, ex);
+				}
+			};
+			HTTPContext.BeginReadLine(stream).AddCallback(callback);
+			return source;
 		}
 		public String Get(String name) {
 			foreach (HTTPHeader h in headers) {

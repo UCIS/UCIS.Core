@@ -208,7 +208,7 @@ namespace UCIS.Util {
 		private AsyncResultImpl result = new AsyncResultImpl();
 		public AsyncResult<TResult> AsyncResult { get { return result; } }
 		public void SetCompleted(Boolean synchronously, TResult result) {
-			this.result.SetCompleted(synchronously, null);
+			this.result.SetCompleted(synchronously, result);
 		}
 		public void SetCompleted(Boolean synchronously, Exception exception) {
 			result.SetCompleted(synchronously, exception);
