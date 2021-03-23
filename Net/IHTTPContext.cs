@@ -24,6 +24,7 @@ namespace UCIS.Net.HTTP {
 		HTTPRequestHeaderCollection RequestHeaders { get; }
 		HTTPRequestBody RequestBody { get; }
 		HTTPQueryParametersCollection QueryParameters { get; }
+		void Close(int errorCode);
 	}
 	public class HTTPContextWrapper : IHTTPContext {
 		IHTTPContext inner;
@@ -47,5 +48,6 @@ namespace UCIS.Net.HTTP {
 		public virtual HTTPRequestBody RequestBody { get { return inner.RequestBody; } }
 		public virtual HTTPResponse Response { get { return inner.Response; } }
 		public virtual HTTPQueryParametersCollection QueryParameters { get { return inner.QueryParameters; } }
+		public virtual void Close(int errorCode) { inner.Close(errorCode); }
 	}
 }

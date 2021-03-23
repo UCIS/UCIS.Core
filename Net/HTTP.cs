@@ -205,7 +205,7 @@ namespace UCIS.Net.HTTP {
 		private int KeepAliveMaxRequests = 20;
 		private Timer TimeoutTimer = null;
 		public Boolean AllowGzipCompression { get; set; }
-		private int ResponseStatusCode;
+		public int ResponseStatusCode { get; private set; }
 		private String ResponseStatusInfo;
 		public HTTPRequestEnvironment Environment { get; private set; }
 		public HTTPRequestHeaderCollection RequestHeaders { get; private set; }
@@ -473,7 +473,12 @@ namespace UCIS.Net.HTTP {
 				if (car != null) {
 					return car.Count;
 				} else {
-					return InputStream.EndRead(asyncResult);
+					int read = InputStream.EndRead(asyncResult);
+					if (read > 0) {
+						BytesRead += read;
+						BytesLeft -= read;
+					}
+					return read;
 				}
 			}
 			public override long Length {
@@ -827,6 +832,7 @@ namespace UCIS.Net.HTTP {
 			}
 			if (keepAlive) {
 				try {
+					if (RequestBody != null) RequestBody.Dispose();
 					new HTTPContext(Server, Reader, Socket, KeepAliveMaxRequests - 1, IsSecure);
 				} catch (Exception ex) {
 					Server.RaiseOnError(this, ex);
@@ -874,8 +880,12 @@ namespace UCIS.Net.HTTP {
 			}
 			Server.RaiseRequestFinished(this);
 			Server.RaiseConnectionClosed(this);
-			Reader.Close();
+			try { Reader.Close(); } catch { }
 			try { if (RequestBody != null) RequestBody.Dispose(); } catch { }
+		}
+		public void Close(int errorCode) {
+			if (errorCode == 0) Close();
+			else SendErrorAndClose(errorCode);
 		}
 
 		public static long CopyStream(Stream input, Stream output, long length) {
