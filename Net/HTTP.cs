@@ -532,7 +532,13 @@ namespace UCIS.Net.HTTP {
 			Environment = new HTTPRequestEnvironment();
 			ResponseHeaders = new List<HTTPHeader>(Server.DefaultHeaders);
 			server.RaiseRequestStarted(this);
-			BeginReadLine(Reader).AddCallback(ReadRequestLineCallback);
+			BeginReadLine(Reader).AddCallback(InvokeReadRequestLineCallback);
+		}
+
+		private void InvokeReadRequestLineCallback(AsyncResult<String> ar) {
+			//Break a possibly recursive callback
+			if (ar.CompletedSynchronously) ThreadPool.QueueUserWorkItem((s) => ReadRequestLineCallback(ar));
+			else ReadRequestLineCallback(ar);
 		}
 
 		public override string ToString() {
@@ -582,7 +588,7 @@ namespace UCIS.Net.HTTP {
 				String ret;
 				if (TryReadString(stream, out ret)) rar.SetCompleted(false, ret);
 				else if (last == read) rar.SetCompleted(false, (String)null);
-				else stream.BeginPrebuffering(read + 1, ReadLineCallback, new Object[] { stream, ar });
+				else stream.BeginPrebuffering(read + 1, ReadLineCallback, new Object[] { stream, rar, read });
 			} catch (Exception ex) {
 				rar.SetCompleted(false, ex);
 			}
@@ -640,7 +646,7 @@ namespace UCIS.Net.HTTP {
 				request = RequestAddress.Split(new Char[] { '?' });
 				RequestPath = Uri.UnescapeDataString(request[0]);
 				RequestQuery = request.Length > 1 ? request[1] : null;
-				HTTPRequestHeaderCollection.BeginReadFromStream(Reader).AddCallback(ReadRequestHeadersCallback);
+				HTTPRequestHeaderCollection.BeginReadFromStream(Reader).AddCallback(InvokeReadRequestHeadersCallback);
 			} catch (Exception ex) {
 				Server.RaiseOnError(this, ex);
 				switch (State) {
@@ -652,6 +658,10 @@ namespace UCIS.Net.HTTP {
 						break;
 				}
 			}
+		}
+
+		private void InvokeReadRequestHeadersCallback(AsyncResult<HTTPRequestHeaderCollection> ar) {
+			UThreadPool.DefaultPool.QueueWorkItem((s) => ReadRequestHeadersCallback(ar), null);
 		}
 
 		private void ReadRequestHeadersCallback(AsyncResult<HTTPRequestHeaderCollection> ar) {
