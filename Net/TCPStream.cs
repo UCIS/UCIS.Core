@@ -227,7 +227,12 @@ namespace UCIS.Net {
 		public override void Close() {
 			disposed = true;
 			try {
-				Socket.Close();
+				try {
+					if (Socket.Connected) Socket.Shutdown(SocketShutdown.Both);
+				} catch {
+				} finally {
+					Socket.Close();
+				}
 			} finally {
 				base.Close();
 				EventHandler eh = Closed;
