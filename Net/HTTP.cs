@@ -20,7 +20,7 @@ namespace UCIS.Net.HTTP {
 		public int RequestTimeout { get; set; }
 		public IList<KeyValuePair<String, String>> DefaultHeaders { get; private set; }
 		public ErrorEventHandler OnError;
-		private Socket[] Listeners = new Socket[0];
+		private ISocket[] Listeners = new ISocket[0];
 		public event EventHandler<HTTPServerEventArgs> ConnectionAccepted;
 		public event EventHandler<HTTPServerEventArgs> ConnectionClosed;
 		public event EventHandler<HTTPServerEventArgs> RequestStarted;
@@ -40,17 +40,21 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void Listen(EndPoint localep) {
-			Socket listener = new Socket(localep.AddressFamily, SocketType.Stream, ProtocolType.Unspecified);
-			ArrayUtil.Add(ref Listeners, listener);
-			listener.Bind(localep);
-			listener.Listen(128);
-			listener.Blocking = false;
-			listener.BeginAccept(AcceptCallback, listener);
+			ISocket listener = new FWSocket(localep.AddressFamily, SocketType.Stream, ProtocolType.Unspecified);
+			Listen(listener, localep);
+		}
+
+		public void Listen(ISocket socket, EndPoint localep) {
+			socket.Bind(localep);
+			socket.Listen(128);
+			socket.Blocking = false;
+			ArrayUtil.Add(ref Listeners, socket);
+			socket.BeginAccept(AcceptCallback, socket);
 		}
 
 		private void AcceptCallback(IAsyncResult ar) {
-			Socket listener = (Socket)ar.AsyncState;
-			Socket socket = null;
+			ISocket listener = (ISocket)ar.AsyncState;
+			ISocket socket = null;
 			try {
 				socket = listener.EndAccept(ar);
 				HandleClient(socket);
@@ -67,7 +71,7 @@ namespace UCIS.Net.HTTP {
 
 		private void SslAuthenticationCallback(IAsyncResult ar) {
 			Object[] args = (Object[])ar.AsyncState;
-			Socket socket = (Socket)args[0];
+			ISocket socket = (ISocket)args[0];
 			SslStream ssl = (SslStream)args[1];
 			Stream streamwrapper = (Stream)args[2];
 			IDisposable timeout = (IDisposable)args[3];
@@ -84,15 +88,24 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void Dispose() {
-			foreach (Socket socket in Listeners) socket.Close();
-			Listeners = new Socket[0];
+			foreach (ISocket socket in Listeners) socket.Close();
+			Listeners = new ISocket[0];
 		}
 
 		public void HandleClient(Socket socket, Stream streamwrapper) {
+			HandleClient((ISocket)new FWSocketWrapper(socket), streamwrapper);
+		}
+
+		public void HandleClient(ISocket socket, Stream streamwrapper) {
 			if (socket.AddressFamily == AddressFamily.InterNetwork || socket.AddressFamily == AddressFamily.InterNetworkV6) {
 				socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 			}
-			if (streamwrapper == null) streamwrapper = new NetworkStream(socket, true);
+			if (streamwrapper == null) {
+				socket.Blocking = true;
+				if (socket is FWSocket) streamwrapper = new NetworkStream((FWSocket)socket, true);
+				else if (socket is FWSocketWrapper) streamwrapper = new NetworkStream(((FWSocketWrapper)socket).Socket, true);
+				else streamwrapper = new SocketStream(socket);
+			}
 			try {
 				if (SSLCertificate != null) {
 					SslStream ssl = new SslStream(streamwrapper);
@@ -107,6 +120,10 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void HandleClient(Socket client) {
+			HandleClient(new FWSocketWrapper(client));
+		}
+
+		public void HandleClient(ISocket client) {
 			RaiseEvent(ConnectionAccepted, null, client);
 			try {
 				HandleClient(client, null);
@@ -117,7 +134,7 @@ namespace UCIS.Net.HTTP {
 		}
 
 		bool TCPServer.IModule.Accept(TCPStream stream) {
-			HandleClient(stream.Socket, stream);
+			HandleClient(new FWSocketWrapper(stream.Socket), stream);
 			return false;
 		}
 
@@ -146,7 +163,7 @@ namespace UCIS.Net.HTTP {
 			}
 		}
 
-		private void RaiseEvent(EventHandler<HTTPServerEventArgs> eh, HTTPContext ctx, Socket socket) {
+		private void RaiseEvent(EventHandler<HTTPServerEventArgs> eh, HTTPContext ctx, ISocket socket) {
 			if (eh != null) eh((Object)ctx ?? this, new HTTPServerEventArgs(this, ctx, socket));
 		}
 
@@ -169,10 +186,10 @@ namespace UCIS.Net.HTTP {
 
 	public class HTTPServerEventArgs : EventArgs {
 		public HTTPServer Server { get; private set; }
-		public Socket Socket { get; private set; }
+		public ISocket Socket { get; private set; }
 		public IHTTPContext Context { get; private set; }
 
-		public HTTPServerEventArgs(HTTPServer server, IHTTPContext context, Socket socket) {
+		public HTTPServerEventArgs(HTTPServer server, IHTTPContext context, ISocket socket) {
 			this.Server = server;
 			this.Socket = socket;
 			this.Context = context;
@@ -197,7 +214,7 @@ namespace UCIS.Net.HTTP {
 		public String RequestQuery { get; private set; }
 		public int HTTPVersion { get; set; }
 
-		public Socket Socket { get; private set; }
+		public ISocket Socket { get; private set; }
 		public Boolean AsynchronousCompletion { get; set; }
 		public Boolean KeepAlive { get; set; }
 		public TCPStream TCPStream { get { return Reader.BaseStream as TCPStream; } }
@@ -519,7 +536,7 @@ namespace UCIS.Net.HTTP {
 			public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
 		}
 
-		internal HTTPContext(HTTPServer server, Stream stream, Socket socket, int maxrequests, Boolean issecure) {
+		internal HTTPContext(HTTPServer server, Stream stream, ISocket socket, int maxrequests, Boolean issecure) {
 			if (ReferenceEquals(server, null)) throw new ArgumentNullException("server");
 			if (ReferenceEquals(socket, null) && ReferenceEquals(stream, null)) throw new ArgumentNullException("stream");
 			this.Server = server;
@@ -530,7 +547,12 @@ namespace UCIS.Net.HTTP {
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
 				if (socket.AddressFamily == AddressFamily.InterNetwork) this.RemoteEndPoint = socket.RemoteEndPoint;
-				if (stream == null) stream = new NetworkStream(socket, true);
+				if (stream == null) {
+					socket.Blocking = true;
+					if (socket is Socket) stream = new NetworkStream((Socket)socket, true);
+					else if (socket is FWSocketWrapper) stream = new NetworkStream(((FWSocketWrapper)socket).Socket, true);
+					else if (stream == null) stream = new SocketStream(socket, true);
+				}
 			}
 			Reader = stream as PrebufferingStream ?? new PrebufferingStream(stream);
 			this.HTTPVersion = 10;

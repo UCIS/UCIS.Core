@@ -18,7 +18,7 @@ namespace UCIS.Net.HTTP {
 		String RequestPath { get; }
 		String RequestQuery { get; }
 		HTTPServer Server { get; }
-		Socket Socket { get; }
+		ISocket Socket { get; }
 		TCPStream TCPStream { get; }
 		HTTPResponse Response { get; }
 		HTTPRequestHeaderCollection RequestHeaders { get; }
@@ -42,7 +42,7 @@ namespace UCIS.Net.HTTP {
 		public virtual string RequestPath { get { return inner.RequestPath; } }
 		public virtual string RequestQuery { get { return inner.RequestQuery; } }
 		public virtual HTTPServer Server { get { return inner.Server; } }
-		public virtual Socket Socket { get { return inner.Socket; } }
+		public virtual ISocket Socket { get { return inner.Socket; } }
 		public virtual TCPStream TCPStream { get { return inner.TCPStream; } }
 		public virtual HTTPRequestHeaderCollection RequestHeaders { get { return inner.RequestHeaders; } }
 		public virtual HTTPRequestBody RequestBody { get { return inner.RequestBody; } }

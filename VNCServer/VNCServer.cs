@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using UCIS.Net;
 using UCIS.Net.HTTP;
 
 namespace UCIS.VNCServer {
@@ -343,7 +344,7 @@ namespace UCIS.VNCServer {
 		Keys modifierKeys = Keys.None;
 		MemoryStream SendBuffer = null;
 		Stream socket;
-		Socket realsocket;
+		ISocket realsocket;
 		Int32 protover;
 		RFBPixelFormat pixelformat;
 		int jpegCounter = 0;
@@ -388,11 +389,14 @@ namespace UCIS.VNCServer {
 		public event EventHandler<VNCClientAuthenticationEventArgs> ClientAuthentication;
 		public event EventHandler ConnectionComplete;
 
-		public VNCServerConnection(Socket client) : this(new NetworkStream(client, true), client) {
+		public VNCServerConnection(Socket client) : this(new NetworkStream(client, true), new FWSocketWrapper(client)) {
+			realsocket.SendBufferSize = 1024 * 1024;
+		}
+		public VNCServerConnection(ISocket client) : this(new SocketStream(client, true), client) {
 			realsocket.SendBufferSize = 1024 * 1024;
 		}
 		public VNCServerConnection(Stream client) : this(client, null) { }
-		public VNCServerConnection(Stream client, Socket socket) {
+		public VNCServerConnection(Stream client, ISocket socket) {
 			this.socket = client;
 			this.realsocket = socket;
 			pixelformat = new RFBPixelFormat() {
