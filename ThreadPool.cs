@@ -32,7 +32,7 @@ namespace UCIS {
 		public event OnExceptionEventHandler OnException;
 		public delegate void OnExceptionEventHandler(UThreadPool sender, ExceptionEventArgs e);
 
-		public UThreadPool() : this(250, 0, 5) { }
+		public UThreadPool() : this(Environment.ProcessorCount * 100, 0, 5) { }
 
 		public UThreadPool(int MaxThreads, int MinIdle, int MaxIdle) {
 			queue = new WorkQueue<WorkItem>(handler);
