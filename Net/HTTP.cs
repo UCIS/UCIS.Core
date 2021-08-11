@@ -20,7 +20,7 @@ namespace UCIS.Net.HTTP {
 		public int RequestTimeout { get; set; }
 		public IList<KeyValuePair<String, String>> DefaultHeaders { get; private set; }
 		public ErrorEventHandler OnError;
-		private Socket Listener = null;
+		private Socket[] Listeners = new Socket[0];
 		public event EventHandler<HTTPServerEventArgs> ConnectionAccepted;
 		public event EventHandler<HTTPServerEventArgs> ConnectionClosed;
 		public event EventHandler<HTTPServerEventArgs> RequestStarted;
@@ -40,24 +40,26 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void Listen(EndPoint localep) {
-			if (Listener != null) throw new InvalidOperationException("A listener exists");
-			Listener = new Socket(localep.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-			Listener.Bind(localep);
-			Listener.Listen(10);
-			Listener.BeginAccept(AcceptCallback, null);
+			Socket listener = new Socket(localep.AddressFamily, SocketType.Stream, ProtocolType.Unspecified);
+			ArrayUtil.Add(ref Listeners, listener);
+			listener.Bind(localep);
+			listener.Listen(128);
+			listener.Blocking = false;
+			listener.BeginAccept(AcceptCallback, listener);
 		}
 
 		private void AcceptCallback(IAsyncResult ar) {
+			Socket listener = (Socket)ar.AsyncState;
 			Socket socket = null;
 			try {
-				socket = Listener.EndAccept(ar);
+				socket = listener.EndAccept(ar);
 				HandleClient(socket);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
 				if (socket != null) socket.Close();
 			}
 			try {
-				Listener.BeginAccept(AcceptCallback, null);
+				listener.BeginAccept(AcceptCallback, listener);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
 			}
@@ -82,7 +84,8 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void Dispose() {
-			if (Listener != null) Listener.Close();
+			foreach (Socket socket in Listeners) socket.Close();
+			Listeners = new Socket[0];
 		}
 
 		public void HandleClient(Socket socket, Stream streamwrapper) {
@@ -523,7 +526,7 @@ namespace UCIS.Net.HTTP {
 			this.AllowGzipCompression = true;
 			if (socket != null) {
 				this.LocalEndPoint = socket.LocalEndPoint;
-				this.RemoteEndPoint = socket.RemoteEndPoint;
+				if (socket.AddressFamily == AddressFamily.InterNetwork) this.RemoteEndPoint = socket.RemoteEndPoint;
 				if (stream == null) stream = new NetworkStream(socket, true);
 			}
 			Reader = stream as PrebufferingStream ?? new PrebufferingStream(stream);
