@@ -32,7 +32,7 @@ namespace UCIS.Net.HTTP {
 				new KeyValuePair<String, String>("Server", "UCIS Embedded Webserver"),
 			};
 			AllowGzipCompression = true;
-			RequestTimeout = 5;
+			RequestTimeout = 30;
 		}
 
 		public void Listen(int port) {
@@ -89,6 +89,9 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void HandleClient(Socket socket, Stream streamwrapper) {
+			if (socket.AddressFamily == AddressFamily.InterNetwork || socket.AddressFamily == AddressFamily.InterNetworkV6) {
+				socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+			}
 			if (streamwrapper == null) streamwrapper = new NetworkStream(socket, true);
 			try {
 				if (SSLCertificate != null) {
