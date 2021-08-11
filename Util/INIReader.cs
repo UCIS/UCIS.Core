@@ -18,9 +18,9 @@ namespace UCIS.Util {
 			String section = "";
 			while (true) {
 				String line = reader.ReadLine();
-				if (line == null) {
-					break;
-				} else if (line.Length == 0 || line.Trim().Length == 0 || line.StartsWith(";")) {
+				if (line == null) break;
+				line = line.TrimEnd();
+				if (line.Length == 0 || line.StartsWith(";")) {
 					continue;
 				} else if (line.StartsWith("[") && line.EndsWith("]")) {
 					section = line.Substring(1, line.Length - 2);
