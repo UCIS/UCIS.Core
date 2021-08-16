@@ -34,7 +34,7 @@ namespace UCIS.Util {
 
 		public Stream BaseStream { get { return baseStream; } }
 
-		public PrebufferingStream(Stream stream) : this(stream, 1024) { }
+		public PrebufferingStream(Stream stream) : this(stream, 1024 * 16) { }
 		public PrebufferingStream(Stream stream, int bufferSize) {
 			if (stream == null) throw new ArgumentNullException("stream");
 			baseStream = stream;

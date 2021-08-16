@@ -621,6 +621,29 @@ namespace UCIS.Net.HTTP {
 				rar.SetCompleted(false, ex);
 			}
 		}
+		public static AsyncResult BeginReadLines(PrebufferingStream stream, Predicate<String> callback) {
+			String str;
+			while (TryReadString(stream, out str)) if (!callback(str)) return AsyncResult.CreateCompleted();
+			AsyncResultSource ar = new AsyncResultSource();
+			stream.BeginPrebuffering(stream.Buffered + 1, ReadLinesCallback, new Object[] { stream, ar, stream.Buffered, callback });
+			return ar;
+		}
+		private static void ReadLinesCallback(IAsyncResult ar) {
+			Object[] state = (Object[])ar.AsyncState;
+			PrebufferingStream stream = (PrebufferingStream)state[0];
+			AsyncResultSource rar = (AsyncResultSource)state[1];
+			int last = (int)state[2];
+			Predicate<String> callback = (Predicate<String>)state[3];
+			try {
+				int read = stream.EndPrebuffering(ar);
+				String str;
+				while (TryReadString(stream, out str)) if (!callback(str)) { rar.SetCompleted(false, null); return; }
+				if (last == read) rar.SetCompleted(false, null);
+				else stream.BeginPrebuffering(read + 1, ReadLineCallback, new Object[] { stream, rar, read, callback });
+			} catch (Exception ex) {
+				rar.SetCompleted(false, ex);
+			}
+		}
 		private static Boolean TryReadString(PrebufferingStream stream, out String ret) {
 			Byte[] buffer = new Byte[16384];
 			int len = stream.TryPeek(buffer, 0, buffer.Length);
@@ -991,34 +1014,32 @@ namespace UCIS.Net.HTTP {
 			AsyncResultSource<HTTPRequestHeaderCollection> source = new AsyncResultSource<HTTPRequestHeaderCollection>();
 			List<HTTPHeader> RequestHeaders = new List<HTTPHeader>();
 			String headerName = null, headerValue = null;
-			Action<AsyncResult<String>> callback = null;
-			callback = (result) => {
-				try {
-					String line = result.Result;
-					if (line == null) {
-						source.SetCompleted(false, (HTTPRequestHeaderCollection)null);
-					} else if (line.Length == 0) {
-						if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
-						source.SetCompleted(false, new HTTPRequestHeaderCollection(RequestHeaders));
-					} else if (line[0] == ' ' || line[0] == '\t') {
-						headerValue += line;
-						HTTPContext.BeginReadLine(stream).AddCallback(callback);
+			AsyncResult result = HTTPContext.BeginReadLines(stream, (line) => {
+				if (line.Length == 0) {
+					if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
+					return false;
+				} else if (line[0] == ' ' || line[0] == '\t') {
+					headerValue += line;
+					return true;
+				} else {
+					if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
+					String[] request = line.Split(new Char[] { ':' }, 2, StringSplitOptions.None);
+					if (request.Length != 2) {
+						RequestHeaders = null;
+						return false;
 					} else {
-						if (headerName != null) RequestHeaders.Add(new HTTPHeader(headerName, (headerValue ?? String.Empty).Trim()));
-						String[] request = line.Split(new Char[] { ':' }, 2, StringSplitOptions.None);
-						if (request.Length != 2) {
-							source.SetCompleted(false, (HTTPRequestHeaderCollection)null);
-						} else {
-							headerName = request[0];
-							headerValue = request[1];
-							HTTPContext.BeginReadLine(stream).AddCallback(callback);
-						}
+						headerName = request[0];
+						headerValue = request[1];
+						return true;
 					}
-				} catch (Exception ex) {
-					source.SetCompleted(false, ex);
 				}
-			};
-			HTTPContext.BeginReadLine(stream).AddCallback(callback);
+			});
+			result.AddSuccessCallback((r) => {
+				source.SetCompleted(false, new HTTPRequestHeaderCollection(RequestHeaders));
+			});
+			result.AddErrorCallback((ex) => {
+				source.SetCompleted(false, ex);
+			});
 			return source;
 		}
 		public String Get(String name) {
