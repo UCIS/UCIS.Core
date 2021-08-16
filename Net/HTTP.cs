@@ -26,6 +26,10 @@ namespace UCIS.Net.HTTP {
 		public event EventHandler<HTTPServerEventArgs> RequestStarted;
 		public event EventHandler<HTTPServerEventArgs> RequestReceived;
 		public event EventHandler<HTTPServerEventArgs> RequestFinished;
+		private volatile int openConnections = 0;
+		public int ActiveConnections { get { return openConnections; } }
+		public int MaximumConnections { get; set; }
+		public Boolean UseSynchronousAccept { get; set; }
 
 		public HTTPServer() {
 			DefaultHeaders = new List<KeyValuePair<String, String>>() {
@@ -47,9 +51,14 @@ namespace UCIS.Net.HTTP {
 		public void Listen(ISocket socket, EndPoint localep) {
 			socket.Bind(localep);
 			socket.Listen(128);
-			socket.Blocking = false;
 			ArrayUtil.Add(ref Listeners, socket);
-			socket.BeginAccept(AcceptCallback, socket);
+			if (UseSynchronousAccept) {
+				socket.Blocking = true;
+				(new Thread(AcceptWorker)).Start(socket);
+			} else {
+				socket.Blocking = false;
+				socket.BeginAccept(AcceptCallback, socket);
+			}
 		}
 
 		private void AcceptCallback(IAsyncResult ar) {
@@ -57,7 +66,11 @@ namespace UCIS.Net.HTTP {
 			ISocket socket = null;
 			try {
 				socket = listener.EndAccept(ar);
-				HandleClient(socket);
+				if (MaximumConnections > 0 && openConnections >= MaximumConnections) {
+					socket.Close();
+				} else {
+					HandleClient(socket);
+				}
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
 				if (socket != null) socket.Close();
@@ -66,6 +79,28 @@ namespace UCIS.Net.HTTP {
 				listener.BeginAccept(AcceptCallback, listener);
 			} catch (Exception ex) {
 				RaiseOnError(this, ex);
+			}
+		}
+
+		private void AcceptWorker(Object state) {
+			ISocket listener = (ISocket)state;
+			while (true) {
+				ISocket socket;
+				while (MaximumConnections > 0 && openConnections >= MaximumConnections) Thread.Sleep(10);
+				try {
+					socket = listener.Accept();
+				} catch (ObjectDisposedException) {
+					break;
+				} catch (Exception ex) {
+					RaiseOnError(this, ex);
+					continue;
+				}
+				try {
+					HandleClient(socket);
+				} catch (Exception ex) {
+					RaiseOnError(this, ex);
+					socket.Close();
+				}
 			}
 		}
 
@@ -97,25 +132,41 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void HandleClient(ISocket socket, Stream streamwrapper) {
-			if (socket.AddressFamily == AddressFamily.InterNetwork || socket.AddressFamily == AddressFamily.InterNetworkV6) {
-				socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-			}
-			if (streamwrapper == null) {
-				socket.Blocking = true;
-				if (socket is FWSocket) streamwrapper = new NetworkStream((FWSocket)socket, true);
-				else if (socket is FWSocketWrapper) streamwrapper = new NetworkStream(((FWSocketWrapper)socket).Socket, true);
-				else streamwrapper = new SocketStream(socket);
-			}
+			RaiseEvent(ConnectionAccepted, null, socket);
+			Interlocked.Increment(ref openConnections);
+			ThreadPool.QueueUserWorkItem(HandleClientInternal, new Object[] { socket, streamwrapper });
+		}
+
+		private void HandleClientInternal(Object state) {
+			Object[] args = (Object[])state;
+			ISocket socket = (ISocket)args[0];
+			Stream streamwrapper = args[1] as Stream;
 			try {
-				if (SSLCertificate != null) {
-					SslStream ssl = new SslStream(streamwrapper);
-					ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl, streamwrapper, new TimedDisposer(ssl, 10000) });
-				} else {
-					new HTTPContext(this, streamwrapper, socket, -1, false);
+				if (socket.AddressFamily == AddressFamily.InterNetwork || socket.AddressFamily == AddressFamily.InterNetworkV6) {
+					socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 				}
-			} catch {
-				streamwrapper.Close();
-				throw;
+				if (streamwrapper == null) {
+					socket.Blocking = true;
+					if (socket is FWSocket) streamwrapper = new NetworkStream((FWSocket)socket, true);
+					else if (socket is FWSocketWrapper) streamwrapper = new NetworkStream(((FWSocketWrapper)socket).Socket, true);
+					else streamwrapper = new SocketStream(socket);
+				}
+				try {
+					if (SSLCertificate != null) {
+						SslStream ssl = new SslStream(streamwrapper);
+						ssl.BeginAuthenticateAsServer(SSLCertificate, SslAuthenticationCallback, new Object[] { socket, ssl, streamwrapper, new TimedDisposer(ssl, 10000) });
+					} else {
+						new HTTPContext(this, streamwrapper, socket, -1, false);
+					}
+				} catch {
+					streamwrapper.Close();
+					throw;
+				}
+			} catch (Exception ex) {
+				RaiseOnError(this, ex);
+				socket.Close();
+				Interlocked.Decrement(ref openConnections);
+				RaiseEvent(ConnectionClosed, null, socket);
 			}
 		}
 
@@ -124,13 +175,7 @@ namespace UCIS.Net.HTTP {
 		}
 
 		public void HandleClient(ISocket client) {
-			RaiseEvent(ConnectionAccepted, null, client);
-			try {
-				HandleClient(client, null);
-			} catch {
-				RaiseEvent(ConnectionClosed, null, client);
-				throw;
-			}
+			HandleClient(client, null);
 		}
 
 		bool TCPServer.IModule.Accept(TCPStream stream) {
@@ -180,6 +225,7 @@ namespace UCIS.Net.HTTP {
 		}
 
 		internal void RaiseConnectionClosed(HTTPContext ctx) {
+			Interlocked.Decrement(ref openConnections);
 			RaiseEvent(ConnectionClosed, ctx, ctx.Socket);
 		}
 	}
@@ -225,7 +271,7 @@ namespace UCIS.Net.HTTP {
 		private HTTPConnectionState State = HTTPConnectionState.Starting;
 		private Stream ResponseStream = null;
 		private Boolean AcceptGzipCompression = false;
-		private int KeepAliveMaxRequests = 20;
+		private int KeepAliveMaxRequests = 100;
 		private Timer TimeoutTimer = null;
 		public Boolean AllowGzipCompression { get; set; }
 		public int ResponseStatusCode { get; private set; }
@@ -712,7 +758,7 @@ namespace UCIS.Net.HTTP {
 		}
 
 		private void InvokeReadRequestHeadersCallback(AsyncResult<HTTPRequestHeaderCollection> ar) {
-			UThreadPool.DefaultPool.QueueWorkItem((s) => ReadRequestHeadersCallback(ar), null);
+			ThreadPool.QueueUserWorkItem((s) => ReadRequestHeadersCallback(ar), null);
 		}
 
 		private void ReadRequestHeadersCallback(AsyncResult<HTTPRequestHeaderCollection> ar) {
