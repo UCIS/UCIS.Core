@@ -436,6 +436,10 @@ namespace UCIS.Net {
 			if (handle == -1) throw new ObjectDisposedException(objectname);
 			if (shutdown(handle, (int)how) == -1) throw new PosixException("shutdown");
 		}
+		public int ReceiveBufferSize {
+			get { return GetSocketOptionInt(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer); }
+			set { SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer, value); }
+		}
 		public int ReceiveTimeout {
 			get {
 				if (handle == -1) throw new ObjectDisposedException(objectname);

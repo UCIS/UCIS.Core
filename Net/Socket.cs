@@ -21,7 +21,7 @@ namespace UCIS.Net {
 		//bool MulticastLoopback { get; set; }
 		bool NoDelay { get; set; }
 		ProtocolType ProtocolType { get; }
-		//int ReceiveBufferSize { get; set; }
+		int ReceiveBufferSize { get; set; }
 		int ReceiveTimeout { get; set; }
 		EndPoint RemoteEndPoint { get; }
 		int SendBufferSize { get; set; }
@@ -114,7 +114,7 @@ namespace UCIS.Net {
 		//int SendTo(byte[] buffer, EndPoint remoteEP);
 		//int SendTo(byte[] buffer, SocketFlags socketFlags, EndPoint remoteEP);
 		//int SendTo(byte[] buffer, int size, SocketFlags socketFlags, EndPoint remoteEP);
-		//int SendTo(byte[] buffer, int offset, int size, SocketFlags socketFlags, EndPoint remoteEP);
+		int SendTo(byte[] buffer, int offset, int size, SocketFlags socketFlags, EndPoint remoteEP);
 		//bool SendToAsync(SocketAsyncEventArgs e);
 		void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, bool optionValue);
 		//void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, byte[] optionValue);
@@ -153,6 +153,10 @@ namespace UCIS.Net {
 		}
 		public ProtocolType ProtocolType {
 			get { return Socket.ProtocolType; }
+		}
+		public int ReceiveBufferSize {
+			get { return Socket.ReceiveBufferSize; }
+			set { Socket.ReceiveBufferSize = value; }
 		}
 		public int ReceiveTimeout {
 			get { return Socket.ReceiveTimeout; }
@@ -204,6 +208,9 @@ namespace UCIS.Net {
 		}
 		public int Send(byte[] buffer, int offset, int size, SocketFlags socketFlags) {
 			return Socket.Send(buffer, offset, size, socketFlags);
+		}
+		public int SendTo(byte[] buffer, int offset, int size, SocketFlags socketFlags, EndPoint remoteEP) {
+			return Socket.SendTo(buffer, offset, size, socketFlags, remoteEP);
 		}
 		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, Boolean optionValue) {
 			Socket.SetSocketOption(optionLevel, optionName, optionValue);
