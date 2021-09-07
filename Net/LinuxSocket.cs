@@ -480,9 +480,12 @@ namespace UCIS.Net {
 					level = 1;
 					switch (optionName) {
 						case SocketOptionName.ReuseAddress: optname = 2; break; //SO_REUSEADDR
+						case SocketOptionName.DontRoute: optname = 5; break; //SO_DONTROUTE
+						case SocketOptionName.Broadcast: optname = 6; break; //SO_BROADCAST
 						case SocketOptionName.SendBuffer: optname = 7; break; //SO_SNDBUF
 						case SocketOptionName.ReceiveBuffer: optname = 8; break; //SO_RCVBUF
 						case SocketOptionName.KeepAlive: optname = 9; break; //SO_KEEPALIVE
+						case SocketOptionName.Linger: optname = 13; break; //SO_LINGER
 						case SocketOptionName.ReceiveTimeout: optname = 21; break; //SO_RCVTIMEO_OLD	
 						case SocketOptionName.SendTimeout: optname = 21; break; //SO_SNDTIMEO_OLD
 						default: throw new NotImplementedException();
