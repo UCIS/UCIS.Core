@@ -685,7 +685,7 @@ namespace UCIS.Net.HTTP {
 				String str;
 				while (TryReadString(stream, out str)) if (!callback(str)) { rar.SetCompleted(false, null); return; }
 				if (last == read) rar.SetCompleted(false, null);
-				else stream.BeginPrebuffering(read + 1, ReadLineCallback, new Object[] { stream, rar, read, callback });
+				else stream.BeginPrebuffering(read + 1, ReadLinesCallback, new Object[] { stream, rar, read, callback });
 			} catch (Exception ex) {
 				rar.SetCompleted(false, ex);
 			}
