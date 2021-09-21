@@ -117,9 +117,9 @@ namespace UCIS.Net {
 		int SendTo(byte[] buffer, int offset, int size, SocketFlags socketFlags, EndPoint remoteEP);
 		//bool SendToAsync(SocketAsyncEventArgs e);
 		void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, bool optionValue);
-		//void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, byte[] optionValue);
+		void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, byte[] optionValue);
 		void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, int optionValue);
-		//void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, object optionValue);
+		void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, object optionValue);
 		//void Shutdown(SocketShutdown how);
 	}
 	public class FWSocket : Socket, ISocket {
@@ -215,7 +215,13 @@ namespace UCIS.Net {
 		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, Boolean optionValue) {
 			Socket.SetSocketOption(optionLevel, optionName, optionValue);
 		}
+		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, byte[] optionValue) {
+			Socket.SetSocketOption(optionLevel, optionName, optionValue);
+		}
 		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, int optionValue) {
+			Socket.SetSocketOption(optionLevel, optionName, optionValue);
+		}
+		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, object optionValue) {
 			Socket.SetSocketOption(optionLevel, optionName, optionValue);
 		}
 		public void Dispose() {

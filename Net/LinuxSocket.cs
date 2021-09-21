@@ -54,6 +54,8 @@ namespace UCIS.Net {
 		[DllImport(lib, SetLastError = true)]
 		static extern int setsockopt(int fd, int level, int optname, [In] ref int optval, int optlen);
 		[DllImport(lib, SetLastError = true)]
+		static extern int setsockopt(int fd, int level, int optname, [In] Byte[] optval, int optlen);
+		[DllImport(lib, SetLastError = true)]
 		static extern int setsockopt(int fd, int level, int optname, [In] ref timeval optval, int optlen);
 		[DllImport(lib, SetLastError = true)]
 		static extern int send(int fd, ref Byte buf, UIntPtr n, int flags);
@@ -491,8 +493,16 @@ namespace UCIS.Net {
 						default: throw new NotImplementedException();
 					}
 					break;
+				case SocketOptionLevel.IP:
+					level = 0; //IPPROTO_IP
+					switch (optionName) {
+						case SocketOptionName.AddMembership: optname = 35; break; //IP_ADD_MEMBERSHIP
+						case SocketOptionName.DropMembership: optname = 36; break; //IP_DROP_MEMBERSHIP
+						default: throw new NotImplementedException();
+					}
+					break;
 				case SocketOptionLevel.Tcp:
-					level = 6;
+					level = 6; //IPPROTO_TCP
 					switch (optionName) {
 						case SocketOptionName.NoDelay: optname = 1; break; //TCP_NODELAY
 						default: throw new NotImplementedException();
@@ -504,11 +514,27 @@ namespace UCIS.Net {
 		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, Boolean optionValue) {
 			SetSocketOption(optionLevel, optionName, optionValue ? 1 : 0);
 		}
+		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, byte[] optionValue) {
+			int level, optname;
+			ConvertSocketOption(optionLevel, optionName, out level, out optname);
+			if (handle == -1) throw new ObjectDisposedException(objectname);
+			if (setsockopt(handle, level, optname, optionValue, optionValue.Length) == -1) throw new PosixException("setsockopt(" + optionLevel + ", " + optionName + ")");
+		}
 		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, int optionValue) {
 			int level, optname;
 			ConvertSocketOption(optionLevel, optionName, out level, out optname);
 			if (handle == -1) throw new ObjectDisposedException(objectname);
 			if (setsockopt(handle, level, optname, ref optionValue, 4) == -1) throw new PosixException("setsockopt(" + optionLevel + ", " + optionName + ")");
+		}
+		public void SetSocketOption(SocketOptionLevel optionLevel, SocketOptionName optionName, object optionValue) {
+			if (optionValue is MulticastOption) {
+				Byte[] mcast = new Byte[8];
+				((MulticastOption)optionValue).Group.GetAddressBytes().CopyTo(mcast, 0);
+				((MulticastOption)optionValue).LocalAddress.GetAddressBytes().CopyTo(mcast, 4);
+				SetSocketOption(optionLevel, optionName, mcast);
+			} else {
+				throw new ArgumentException("optname");
+			}
 		}
 		private int GetSocketOptionInt(SocketOptionLevel optionLevel, SocketOptionName optionName) {
 			int level, optname;
@@ -700,7 +726,7 @@ namespace UCIS.Net {
 			EpollWait();
 		}
 		static void EpollLoop() {
-			epoll_event[] events = new epoll_event[4];
+			epoll_event[] events = new epoll_event[8];
 			try {
 				Dictionary<int, LinuxSocket> sockmap = epollsockets;
 				if (sockmap == null) return;
