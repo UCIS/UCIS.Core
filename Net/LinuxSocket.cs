@@ -376,6 +376,55 @@ namespace UCIS.Net {
 			if (ret == -1) throw new PosixException("recv");
 			return ret;
 		}
+
+		[StructLayout(LayoutKind.Sequential)]
+		unsafe struct mmsghdr {
+			public msghdr msg_hdr;
+			public UInt32 msg_len;
+		}
+		[StructLayout(LayoutKind.Sequential)]
+		unsafe struct iovec {
+               public void *iov_base;
+			   public UIntPtr iov_len;
+           }
+		[StructLayout(LayoutKind.Sequential)]
+		unsafe struct msghdr {
+			public void* msg_name;
+			public UInt32 msg_namelen;
+			public iovec* msg_iov;
+			public UIntPtr msg_iovlen;
+			public void* msg_control;
+			public UIntPtr msg_controllen;
+			public int msg_flags;
+		}
+		[StructLayout(LayoutKind.Sequential)]
+		struct timespec {
+			public UInt64 tv_sec;
+			public Int32 tv_nsec;
+		}
+		[DllImport(lib, SetLastError = true)]
+		private static unsafe extern int recvmmsg(int sockfd, mmsghdr *msgvec, UInt32 vlen, int flags, timespec *timeout);
+		const int MSG_WAITFORONE = 0x10000;
+		public unsafe IList<ArraySegment<byte>> ReceiveMultipleMessages(IList<ArraySegment<byte>> buffers) {
+			if (handle == -1) throw new ObjectDisposedException(objectname);
+			GCHandle[] bufhandles = new GCHandle[buffers.Count];
+			iovec* iovecs = stackalloc iovec[buffers.Count];
+			mmsghdr* hdrs = stackalloc mmsghdr[buffers.Count];
+			for (int i = 0; i < buffers.Count; i++) {
+				bufhandles[i] = GCHandle.Alloc(buffers[i].Array, GCHandleType.Pinned);
+				iovecs[i] = new iovec() { iov_base = (byte*)bufhandles[i].AddrOfPinnedObject() + buffers[i].Offset, iov_len = (UIntPtr)(UInt32)buffers[i].Count };
+				hdrs[i] = new mmsghdr() { msg_hdr = new msghdr() { msg_iov = &iovecs[i], msg_iovlen = (UIntPtr)1 } };
+			}
+			int ret = recvmmsg(handle, hdrs, (uint)buffers.Count, MSG_WAITFORONE, null);
+			for (int i = 0; i < buffers.Count; i++) bufhandles[i].Free();
+			if (ret == -1) throw new PosixException("recvmmsg");
+			ArraySegment<byte>[] retvec = new ArraySegment<byte>[ret];
+			for (int i = 0; i < ret && i < buffers.Count; i++) {
+				retvec[i] = new ArraySegment<byte>(buffers[i].Array, buffers[i].Offset, (int)hdrs[i].msg_len);
+			}
+			return retvec;
+		}
+
 		public int ReceiveFrom(byte[] buffer, ref EndPoint remoteEP) {
 			return ReceiveFrom(buffer, 0, buffer.Length, SocketFlags.None, ref remoteEP);
 		}
